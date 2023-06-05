@@ -7,6 +7,7 @@
 package org.hibernate.orm.test.bytecode.enhance.internal.bytebuddy;
 
 import java.lang.reflect.Method;
+import java.time.Clock;
 import javax.persistence.Column;
 import javax.persistence.Embeddable;
 import javax.persistence.Embedded;
@@ -17,6 +18,7 @@ import javax.persistence.MappedSuperclass;
 import org.hibernate.bytecode.enhance.internal.tracker.CompositeOwnerTracker;
 import org.hibernate.bytecode.enhance.internal.tracker.SimpleFieldTracker;
 
+import org.hibernate.engine.spi.SelfDirtinessTracker;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -49,162 +51,182 @@ import static org.hibernate.bytecode.enhance.spi.EnhancerConstants.TRACKER_SUSPE
 @EnhancementOptions(inlineDirtyChecking = true)
 public class DirtyCheckingWithEmbeddableAndMappedSuperclassTest {
 
-	@Test
-	public void shouldDeclareFieldsInEntityClass() {
-		assertThat( CardGame.class )
-				.hasDeclaredFields( ENTITY_ENTRY_FIELD_NAME, PREVIOUS_FIELD_NAME, NEXT_FIELD_NAME, TRACKER_FIELD_NAME );
-	}
+    @Test
+    public void shouldDeclareFieldsInEntityClass() {
+        assertThat( CardGame.class )
+                .hasDeclaredFields( ENTITY_ENTRY_FIELD_NAME, PREVIOUS_FIELD_NAME, NEXT_FIELD_NAME, TRACKER_FIELD_NAME );
+    }
 
-	@Test
-	public void shouldDeclareMethodsInEntityClass() {
-		assertThat( CardGame.class )
-				.hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "id", PERSISTENT_FIELD_WRITER_PREFIX + "id" )
-				.hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "name", PERSISTENT_FIELD_WRITER_PREFIX + "name" )
-				.hasDeclaredMethods( ENTITY_INSTANCE_GETTER_NAME, ENTITY_ENTRY_GETTER_NAME )
-				.hasDeclaredMethods( PREVIOUS_GETTER_NAME, PREVIOUS_SETTER_NAME, NEXT_GETTER_NAME, NEXT_SETTER_NAME )
-				.hasDeclaredMethods( TRACKER_HAS_CHANGED_NAME, TRACKER_CLEAR_NAME, TRACKER_SUSPEND_NAME, TRACKER_GET_NAME );
-	}
+    @Test
+    public void shouldDeclareMethodsInEntityClass() {
+        assertThat( CardGame.class )
+                .hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "id", PERSISTENT_FIELD_WRITER_PREFIX + "id" )
+                .hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "name", PERSISTENT_FIELD_WRITER_PREFIX + "name" )
+                .hasDeclaredMethods( ENTITY_INSTANCE_GETTER_NAME, ENTITY_ENTRY_GETTER_NAME )
+                .hasDeclaredMethods( PREVIOUS_GETTER_NAME, PREVIOUS_SETTER_NAME, NEXT_GETTER_NAME, NEXT_SETTER_NAME )
+                .hasDeclaredMethods( TRACKER_HAS_CHANGED_NAME, TRACKER_CLEAR_NAME, TRACKER_SUSPEND_NAME, TRACKER_GET_NAME );
+    }
 
-	@Test
-	public void shouldDeclareFieldsInEmbeddedClass() {
-		assertThat( Component.class )
-				.hasDeclaredFields( TRACKER_COMPOSITE_FIELD_NAME );
-	}
+    @Test
+    public void shouldDeclareFieldsInEmbeddedClass() {
+        assertThat( Component.class )
+                .hasDeclaredFields( TRACKER_COMPOSITE_FIELD_NAME );
+    }
 
-	@Test
-	public void shouldDeclareMethodsInEmbeddedClass() {
-		assertThat(Component.class )
-				.hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "component", PERSISTENT_FIELD_WRITER_PREFIX + "component" )
-				.hasDeclaredMethods( TRACKER_COMPOSITE_SET_OWNER, TRACKER_COMPOSITE_CLEAR_OWNER );
-	}
+    @Test
+    public void shouldDeclareMethodsInEmbeddedClass() {
+        assertThat(Component.class )
+                .hasDeclaredMethods( PERSISTENT_FIELD_READER_PREFIX + "component", PERSISTENT_FIELD_WRITER_PREFIX + "component" )
+                .hasDeclaredMethods( TRACKER_COMPOSITE_SET_OWNER, TRACKER_COMPOSITE_CLEAR_OWNER );
+    }
 
-	@Test
-	public void shouldCreateTheTracker() throws Exception {
-		CardGame entity = new CardGame( "MTG", "Magic the Gathering" );
-		assertThat( entity )
-				.extracting( NEXT_FIELD_NAME ).isNull();
-		assertThat( entity )
-				.extracting( PREVIOUS_FIELD_NAME ).isNull();
-		assertThat( entity )
-				.extracting( ENTITY_ENTRY_FIELD_NAME ).isNull();
-		assertThat( entity )
-				.extracting( TRACKER_FIELD_NAME ).isInstanceOf( SimpleFieldTracker.class );
-		assertThat( entity.getFirstPlayerToken() )
-				.extracting( TRACKER_COMPOSITE_FIELD_NAME ).isInstanceOf( CompositeOwnerTracker.class);
+    @Test
+    public void shouldCreateTheTracker() throws Exception {
+        CardGame entity = new CardGame( "MTG", "Magic the Gathering" );
+        assertThat( entity )
+                .extracting( NEXT_FIELD_NAME ).isNull();
+        assertThat( entity )
+                .extracting( PREVIOUS_FIELD_NAME ).isNull();
+        assertThat( entity )
+                .extracting( ENTITY_ENTRY_FIELD_NAME ).isNull();
+        assertThat( entity )
+                .extracting( TRACKER_FIELD_NAME ).isInstanceOf( SimpleFieldTracker.class );
+        assertThat( entity.getFirstPlayerToken() )
+                .extracting( TRACKER_COMPOSITE_FIELD_NAME ).isInstanceOf( CompositeOwnerTracker.class);
 
-		assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( true );
-		assertThat( entity ).extracting( TRACKER_GET_NAME )
-				.isEqualTo( new String[] { "name", "firstPlayerToken" } );
-		assertThat( entity.getFirstPlayerToken() )
-				.extracting( TRACKER_COMPOSITE_FIELD_NAME + ".names" ).isEqualTo( new String[] { "firstPlayerToken" } );
-	}
+        // NuoDB 18-May-23 - use dirtiness tracker properties directly, reflection fails
+        SelfDirtinessTracker sdtEntity = (SelfDirtinessTracker)entity;
+        assert(sdtEntity.$$_hibernate_hasDirtyAttributes());
+        //assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( true );
+        assertThat( sdtEntity.$$_hibernate_getDirtyAttributes())
+                .isEqualTo( new String[] { "name", "firstPlayerToken" } );
+        //assertThat( entity ).extracting( TRACKER_GET_NAME )
+        //      .isEqualTo( new String[] { "name", "firstPlayerToken" } );
 
-	@Test
-	public void shouldResetTheTracker() throws Exception {
-		CardGame entity = new CardGame( "7WD", "7 Wonders duel" );
+        assertThat( entity.getFirstPlayerToken() )
+                .extracting( TRACKER_COMPOSITE_FIELD_NAME + ".names" ).isEqualTo( new String[] { "firstPlayerToken" } );
+    }
 
-		Method trackerClearMethod = CardGame.class.getMethod( TRACKER_CLEAR_NAME );
-		trackerClearMethod.invoke( entity );
+    @Test
+    public void shouldResetTheTracker() throws Exception {
+        CardGame entity = new CardGame( "7WD", "7 Wonders duel" );
 
-		assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( false );
-		assertThat( entity ).extracting( TRACKER_GET_NAME ).isEqualTo( new String[0] );
-	}
+        Method trackerClearMethod = CardGame.class.getMethod( TRACKER_CLEAR_NAME );
+        trackerClearMethod.invoke( entity );
 
-	@Test
-	public void shouldUpdateTheTracker() throws Exception {
-		CardGame entity = new CardGame( "SPL", "Splendor" );
+        // NuoDB 18-May-23 - use dirtiness tracker properties directly, reflection fails
+        SelfDirtinessTracker sdtEntity = (SelfDirtinessTracker)entity;
+        assert(!sdtEntity.$$_hibernate_hasDirtyAttributes());
+        //assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( false );
+        assertThat( sdtEntity.$$_hibernate_getDirtyAttributes())
+                .isEqualTo( new String[0]  );
+        //assertThat( entity ).extracting( TRACKER_GET_NAME ).isEqualTo( new String[0] );
+    }
 
-		Method trackerClearMethod = CardGame.class.getMethod( TRACKER_CLEAR_NAME );
-		trackerClearMethod.invoke( entity );
+    @Test
+    public void shouldUpdateTheTracker() throws Exception {
+        CardGame entity = new CardGame( "SPL", "Splendor" );
+        Method trackerClearMethod = CardGame.class.getMethod( TRACKER_CLEAR_NAME );
+        trackerClearMethod.invoke( entity );
 
-		entity.setName( "Splendor: Cities of Splendor" );
+        entity.setName( "Splendor: Cities of Splendor" );
 
-		assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( true );
-		assertThat( entity ).extracting( TRACKER_GET_NAME )
-				.isEqualTo( new String[] { "name", "firstPlayerToken" } );
+        // NuoDB 18-May-23 - use dirtiness tracker properties directly, reflection fails
+        SelfDirtinessTracker sdtEntity = (SelfDirtinessTracker)entity;
+        assert(sdtEntity.$$_hibernate_hasDirtyAttributes());
+        //assertThat( entity ).extracting( TRACKER_HAS_CHANGED_NAME ).isEqualTo( true );
+        assertThat( sdtEntity.$$_hibernate_getDirtyAttributes())
+                .isEqualTo( new String[] { "name", "firstPlayerToken" } );
+        //assertThat( entity ).extracting( TRACKER_GET_NAME )
+        //      .isEqualTo( new String[] { "name", "firstPlayerToken" } );
 
-		trackerClearMethod.invoke( entity );
+        trackerClearMethod.invoke( entity );
 
-		entity.setFirstPlayerToken( new Component( "FIRST PLAYER!!!!!!!!" ) );
-		assertThat( entity ).extracting( TRACKER_GET_NAME )
-				.isEqualTo( new String[] { "firstPlayerToken" } );
-		assertThat( entity.getFirstPlayerToken() )
-				.extracting( TRACKER_COMPOSITE_FIELD_NAME + ".names" ).isEqualTo( new String[] { "firstPlayerToken" } );
-	}
+        entity.setFirstPlayerToken( new Component( "FIRST PLAYER!!!!!!!!" ) );
 
-	@MappedSuperclass
-	public static abstract class TableTopGame {
+        // NuoDB 18-May-23 - use dirtiness tracker properties directly, reflection fails
+        assertThat( sdtEntity.$$_hibernate_getDirtyAttributes())
+                .isEqualTo( new String[] { "firstPlayerToken" } );
+        //assertThat( entity ).extracting( TRACKER_GET_NAME )
+        //      .isEqualTo( new String[] { "firstPlayerToken" } );
 
-		@Embedded
-		private Component firstPlayerToken;
+        assertThat( entity.getFirstPlayerToken() )
+                .extracting( TRACKER_COMPOSITE_FIELD_NAME + ".names" ).isEqualTo( new String[] { "firstPlayerToken" } );
+    }
 
-		public Component getFirstPlayerToken() {
-			return firstPlayerToken;
-		}
+    @MappedSuperclass
+    public static abstract class TableTopGame {
 
-		public void setFirstPlayerToken(Component firstPlayerToken) {
-			this.firstPlayerToken = firstPlayerToken;
-		}
-	}
+        @Embedded
+        private Component firstPlayerToken;
 
-	@Embeddable
-	public static class Component {
+        public Component getFirstPlayerToken() {
+            return firstPlayerToken;
+        }
 
-		@Column(name = "first_player_token")
-		private String component;
+        public void setFirstPlayerToken(Component firstPlayerToken) {
+            this.firstPlayerToken = firstPlayerToken;
+        }
+    }
 
-		public Component() {
-		}
+    @Embeddable
+    public static class Component {
 
-		private Component(String component) {
-			this.component = component;
-		}
+        @Column(name = "first_player_token")
+        private String component;
 
-		public String getComponent() {
-			return component;
-		}
+        public Component() {
+        }
 
-		public void setComponent(String component) {
-			this.component = component;
-		}
-	}
+        private Component(String component) {
+            this.component = component;
+        }
 
-	@Entity(name = "CardGame")
-	public static class CardGame extends TableTopGame {
+        public String getComponent() {
+            return component;
+        }
 
-		@Id
-		private String id;
-		private String name;
+        public void setComponent(String component) {
+            this.component = component;
+        }
+    }
 
-		public CardGame() {
-		}
+    @Entity(name = "CardGame")
+    public static class CardGame extends TableTopGame {
 
-		private CardGame(String id, String name) {
-			this.id = id;
-			this.name = name;
-			setFirstPlayerToken( createEmbeddedValue( name ) );
-		}
+        @Id
+        private String id;
+        private String name;
 
-		public String getId() {
-			return id;
-		}
+        public CardGame() {
+        }
 
-		public void setId(String id) {
-			this.id = id;
-		}
+        private CardGame(String id, String name) {
+            this.id = id;
+            this.name = name;
+            setFirstPlayerToken( createEmbeddedValue( name ) );
+        }
 
-		public String getName() {
-			return name;
-		}
+        public String getId() {
+            return id;
+        }
 
-		public void setName(String name) {
-			this.name = name;
-			setFirstPlayerToken( createEmbeddedValue( name ) );
-		}
+        public void setId(String id) {
+            this.id = id;
+        }
 
-		private Component createEmbeddedValue(String name) {
-			return new Component( name + " first player token");
-		}
-	}
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+            setFirstPlayerToken( createEmbeddedValue( name ) );
+        }
+
+        private Component createEmbeddedValue(String name) {
+            return new Component( name + " first player token");
+        }
+    }
 
 }

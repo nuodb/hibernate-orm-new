@@ -43,6 +43,8 @@ import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
 
@@ -320,6 +322,8 @@ public class QueryBuilderTest extends BaseEntityManagerFunctionalTestCase {
 
 	@Test
 	@TestForIssue(jiraKey = "HHH-12314")
+	// NuoDB 18-May-23
+    @SkipForDialect(value= NuoDBDialect.class, comment = "NuoDB expects SELECT in generated JOIN sub-select")
 	public void testJoinUsingNegatedPredicate() {
 		// Write test data
 		doInJPA( this::entityManagerFactory, entityManager -> {

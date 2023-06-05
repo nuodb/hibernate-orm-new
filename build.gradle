@@ -9,6 +9,7 @@ buildscript {
 	repositories {
 		jcenter()
 		mavenCentral()
+		mavenLocal()
 	}
 	dependencies {
 		classpath 'org.hibernate.build.gradle:hibernate-matrix-testing:3.0.0.Final'
@@ -44,7 +45,15 @@ ext {
 	}
 	jpaVersion = new JpaVersion('2.2')
 	jakartaJpaVersion = new JpaVersion('3.0.0')
+	
+	nuodbHibernateVersion = new NuodbHibernateVersion();
+	nuodbHibernateJarVersion = System.env['DIALECT_VERSION'] ?: nuodbHibernateVersion.latestVersion;
 }
+
+if (!nuodbHibernateJarVersion.endsWith('-hib5'))
+	nuodbHibernateJarVersion += '-hib5';
+
+println "	Expecting to use NuoDB Hibernate JAR nuodb-hibernate-${nuodbHibernateJarVersion}.jar"
 
 // The Gradle Nexus Publish Plugin must be applied to the root project and requires group and version
 
@@ -62,12 +71,33 @@ nexusPublishing {
 
 allprojects {
 	repositories {
+		//ext.nuodbHibernateJarVersion = System.env['DIALECT_VERSION'] ?: nuodbHibernateVersion.latestVersion;
+
+		// Set SONATYPE_VERSION to pull our Jar from there
+		if (System.env['SONATYPE_VERSION'] != null) {
+			println "hibernate-orm: Using https://oss.sonatype.org/content/repositories/comnuodb-${System.env.SONATYPE_VERSION}/com/nuodb/hibernate/nuodb-hibernate/${nuodbHibernateJarVersion}/"
+			ivy {
+				url "https://oss.sonatype.org/content/repositories/comnuodb-${System.env.SONATYPE_VERSION}/"
+
+				layout 'pattern', {
+					artifact '/com/nuodb/hibernate/nuodb-hibernate/${nuodbHibernateJarVersion}/nuodb-hibernate-${nuodbHibernateJarVersion}.[ext]'
+				}
+			}
+		}
 		mavenCentral()
 		//Allow loading additional dependencies from a local path;
 		//useful to load JDBC drivers which can not be distributed in public.
 		if (System.env['ADDITIONAL_REPO'] != null) {
 			flatDir {
 				dirs "${System.env.ADDITIONAL_REPO}"
+			}
+		}
+		// NuoDB: Default to adding our dialect explicitly
+		else {
+			flatDir {
+				String mvnHome = "${System.properties.get('user.home').replace('\\', '/')}/.m2/repository";
+				//println "Using default repository: ${mvnHome}"
+				dirs "${mvnHome}/com/nuodb/hibernate/nuodb-hibernate/${nuodbHibernateJarVersion}"
 			}
 		}
 	}
@@ -122,7 +152,7 @@ task ciBuild {
 
 wrapper {
 	// To upgrade the version of gradle used in the wrapper, run:
-	//     ./gradlew wrapper --gradle-version NEW_VERSION
+	//	 ./gradlew wrapper --gradle-version NEW_VERSION
 	distributionType = Wrapper.DistributionType.ALL
 }
 
@@ -196,17 +226,103 @@ class HibernateVersion {
 	}
 }
 
+public class NuodbHibernateVersion {
+
+	public static final String unknownVersion = 'UNKNOWN';
+	public final String latestVersion
+	
+	public NuodbHibernateVersion() {
+		latestVersion = getLatestVersion();
+		println "Latest NuoDB Hibernate dialect found in ~/.m2 is ${latestVersion}"
+		
+		if (System.env['DIALECT_VERSION'] == null) {
+			println("DIALECT_VERSION environment variable should be set to 20.0.0 or later")
+			
+			if (isUnknown()) {
+				println()
+				println(">> ERROR: Unknown Dialect JAR version, unable to continue")
+				println()
+				System.exit(-1)
+			}
+
+			println("	Defaulting to latest version in .m2 repo: ${latestVersion}")
+		}
+		else {
+			latestVersion = System.env['DIALECT_VERSION'];
+			println("	Using DIALECT_VERSION=${latestVersion}")
+		}
+	}
+
+	public boolean isUnknown() {
+		return latestVersion.equals(unknownVersion);
+	}
+
+	private String getLatestVersion() {
+		String splitAtPeriod = '\\.';
+		String NO_VALUE = '0.0.0';
+		
+		File mavenHibDir = new File(System.getProperty('user.home'), '.m2/repository/com/nuodb/hibernate/nuodb-hibernate');
+		String latest = NO_VALUE;
+		String[] lbits = latest.split(splitAtPeriod);
+		
+		if (!mavenHibDir.exists())
+			return unknownVersion;
+			
+		for(File f : mavenHibDir.listFiles()) {
+			String dirName = f.name;
+			String originalDirName = dirName;
+			//println("dirName = ${dirName}");
+			
+			if (dirName.startsWith('.') || dirName.startsWith('3.') ||
+					!dirName.endsWith('-hib5') || !Character.isDigit(dirName.charAt(0)))
+   				continue;
+   				
+			int ix = dirName.indexOf('-');
+
+			if (ix != -1)
+				dirName = dirName.substring(0, ix);
+			
+			String[] m = dirName.split(splitAtPeriod);
+			boolean later = false;
+			//println("  latest = ${Arrays.asList(lbits)}");
+			//println("  dirName = ${Arrays.asList(m)}");
+			
+			// Version must be X.Y.Z, 3 components.  Otherwise it is a dud.
+			if (m.length < 3) {
+				println("WARNING: Corrupt directory name $originalDirName");
+				continue;
+			}
+
+			if (m[0] > lbits[0])
+				later = true;
+			else if (m[0] == lbits[0]) {
+				if (m[1] > lbits[1])
+					later = true;
+				else if (m[1] == lbits[1] && m[2] > lbits[2])
+					later = true;
+			}
+			
+			if (later) {
+				//println("  Change to ${dirName}")
+				latest = dirName;
+				lbits = latest.split(splitAtPeriod);
+			}
+			
+		}
+		
+		return latest.equals(NO_VALUE) ? unknownVersion : latest;
+	}
+
+}
+
 //idea {
-//    project {
+//	project {
 //		jdkName = gradle.ext.baselineJavaVersion
 //		languageLevel = gradle.ext.baselineJavaVersion
 //
 //		vcs = 'Git'
-//    }
-//    module {
-//        name = "hibernate-orm"
-//    }
+//	}
+//	module {
+//		name = "hibernate-orm"
+//	}
 //}
-
-
-

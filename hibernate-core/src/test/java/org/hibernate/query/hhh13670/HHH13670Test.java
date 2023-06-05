@@ -6,10 +6,13 @@
  */
 package org.hibernate.query.hhh13670;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 import javax.persistence.Column;
 import javax.persistence.ConstraintMode;
@@ -81,6 +84,8 @@ public class HHH13670Test extends BaseCoreFunctionalTestCase {
     }
 
     @Test
+    // NuoDB 18-May-23
+    @SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB expects SELECT in generated OUTER JOIN clause")
     public void testSubTypeJoinWithTableGroupJoins() {
         doInJPA(this::sessionFactory, em -> {
             List<Tuple> resultList = em.createQuery("SELECT subB_0.id, subA_0.id, subB_0.id, subA_0.id FROM SubB subB_0 LEFT JOIN SubA subA_0 ON subA_0.id = subB_0.parent.id ORDER BY subB_0.id ASC, subA_0.id ASC", Tuple.class)

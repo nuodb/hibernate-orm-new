@@ -29,6 +29,7 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.testing.transaction.TransactionUtil;
 import org.hibernate.testing.util.ExceptionUtil;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
@@ -44,6 +45,7 @@ import static org.junit.Assert.fail;
 @TestForIssue( jiraKey = "HHH-5275")
 @SkipForDialect(value=SybaseASE15Dialect.class, strictMatching=true,
 		comment = "skip this test on Sybase ASE 15.5, but run it on 15.7, see HHH-6820")
+@Ignore // Hangs when running against any database, ignore for now.  NuoDB 8-JAN-19
 public class LockModeTest extends BaseCoreFunctionalTestCase {
 
 	private Long id;

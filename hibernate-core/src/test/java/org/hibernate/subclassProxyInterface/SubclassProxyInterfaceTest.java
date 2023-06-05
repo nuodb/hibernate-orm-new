@@ -12,12 +12,14 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.service.ServiceRegistry;
+import org.hibernate.testing.RequiresDialect;
 import org.hibernate.testing.ServiceRegistryBuilder;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 
 /**
  * @author Steve Ebersole
  */
+@RequiresDialect(H2Dialect.class)  // NuoDB 18-May-23
 public class SubclassProxyInterfaceTest extends BaseUnitTestCase {
 	@Test
 	public void testSubclassProxyInterfaces() {

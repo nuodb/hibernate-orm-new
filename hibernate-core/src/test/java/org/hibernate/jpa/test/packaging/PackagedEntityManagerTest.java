@@ -7,6 +7,7 @@
 package org.hibernate.jpa.test.packaging;
 
 import java.io.File;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
@@ -15,7 +16,10 @@ import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 import javax.persistence.PersistenceException;
 
+import com.nuodb.hibernate.NuoDBDialect;
+import org.hibernate.Session;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.dialect.H2Dialect;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventType;
@@ -43,7 +47,9 @@ import org.hibernate.jpa.test.pack.various.Airplane;
 import org.hibernate.jpa.test.pack.various.Seat;
 import org.hibernate.stat.Statistics;
 
+import org.hibernate.testing.RequiresDialect;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -56,459 +62,490 @@ import static org.junit.Assert.fail;
  * In this test we verify that  it is possible to bootstrap Hibernate/JPA from
  * various bundles (war, par, ...) using {@code Persistence.createEntityManagerFactory()}
  * <p/>
- * Each test will before its run build the required bundle and place them into the classpath.
+ * Each test will, before its run, build the required bundle and place them into the classpath.
  *
  * @author Gavin King
  * @author Hardy Ferentschik
  */
 @SuppressWarnings("unchecked")
+// NuoDB 19-May-23: These tests are hard-wired to use H2.
+@RequiresDialect(H2Dialect.class) // No point running for any other dialect
 public class PackagedEntityManagerTest extends PackagingTestCase {
-	private EntityManagerFactory emf;
-	@After
-	public void tearDown(){
-		if(emf != null && emf.isOpen()) {
-			emf.close();
-		}
-	}
+    private EntityManagerFactory emf;
 
-	@Test
-	public void testDefaultPar() throws Exception {
-		File testPackage = buildDefaultPar();
-		addPackageToClasspath( testPackage );
+    @Before
+    public void setSchema() {
+        // NuoDB 18-May-2: Make sure schema DBO exists
+        if (getDialect() instanceof NuoDBDialect) {
+            createSchemaDBO(openSession());
+        }
+    }
 
-		// run the test
-		emf = Persistence.createEntityManagerFactory( "defaultpar", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		ApplicationServer as = new ApplicationServer();
-		as.setName( "JBoss AS" );
-		Version v = new Version();
-		v.setMajor( 4 );
-		v.setMinor( 0 );
-		v.setMicro( 3 );
-		as.setVersion( v );
-		Mouse mouse = new Mouse();
-		mouse.setName( "mickey" );
-		em.getTransaction().begin();
-		em.persist( as );
-		em.persist( mouse );
-		assertEquals( 1, em.createNamedQuery( "allMouse" ).getResultList().size() );
-		Lighter lighter = new Lighter();
-		lighter.name = "main";
-		lighter.power = " 250 W";
-		em.persist( lighter );
-		em.flush();
-		em.remove( lighter );
-		em.remove( mouse );
-		assertNotNull( as.getId() );
-		em.remove( as );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+    private void createSchemaDBO(Session session) {
+        try {
+            session.doWork( conn -> conn.createStatement().executeUpdate("CREATE SCHEMA DBO"));
+        }
+        finally {
+            session.close();
+        }
+    }
 
-	@Test
-	public void testDefaultParForPersistence_1_0() throws Exception {
-		File testPackage = buildDefaultPar_1_0();
-		addPackageToClasspath( testPackage );
+    private void createSchemaDBO(EntityManager em) {
+        try {
+            em.unwrap(Session.class).doWork(conn -> conn.createStatement().executeUpdate("CREATE SCHEMA DBO"));
+        }
+        catch(Exception e) {
+            // H2 may raise an exception if it exists already?
+            log.info(e.getClass().getSimpleName() + " creating DBO schema: " + e.getLocalizedMessage());
+        }
+    }
 
-		emf = Persistence.createEntityManagerFactory( "defaultpar_1_0", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		ApplicationServer1 as = new ApplicationServer1();
-		as.setName( "JBoss AS" );
-		Version1 v = new Version1();
-		v.setMajor( 4 );
-		v.setMinor( 0 );
-		v.setMicro( 3 );
-		as.setVersion( v );
-		Mouse1 mouse = new Mouse1();
-		mouse.setName( "mickey" );
-		em.getTransaction().begin();
-		em.persist( as );
-		em.persist( mouse );
-		assertEquals( 1, em.createNamedQuery( "allMouse_1_0" ).getResultList().size() );
-		Lighter1 lighter = new Lighter1();
-		lighter.name = "main";
-		lighter.power = " 250 W";
-		em.persist( lighter );
-		em.flush();
-		em.remove( lighter );
-		em.remove( mouse );
-		assertNotNull( as.getId() );
-		em.remove( as );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+    @After
+    public void tearDown(){
+        if(emf != null && emf.isOpen()) {
+            emf.close();
+        }
+    }
 
-	@Test
-	public void testListenersDefaultPar() throws Exception {
-		File testPackage = buildDefaultPar();
-		addPackageToClasspath( testPackage );
+    @Test
+    public void testDefaultPar() throws Exception {
+        File testPackage = buildDefaultPar();
+        addPackageToClasspath( testPackage );
 
-		IncrementListener.reset();
-		OtherIncrementListener.reset();
-		emf = Persistence.createEntityManagerFactory( "defaultpar", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		em.getTransaction().begin();
-		ApplicationServer as = new ApplicationServer();
-		as.setName( "JBoss AS" );
-		Version v = new Version();
-		v.setMajor( 4 );
-		v.setMinor( 0 );
-		v.setMicro( 3 );
-		as.setVersion( v );
-		em.persist( as );
-		em.flush();
-		assertEquals( "Failure in default listeners", 1, IncrementListener.getIncrement() );
-		assertEquals( "Failure in XML overriden listeners", 1, OtherIncrementListener.getIncrement() );
+        // run the test
+        emf = Persistence.createEntityManagerFactory( "defaultpar", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        ApplicationServer as = new ApplicationServer();
+        as.setName( "JBoss AS" );
+        Version v = new Version();
+        v.setMajor( 4 );
+        v.setMinor( 0 );
+        v.setMicro( 3 );
+        as.setVersion( v );
+        Mouse mouse = new Mouse();
+        mouse.setName( "mickey" );
+        em.getTransaction().begin();
+        em.persist( as );
+        em.persist( mouse );
+        assertEquals( 1, em.createNamedQuery( "allMouse" ).getResultList().size() );
+        Lighter lighter = new Lighter();
+        lighter.name = "main";
+        lighter.power = " 250 W";
+        em.persist( lighter );
+        em.flush();
+        em.remove( lighter );
+        em.remove( mouse );
+        assertNotNull( as.getId() );
+        em.remove( as );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-		Mouse mouse = new Mouse();
-		mouse.setName( "mickey" );
-		em.persist( mouse );
-		em.flush();
-		assertEquals( "Failure in @ExcludeDefaultListeners", 1, IncrementListener.getIncrement() );
-		assertEquals( 1, OtherIncrementListener.getIncrement() );
+    @Test
+    public void testDefaultParForPersistence_1_0() throws Exception {
+        File testPackage = buildDefaultPar_1_0();
+        addPackageToClasspath( testPackage );
 
-		Money money = new Money();
-		em.persist( money );
-		em.flush();
-		assertEquals( "Failure in @ExcludeDefaultListeners", 2, IncrementListener.getIncrement() );
-		assertEquals( 1, OtherIncrementListener.getIncrement() );
+        emf = Persistence.createEntityManagerFactory( "defaultpar_1_0", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        ApplicationServer1 as = new ApplicationServer1();
+        as.setName( "JBoss AS" );
+        Version1 v = new Version1();
+        v.setMajor( 4 );
+        v.setMinor( 0 );
+        v.setMicro( 3 );
+        as.setVersion( v );
+        Mouse1 mouse = new Mouse1();
+        mouse.setName( "mickey" );
+        em.getTransaction().begin();
+        em.persist( as );
+        em.persist( mouse );
+        assertEquals( 1, em.createNamedQuery( "allMouse_1_0" ).getResultList().size() );
+        Lighter1 lighter = new Lighter1();
+        lighter.name = "main";
+        lighter.power = " 250 W";
+        em.persist( lighter );
+        em.flush();
+        em.remove( lighter );
+        em.remove( mouse );
+        assertNotNull( as.getId() );
+        em.remove( as );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-		em.getTransaction().rollback();
-		em.close();
-		emf.close();
-	}
+    @Test
+    public void testListenersDefaultPar() throws Exception {
+        File testPackage = buildDefaultPar();
+        addPackageToClasspath( testPackage );
 
-	@Test
-	public void testExplodedPar() throws Exception {
-		File testPackage = buildExplodedPar();
-		addPackageToClasspath( testPackage );
+        IncrementListener.reset();
+        OtherIncrementListener.reset();
+        emf = Persistence.createEntityManagerFactory( "defaultpar", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
+        ApplicationServer as = new ApplicationServer();
+        as.setName( "JBoss AS" );
+        Version v = new Version();
+        v.setMajor( 4 );
+        v.setMinor( 0 );
+        v.setMicro( 3 );
+        as.setVersion( v );
+        em.persist( as );
+        em.flush();
+        assertEquals( "Failure in default listeners", 1, IncrementListener.getIncrement() );
+        assertEquals( "Failure in XML overriden listeners", 1, OtherIncrementListener.getIncrement() );
 
-		emf = Persistence.createEntityManagerFactory( "explodedpar", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		Carpet carpet = new Carpet();
-		Elephant el = new Elephant();
-		el.setName( "Dumbo" );
-		carpet.setCountry( "Turkey" );
-		em.getTransaction().begin();
-		em.persist( carpet );
-		em.persist( el );
-		assertEquals( 1, em.createNamedQuery( "allCarpet" ).getResultList().size() );
-		assertNotNull( carpet.getId() );
-		em.remove( carpet );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+        Mouse mouse = new Mouse();
+        mouse.setName( "mickey" );
+        em.persist( mouse );
+        em.flush();
+        assertEquals( "Failure in @ExcludeDefaultListeners", 1, IncrementListener.getIncrement() );
+        assertEquals( 1, OtherIncrementListener.getIncrement() );
 
-	@Test
-	public void testExcludeHbmPar() throws Exception {
-		File testPackage = buildExcludeHbmPar();
-		addPackageToClasspath( testPackage );
+        Money money = new Money();
+        em.persist( money );
+        em.flush();
+        assertEquals( "Failure in @ExcludeDefaultListeners", 2, IncrementListener.getIncrement() );
+        assertEquals( 1, OtherIncrementListener.getIncrement() );
 
-		try {
-			emf = Persistence.createEntityManagerFactory( "excludehbmpar", new HashMap() );
-		}
-		catch ( PersistenceException e ) {
-			emf.close();
-			Throwable nested = e.getCause();
-			if ( nested == null ) {
-				throw e;
-			}
-			nested = nested.getCause();
-			if ( nested == null ) {
-				throw e;
-			}
-			if ( !( nested instanceof ClassNotFoundException ) ) {
-				throw e;
-			}
-			fail( "Try to process hbm file: " + e.getMessage() );
+        em.getTransaction().rollback();
+        em.close();
+        emf.close();
+    }
 
-		}
-		EntityManager em = emf.createEntityManager();
-		Caipirinha s = new Caipirinha( "Strong" );
-		em.getTransaction().begin();
-		em.persist( s );
-		em.getTransaction().commit();
+    @Test
+    public void testExplodedPar() throws Exception {
+        File testPackage = buildExplodedPar();
+        addPackageToClasspath( testPackage );
 
-		em.getTransaction().begin();
-		s = em.find( Caipirinha.class, s.getId() );
-		em.remove( s );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+        emf = Persistence.createEntityManagerFactory( "explodedpar", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        Carpet carpet = new Carpet();
+        Elephant el = new Elephant();
+        el.setName( "Dumbo" );
+        carpet.setCountry( "Turkey" );
+        em.getTransaction().begin();
+        em.persist( carpet );
+        em.persist( el );
+        assertEquals( 1, em.createNamedQuery( "allCarpet" ).getResultList().size() );
+        assertNotNull( carpet.getId() );
+        em.remove( carpet );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-	@Test
-	public void testCfgXmlPar() throws Exception {
-		File testPackage = buildCfgXmlPar();
-		addPackageToClasspath( testPackage );
+    @Test
+    public void testExcludeHbmPar() throws Exception {
+        File testPackage = buildExcludeHbmPar();
+        addPackageToClasspath( testPackage );
 
-		emf = Persistence.createEntityManagerFactory( "cfgxmlpar", new HashMap() );
+        try {
+            emf = Persistence.createEntityManagerFactory( "excludehbmpar", new HashMap() );
+        }
+        catch ( PersistenceException e ) {
+            emf.close();
+            Throwable nested = e.getCause();
+            if ( nested == null ) {
+                throw e;
+            }
+            nested = nested.getCause();
+            if ( nested == null ) {
+                throw e;
+            }
+            if ( !( nested instanceof ClassNotFoundException ) ) {
+                throw e;
+            }
+            fail( "Try to process hbm file: " + e.getMessage() );
 
-		assertTrue( emf.getProperties().containsKey( "hibernate.test-assertable-setting" ) );
+        }
+        EntityManager em = emf.createEntityManager();
+        Caipirinha s = new Caipirinha( "Strong" );
+        em.getTransaction().begin();
+        em.persist( s );
+        em.getTransaction().commit();
 
-		EntityManager em = emf.createEntityManager();
-		Item i = new Item();
-		i.setDescr( "Blah" );
-		i.setName( "factory" );
-		Morito m = new Morito();
-		m.setPower( "SuperStrong" );
-		em.getTransaction().begin();
-		em.persist( i );
-		em.persist( m );
-		em.getTransaction().commit();
+        em.getTransaction().begin();
+        s = em.find( Caipirinha.class, s.getId() );
+        em.remove( s );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-		em.getTransaction().begin();
-		i = em.find( Item.class, i.getName() );
-		em.remove( i );
-		em.remove( em.find( Morito.class, m.getId() ) );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+    @Test
+    public void testCfgXmlPar() throws Exception {
+        File testPackage = buildCfgXmlPar();
+        addPackageToClasspath( testPackage );
 
-	@Test
-	public void testSpacePar() throws Exception {
-		File testPackage = buildSpacePar();
-		addPackageToClasspath( testPackage );
+        emf = Persistence.createEntityManagerFactory( "cfgxmlpar", new HashMap() );
 
-		emf = Persistence.createEntityManagerFactory( "space par", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		org.hibernate.jpa.test.pack.spacepar.Bug bug = new org.hibernate.jpa.test.pack.spacepar.Bug();
-		bug.setSubject( "Spaces in directory name don't play well on Windows" );
-		em.getTransaction().begin();
-		em.persist( bug );
-		em.flush();
-		em.remove( bug );
-		assertNotNull( bug.getId() );
-		em.getTransaction().rollback();
-		em.close();
-		emf.close();
-	}
+        assertTrue( emf.getProperties().containsKey( "hibernate.test-assertable-setting" ) );
 
-	@Test
-	public void testOverriddenPar() throws Exception {
-		File testPackage = buildOverridenPar();
-		addPackageToClasspath( testPackage );
+        EntityManager em = emf.createEntityManager();
+        createSchemaDBO(em);  /// Make sure it exists
+        Item i = new Item();
+        i.setDescr( "Blah" );
+        i.setName( "factory" );
+        Morito m = new Morito();
+        m.setPower( "SuperStrong" );
+        em.getTransaction().begin();
+        em.persist( i );
+        em.persist( m );
+        em.getTransaction().commit();
 
-		HashMap properties = new HashMap();
-		properties.put( AvailableSettings.JPA_JTA_DATASOURCE, null );
-		Properties p = new Properties();
-		p.load( ConfigHelper.getResourceAsStream( "/overridenpar.properties" ) );
-		properties.putAll( p );
-		emf = Persistence.createEntityManagerFactory( "overridenpar", properties );
-		EntityManager em = emf.createEntityManager();
-		org.hibernate.jpa.test.pack.overridenpar.Bug bug = new org.hibernate.jpa.test.pack.overridenpar.Bug();
-		bug.setSubject( "Allow DS overriding" );
-		em.getTransaction().begin();
-		em.persist( bug );
-		em.flush();
-		em.remove( bug );
-		assertNotNull( bug.getId() );
-		em.getTransaction().rollback();
-		em.close();
-		emf.close();
-	}
+        em.getTransaction().begin();
+        i = em.find( Item.class, i.getName() );
+        em.remove( i );
+        em.remove( em.find( Morito.class, m.getId() ) );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-	@Test
-	public void testListeners() throws Exception {
-		File testPackage = buildExplicitPar();
-		addPackageToClasspath( testPackage );
+    @Test
+    public void testSpacePar() throws Exception {
+        File testPackage = buildSpacePar();
+        addPackageToClasspath( testPackage );
 
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		EventListenerRegistry listenerRegistry = em.unwrap( SharedSessionContractImplementor.class ).getFactory()
-				.getServiceRegistry()
-				.getService( EventListenerRegistry.class );
-		assertEquals(
-				"Explicit pre-insert event through hibernate.ejb.event.pre-insert does not work",
-				listenerRegistry.getEventListenerGroup( EventType.PRE_INSERT ).count(),
-				listenerRegistry.getEventListenerGroup( EventType.PRE_UPDATE ).count() + 1
-		);
+        emf = Persistence.createEntityManagerFactory( "space par", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        org.hibernate.jpa.test.pack.spacepar.Bug bug = new org.hibernate.jpa.test.pack.spacepar.Bug();
+        bug.setSubject( "Spaces in directory name don't play well on Windows" );
+        em.getTransaction().begin();
+        em.persist( bug );
+        em.flush();
+        em.remove( bug );
+        assertNotNull( bug.getId() );
+        em.getTransaction().rollback();
+        em.close();
+        emf.close();
+    }
 
-		em.close();
-		emf.close();
-	}
+    @Test
+    public void testOverriddenPar() throws Exception {
+        File testPackage = buildOverridenPar();
+        addPackageToClasspath( testPackage );
 
-	@Test
-	public void testExtendedEntityManager() throws Exception {
-		File testPackage = buildExplicitPar();
-		addPackageToClasspath( testPackage );
+        HashMap properties = new HashMap();
+        properties.put( AvailableSettings.JPA_JTA_DATASOURCE, null );
+        Properties p = new Properties();
+        p.load( ConfigHelper.getResourceAsStream( "/overridenpar.properties" ) );
+        properties.putAll( p );
+        emf = Persistence.createEntityManagerFactory( "overridenpar", properties );
+        EntityManager em = emf.createEntityManager();
+        org.hibernate.jpa.test.pack.overridenpar.Bug bug = new org.hibernate.jpa.test.pack.overridenpar.Bug();
+        bug.setSubject( "Allow DS overriding" );
+        em.getTransaction().begin();
+        em.persist( bug );
+        em.flush();
+        em.remove( bug );
+        assertNotNull( bug.getId() );
+        em.getTransaction().rollback();
+        em.close();
+        emf.close();
+    }
 
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		Item item = new Item( "Mouse", "Micro$oft mouse" );
-		em.getTransaction().begin();
-		em.persist( item );
-		assertTrue( em.contains( item ) );
-		em.getTransaction().commit();
+    @Test
+    public void testListeners() throws Exception {
+        File testPackage = buildExplicitPar();
+        addPackageToClasspath( testPackage );
 
-		assertTrue( em.contains( item ) );
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        EventListenerRegistry listenerRegistry = em.unwrap( SharedSessionContractImplementor.class ).getFactory()
+                .getServiceRegistry()
+                .getService( EventListenerRegistry.class );
+        assertEquals(
+                "Explicit pre-insert event through hibernate.ejb.event.pre-insert does not work",
+                listenerRegistry.getEventListenerGroup( EventType.PRE_INSERT ).count(),
+                listenerRegistry.getEventListenerGroup( EventType.PRE_UPDATE ).count() + 1
+        );
 
-		em.getTransaction().begin();
-		Item item1 = (Item) em.createQuery( "select i from Item i where descr like 'M%'" ).getSingleResult();
-		assertNotNull( item1 );
-		assertSame( item, item1 );
-		item.setDescr( "Micro$oft wireless mouse" );
-		assertTrue( em.contains( item ) );
-		em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-		assertTrue( em.contains( item ) );
+    @Test
+    public void testExtendedEntityManager() throws Exception {
+        File testPackage = buildExplicitPar();
+        addPackageToClasspath( testPackage );
 
-		em.getTransaction().begin();
-		item1 = em.find( Item.class, "Mouse" );
-		assertSame( item, item1 );
-		em.getTransaction().commit();
-		assertTrue( em.contains( item ) );
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        Item item = new Item( "Mouse", "Micro$oft mouse" );
+        em.getTransaction().begin();
+        em.persist( item );
+        assertTrue( em.contains( item ) );
+        em.getTransaction().commit();
 
-		item1 = em.find( Item.class, "Mouse" );
-		assertSame( item, item1 );
-		assertTrue( em.contains( item ) );
+        assertTrue( em.contains( item ) );
 
-		item1 = (Item) em.createQuery( "select i from Item i where descr like 'M%'" ).getSingleResult();
-		assertNotNull( item1 );
-		assertSame( item, item1 );
-		assertTrue( em.contains( item ) );
+        em.getTransaction().begin();
+        Item item1 = (Item) em.createQuery( "select i from Item i where descr like 'M%'" ).getSingleResult();
+        assertNotNull( item1 );
+        assertSame( item, item1 );
+        item.setDescr( "Micro$oft wireless mouse" );
+        assertTrue( em.contains( item ) );
+        em.getTransaction().commit();
 
-		em.getTransaction().begin();
-		assertTrue( em.contains( item ) );
-		em.remove( item );
-		em.remove( item ); //second remove should be a no-op
-		em.getTransaction().commit();
+        assertTrue( em.contains( item ) );
 
-		em.close();
-		emf.close();
-	}
+        em.getTransaction().begin();
+        item1 = em.find( Item.class, "Mouse" );
+        assertSame( item, item1 );
+        em.getTransaction().commit();
+        assertTrue( em.contains( item ) );
 
-	@Test
-	public void testConfiguration() throws Exception {
-		File testPackage = buildExplicitPar();
-		addPackageToClasspath( testPackage );
+        item1 = em.find( Item.class, "Mouse" );
+        assertSame( item, item1 );
+        assertTrue( em.contains( item ) );
 
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
-		Item item = new Item( "Mouse", "Micro$oft mouse" );
-		Distributor res = new Distributor();
-		res.setName( "Bruce" );
-		item.setDistributors( new HashSet<Distributor>() );
-		item.getDistributors().add( res );
-		Statistics stats = ( (HibernateEntityManagerFactory) emf ).getSessionFactory().getStatistics();
-		stats.clear();
-		stats.setStatisticsEnabled( true );
+        item1 = (Item) em.createQuery( "select i from Item i where descr like 'M%'" ).getSingleResult();
+        assertNotNull( item1 );
+        assertSame( item, item1 );
+        assertTrue( em.contains( item ) );
 
-		EntityManager em = emf.createEntityManager();
-		em.getTransaction().begin();
+        em.getTransaction().begin();
+        assertTrue( em.contains( item ) );
+        em.remove( item );
+        em.remove( item ); //second remove should be a no-op
+        em.getTransaction().commit();
 
-		em.persist( res );
-		em.persist( item );
-		assertTrue( em.contains( item ) );
+        em.close();
+        emf.close();
+    }
 
-		em.getTransaction().commit();
-		em.close();
+    @Test
+    public void testConfiguration() throws Exception {
+        File testPackage = buildExplicitPar();
+        addPackageToClasspath( testPackage );
 
-		assertEquals( 1, stats.getSecondLevelCachePutCount() );
-		assertEquals( 0, stats.getSecondLevelCacheHitCount() );
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        Item item = new Item( "Mouse", "Micro$oft mouse" );
+        Distributor res = new Distributor();
+        res.setName( "Bruce" );
+        item.setDistributors( new HashSet<Distributor>() );
+        item.getDistributors().add( res );
+        Statistics stats = ( (HibernateEntityManagerFactory) emf ).getSessionFactory().getStatistics();
+        stats.clear();
+        stats.setStatisticsEnabled( true );
 
-		em = emf.createEntityManager();
-		em.getTransaction().begin();
-		Item second = em.find( Item.class, item.getName() );
-		assertEquals( 1, second.getDistributors().size() );
-		assertEquals( 1, stats.getSecondLevelCacheHitCount() );
-		em.getTransaction().commit();
-		em.close();
+        EntityManager em = emf.createEntityManager();
+        em.getTransaction().begin();
 
-		em = emf.createEntityManager();
-		em.getTransaction().begin();
-		second = em.find( Item.class, item.getName() );
-		assertEquals( 1, second.getDistributors().size() );
-		assertEquals( 3, stats.getSecondLevelCacheHitCount() );
-		for ( Distributor distro : second.getDistributors() ) {
-			em.remove( distro );
-		}
-		em.remove( second );
-		em.getTransaction().commit();
-		em.close();
+        em.persist( res );
+        em.persist( item );
+        assertTrue( em.contains( item ) );
 
-		stats.clear();
-		stats.setStatisticsEnabled( false );
-		emf.close();
-	}
+        em.getTransaction().commit();
+        em.close();
 
-	@Test
-	public void testExternalJar() throws Exception {
-		File externalJar = buildExternalJar();
-		File testPackage = buildExplicitPar();
-		addPackageToClasspath( testPackage, externalJar );
+        assertEquals( 1, stats.getSecondLevelCachePutCount() );
+        assertEquals( 0, stats.getSecondLevelCacheHitCount() );
 
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		Scooter s = new Scooter();
-		s.setModel( "Abadah" );
-		s.setSpeed( 85l );
-		em.getTransaction().begin();
-		em.persist( s );
-		em.getTransaction().commit();
-		em.close();
-		em = emf.createEntityManager();
-		em.getTransaction().begin();
-		s = em.find( Scooter.class, s.getModel() );
-		assertEquals( Long.valueOf( 85 ), s.getSpeed() );
-		em.remove( s );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+        em = emf.createEntityManager();
+        em.getTransaction().begin();
+        Item second = em.find( Item.class, item.getName() );
+        assertEquals( 1, second.getDistributors().size() );
+        assertEquals( 1, stats.getSecondLevelCacheHitCount() );
+        em.getTransaction().commit();
+        em.close();
 
-	@Test
-	public void testRelativeJarReferences() throws Exception {
-		File externalJar = buildExternalJar2();
-		File testPackage = buildExplicitPar2();
-		addPackageToClasspath( testPackage, externalJar );
+        em = emf.createEntityManager();
+        em.getTransaction().begin();
+        second = em.find( Item.class, item.getName() );
+        assertEquals( 1, second.getDistributors().size() );
+        assertEquals( 3, stats.getSecondLevelCacheHitCount() );
+        for ( Distributor distro : second.getDistributors() ) {
+            em.remove( distro );
+        }
+        em.remove( second );
+        em.getTransaction().commit();
+        em.close();
 
-		// if the jar cannot be resolved, this call should fail
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        stats.clear();
+        stats.setStatisticsEnabled( false );
+        emf.close();
+    }
 
-		// but to make sure, also verify that the entity defined in the external jar was found
-		emf.getMetamodel().entity( Airplane.class );
-		emf.getMetamodel().entity( Scooter.class );
+    @Test
+    public void testExternalJar() throws Exception {
+        File externalJar = buildExternalJar();
+        File testPackage = buildExplicitPar();
+        addPackageToClasspath( testPackage, externalJar );
 
-		// additionally, try to use them
-		EntityManager em = emf.createEntityManager();
-		Scooter s = new Scooter();
-		s.setModel( "Abadah" );
-		s.setSpeed( 85l );
-		em.getTransaction().begin();
-		em.persist( s );
-		em.getTransaction().commit();
-		em.close();
-		em = emf.createEntityManager();
-		em.getTransaction().begin();
-		s = em.find( Scooter.class, s.getModel() );
-		assertEquals( Long.valueOf( 85 ), s.getSpeed() );
-		em.remove( s );
-		em.getTransaction().commit();
-		em.close();
-		emf.close();
-	}
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        Scooter s = new Scooter();
+        s.setModel( "Abadah" );
+        s.setSpeed( 85l );
+        em.getTransaction().begin();
+        em.persist( s );
+        em.getTransaction().commit();
+        em.close();
+        em = emf.createEntityManager();
+        em.getTransaction().begin();
+        s = em.find( Scooter.class, s.getModel() );
+        assertEquals( Long.valueOf( 85 ), s.getSpeed() );
+        em.remove( s );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
 
-	@Test
-	public void testORMFileOnMainAndExplicitJars() throws Exception {
-		File testPackage = buildExplicitPar();
-		addPackageToClasspath( testPackage );
+    @Test
+    public void testRelativeJarReferences() throws Exception {
+        File externalJar = buildExternalJar2();
+        File testPackage = buildExplicitPar2();
+        addPackageToClasspath( testPackage, externalJar );
 
-		emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
-		EntityManager em = emf.createEntityManager();
-		Seat seat = new Seat();
-		seat.setNumber( "3B" );
-		Airplane plane = new Airplane();
-		plane.setSerialNumber( "75924418409052355" );
-		em.getTransaction().begin();
-		em.persist( seat );
-		em.persist( plane );
-		em.flush();
-		em.getTransaction().rollback();
-		em.close();
-		emf.close();
-	}
+        // if the jar cannot be resolved, this call should fail
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+
+        // but to make sure, also verify that the entity defined in the external jar was found
+        emf.getMetamodel().entity( Airplane.class );
+        emf.getMetamodel().entity( Scooter.class );
+
+        // additionally, try to use them
+        EntityManager em = emf.createEntityManager();
+        Scooter s = new Scooter();
+        s.setModel( "Abadah" );
+        s.setSpeed( 85l );
+        em.getTransaction().begin();
+        em.persist( s );
+        em.getTransaction().commit();
+        em.close();
+        em = emf.createEntityManager();
+        em.getTransaction().begin();
+        s = em.find( Scooter.class, s.getModel() );
+        assertEquals( Long.valueOf( 85 ), s.getSpeed() );
+        em.remove( s );
+        em.getTransaction().commit();
+        em.close();
+        emf.close();
+    }
+
+    @Test
+    public void testORMFileOnMainAndExplicitJars() throws Exception {
+        File testPackage = buildExplicitPar();
+        addPackageToClasspath( testPackage );
+
+        emf = Persistence.createEntityManagerFactory( "manager1", new HashMap() );
+        EntityManager em = emf.createEntityManager();
+        Seat seat = new Seat();
+        seat.setNumber( "3B" );
+        Airplane plane = new Airplane();
+        plane.setSerialNumber( "75924418409052355" );
+        em.getTransaction().begin();
+        em.persist( seat );
+        em.persist( plane );
+        em.flush();
+        em.getTransaction().rollback();
+        em.close();
+        emf.close();
+    }
 }

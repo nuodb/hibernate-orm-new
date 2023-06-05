@@ -22,6 +22,9 @@ import org.hibernate.ScrollableResults;
 import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.jpa.test.BaseEntityManagerFunctionalTestCase;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
+
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 
@@ -49,6 +52,8 @@ public class CriteriaToScrollableResultsFetchTest extends BaseEntityManagerFunct
 
 	@Test
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA only supports forward-only cursors")
+    // NuoDB 18-May-23
+    @SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB only supports forward-only cursors")
 	public void testWithScroll() {
 		// Creates data necessary for test
 		Long facilityId = populate();

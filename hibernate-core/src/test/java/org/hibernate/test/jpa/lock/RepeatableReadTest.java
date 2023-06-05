@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import org.hibernate.LockMode;
 import org.hibernate.Session;
 import org.hibernate.StaleObjectStateException;
@@ -25,6 +27,7 @@ import org.hibernate.test.jpa.Part;
 import org.hibernate.testing.jdbc.SQLServerSnapshotIsolationConnectionProvider;
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -37,6 +40,8 @@ import static org.junit.Assert.fail;
  * @author Steve Ebersole
  */
 @RequiresDialectFeature( DialectChecks.DoesReadCommittedNotCauseWritersToBlockReadersCheck.class )
+// NuoDB: Revisit this test
+//@SkipForDialect(value = NuoDBDialect.class, comment = "Identified issues with long timeouts when running this test for NuoDB database. Skipping until we have a solution.")
 public class RepeatableReadTest extends AbstractJPATest {
 
 	private SQLServerSnapshotIsolationConnectionProvider connectionProvider = new SQLServerSnapshotIsolationConnectionProvider();

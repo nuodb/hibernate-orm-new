@@ -20,11 +20,14 @@ import org.hibernate.test.util.jdbc.PreparedStatementSpyConnectionProvider;
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.transaction.TransactionUtil;
 import org.hibernate.testing.util.ExceptionUtil;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -70,7 +73,10 @@ public class StatementIsClosedAfterALockExceptionTest extends BaseEntityManagerF
 
 	@Test(timeout = 1000 * 30) //30 seconds
 	@TestForIssue(jiraKey = "HHH-11617")
-	@SkipForDialect( value = CockroachDB192Dialect.class )
+    @SkipForDialects(value = {
+            @SkipForDialect(value = CockroachDB192Dialect.class),
+            @SkipForDialect(value = NuoDBDialect.class)
+    })  // NuoDB 18-May-23
 	public void testStatementIsClosed() {
 
 		TransactionUtil.doInJPA( this::entityManagerFactory, em1 -> {

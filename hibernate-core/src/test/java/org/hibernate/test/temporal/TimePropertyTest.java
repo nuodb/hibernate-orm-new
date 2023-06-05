@@ -30,6 +30,7 @@ import static junit.framework.Assert.assertNotNull;
 /**
  * @author Gail Badner
  */
+// NuoDB: Revisit this test
 public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 	private final DateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
 
@@ -73,7 +74,7 @@ public class TimePropertyTest extends BaseCoreFunctionalTestCase {
 
 		final Query queryWithParameter = s.createQuery( queryString ).setParameter( 1, eGotten.tAsDate );
 		final Entity eQueriedWithParameter = (Entity) queryWithParameter.uniqueResult();
-		assertNotNull( eQueriedWithParameter );
+		assertNotNull( "eQueriedWithParameter should not be null", eQueriedWithParameter );
 		s.getTransaction().commit();
 		s.close();
 

@@ -1,9 +1,12 @@
 package org.hibernate.test.join;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 import javax.persistence.*;
 
@@ -13,6 +16,8 @@ import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+//NuoDB 19-May-2023: All tests generate right out joins that NuoDB does not yet support.
+@SkipForDialect(NuoDBDialect.class)
 public class OuterJoinTest extends BaseCoreFunctionalTestCase {
 
 	@Override

@@ -16,6 +16,8 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 /**
  * @author Nathan Xu
  * @author Christian Beikov
@@ -32,6 +34,8 @@ public class HHH14156Test extends BaseCoreFunctionalTestCase {
 	@SkipForDialect(value = SQLServerDialect.class, comment = "SQLServer doesn't support tuple comparisons")
 	@SkipForDialect(value = DerbyDialect.class, comment = "Derby doesn't support tuple comparisons")
 	@SkipForDialect(value = SybaseASE15Dialect.class, comment = "Sybase doesn't support tuple comparisons")
+    // NuoDB 18-May-23
+    @SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB doesn't support tuple comparisons")
 	public void testNoExceptionThrown() {
 		inTransaction( session ->
 			session.createQuery(

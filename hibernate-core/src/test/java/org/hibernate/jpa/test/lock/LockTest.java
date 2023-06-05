@@ -45,6 +45,8 @@ import org.hibernate.testing.transaction.TransactionUtil;
 import org.hibernate.testing.util.ExceptionUtil;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import org.jboss.logging.Logger;
 
 import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
@@ -274,6 +276,7 @@ public class LockTest extends BaseEntityManagerFunctionalTestCase {
 
 	@Test
 	@RequiresDialectFeature( value = DialectChecks.SupportSkipLocked.class )
+    @SkipForDialect(value=NuoDBDialect.class, comment = "NuoDB does not use read locks")
 	public void testUpdateWithPessimisticReadLockSkipLocked() {
 		Lock lock = new Lock();
 		lock.setName( "name" );

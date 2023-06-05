@@ -23,6 +23,8 @@ import org.hibernate.dialect.CockroachDB192Dialect;
 import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -101,6 +103,13 @@ public class BatchOptimisticLockingTest extends
 						expected.getMessage()
 				);
 			}
+            else if (getDialect() instanceof NuoDBDialect) {
+                // NuoDB 18-May-23
+                assertEquals(
+                        "org.hibernate.exception.LockAcquisitionException: could not execute statement",
+                        expected.getMessage()
+                );
+            }
 			else {
 				assertEquals(
 						"Batch update returned unexpected row count from update [1]; actual row count: 0; expected: 1; statement executed: update Person set name=?, version=? where id=? and version=?",

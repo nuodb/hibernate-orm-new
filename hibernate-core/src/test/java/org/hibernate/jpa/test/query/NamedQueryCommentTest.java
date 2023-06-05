@@ -32,6 +32,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -104,7 +106,13 @@ public class NamedQueryCommentTest extends BaseEntityManagerFunctionalTestCase {
 
 			sqlStatementInterceptor.assertExecutedCount(1);
 
-			sqlStatementInterceptor.assertExecuted(
+	         // NuoDB 18-May-23: NuoDB requires hint after select with no space before + sign
+            if (getDialect() instanceof NuoDBDialect)
+                sqlStatementInterceptor.assertExecuted(
+                        " SELECT /*+ INDEX (game idx_game_title)  */ * from game g where title = ?"
+                );
+            else
+                sqlStatementInterceptor.assertExecuted(
 					"/* + INDEX (game idx_game_title)  */ select * from game g where title = ?"
 
 			);

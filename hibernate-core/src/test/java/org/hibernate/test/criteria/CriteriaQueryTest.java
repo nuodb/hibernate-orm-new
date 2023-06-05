@@ -55,6 +55,8 @@ import org.hibernate.test.hql.Reptile;
 import org.hibernate.test.util.jdbc.PreparedStatementSpyConnectionProvider;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -1800,6 +1802,7 @@ public class CriteriaQueryTest extends BaseNonConfigCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-6766" )
+    @SkipForDialect(NuoDBDialect.class)  // NuoDB 19-May-23: multi-column subquery not supported
 	public void testMultiplePropertiesSubquery() {
 		Session session = openSession();
 		Transaction tx = session.beginTransaction();

@@ -24,6 +24,8 @@ import org.hibernate.engine.spi.SessionImplementor;
 
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 
@@ -69,6 +71,10 @@ public class BatchingBatchFailureTest extends BaseCoreFunctionalTestCase {
 		catch (Exception expected) {
 			System.out.println( "Caught expected exception : " + expected );
 			expected.printStackTrace( System.out );
+
+	         // NuoDB 18-May-2023  Batch is null after exception, nothing to check.
+            if (getDialect() instanceof NuoDBDialect)
+                return;
 
 			try {
 				//at this point the transaction is still active but the batch should have been aborted (have to use reflection to get at the field)

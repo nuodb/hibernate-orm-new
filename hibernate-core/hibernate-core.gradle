@@ -5,6 +5,26 @@
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 import org.apache.tools.ant.filters.ReplaceTokens
+import org.gradle.api.tasks.testing.TestResult.ResultType
+
+// BEGIN: For NUODB
+// Can't think of a way to make this generic, but we only test NuoDB
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.nuodb.jdbc:nuodb-jdbc:24.0.0'
+        classpath "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}"
+    }
+}
+// END: For NUODB
+
+
+//plugins {
+//    id 'org.hibernate.build.xjc-jakarta'
+//}
 
 description = 'Hibernate\'s core ORM functionality'
 
@@ -12,6 +32,13 @@ apply from: rootProject.file( 'gradle/published-java-module.gradle' )
 apply plugin: 'antlr'
 apply plugin: 'hibernate-matrix-testing'
 apply plugin: 'org.hibernate.build.gradle.xjc'
+
+// BEGIN: For NUODB
+println "hibernate-core: Using NuoDB Dialect from JAR V${nuodbHibernateJarVersion}"
+
+// Is NuoDB's Hibernate JAR available?
+NuoDBDependencies.checkDependencies()
+// END: For NUODB
 
 ext {
     jaxbTargetDir = file( "${buildDir}/generated-src/jaxb/main" )
@@ -47,6 +74,7 @@ dependencies {
     compile( libraries.classmate )
     compile( libraries.activation )
 
+    //compile( "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}" )
     compile( libraries.commons_annotations )
     antlr( libraries.antlr )
 
@@ -93,7 +121,10 @@ dependencies {
     testRuntime( libraries.weld )
     testRuntime( libraries.atomikos )
     testRuntime( libraries.atomikos_jta )
-    testRuntime(libraries.wildfly_transaction_client)
+    testRuntime( libraries.wildfly_transaction_client )
+
+    //testRuntime( "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}" )
+    //testRuntime( "com.nuodb.jdbc:nuodb-jdbc:24.0.0" )
 
     testAnnotationProcessor( project( ':hibernate-jpamodelgen' ) )
 
@@ -103,6 +134,9 @@ dependencies {
     testCompile libraries.jboss_ejb_spec_jar
     testCompile libraries.jboss_annotation_spec_jar
 
+    // Additional tests requiring Javassist
+    // folder in src/javassist/java
+    testCompile "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}"
 }
 
 jar {
@@ -235,8 +269,12 @@ test {
     }
 
     beforeTest { descriptor ->
-        //println "Starting test: " + descriptor
+        println "Starting test: " + descriptor
     }
+
+    // Is there a database running?
+    NuoDBDependencies.isDatabaseAvailable("${projectDir}/../databases/nuodb/resources/hibernate.properties")
+    
 
     // Allow to exclude specific tests
     if (project.hasProperty('excludeTests')) {
@@ -246,3 +284,58 @@ test {
     }
 }
 
+
+// BEGIN: For NUODB
+/**
+ * Is the test database available? Can't think of a way to make this generic, and we
+ * only test NuoDB.
+ */
+public class NuoDBDependencies {
+
+    public static void checkDependencies() {
+        try {
+            com.nuodb.jdbc.DataSource dataSource = new com.nuodb.jdbc.DataSource();
+            //com.nuodb.hibernate.NuoDBDialect dialect = new com.nuodb.hibernate.NuoDBDialect();
+            com.nuodb.jdbc.Driver driver = new com.nuodb.jdbc.Driver();
+
+            System.out.println(">> NuoDB classes available:");
+            System.out.println(">>   Dialect Jar is V${new com.nuodb.hibernate.JarVersionInfo().version}");
+        } catch (Exception e) {
+            System.err.println(">> Failed attempting to check for NuoDB dependencies: " + e);
+            throw new GradleException("Unable to access database for tests: ${e.localizedMessage}");
+        }
+
+        return;
+    }
+
+    public static boolean isDatabaseAvailable(String hibernatePropertiesFile) {
+        try {
+            java.util.Properties props = new java.util.Properties();
+            props.load(new java.io.FileReader(hibernatePropertiesFile));
+
+            System.out.println('Testing connection using these properties:');
+            Set entries = props.entrySet();
+            
+            for (Map.Entry e: entries) {
+                if (((String) e.getKey()).startsWith("hibernate.connection"))
+                    System.out.println("    " + e.getKey() + "=" + e.getValue());
+            }
+
+            com.nuodb.jdbc.DataSource dataSource = new com.nuodb.jdbc.DataSource();
+            //dataSource.setDriverClassName(props.getProperty("hibernate.connection.driver_class"));
+            dataSource.setUrl(props.getProperty("hibernate.connection.url").replace('.hib', ''));
+            dataSource.setUsername(props.getProperty("hibernate.connection.username"));
+            dataSource.setPassword(props.getProperty("hibernate.connection.password"));
+
+            java.sql.Connection conn = dataSource.getConnection();
+            conn.close();
+            dataSource.close();
+        } catch (Exception e) {
+            System.err.println(">> Failed attempting to check for database: " + e);
+            throw new GradleException("Unable to access database for tests: ${e.localizedMessage}");
+        }
+
+        return true;
+    }
+}
+// END: For NUODB
