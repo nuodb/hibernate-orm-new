@@ -12,6 +12,10 @@ Unfortunately the section on Matrix testing (in the original README below) is ye
 To run the matrix tests for NuoDB:
 
 1. You must have Java JDK 8 installed.  Java 11 won't work.
+   * _Recommendation:_ Install `jenv` from https://github.com/jenv/jenv to manage your JVMs.
+      * You may need to tell it which JDKs you have.
+   * There is a `.java-version` file in this project, telling `jenv` to use Java 1.8.
+   * If necessary, to switch to Java 8, run `jenv local 1.8`.
 
 1. Next, make sure you have our Hibernate 5 dialect jar available:
 
@@ -65,20 +69,22 @@ Here are two options using Docker:
    * Windows (using `gradlew.bat`):
 
       ```sh
-      set TEST_PLAN=green
+      #set TEST_PLAN=green
+      set DIALECT_VERSION=22.0.1-hib5
       gradlew clean hibernate-core:matrix_nuodb
       ```
 
    * MacOS/Linux
 
       ```sh
-      TEST_PLAN=green ./gradlew clean hibernate-core:matrix_nuodb
+      #TEST_PLAN=green ./gradlew clean hibernate-core:matrix_nuodb
+      DIALECT_VERSION=22.0.1-hib5 ./gradlew clean hibernate-core:matrix_nuodb
       ```
 
    * Expected output is something like:
 
      ```sh
-     10392 tests completed, 148 failed, 1942 skipped
+     10583 tests completed, 73 failed, 1984 skipped
      ```
 
    * **Warnings:**

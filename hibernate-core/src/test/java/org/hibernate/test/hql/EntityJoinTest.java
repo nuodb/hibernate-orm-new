@@ -27,6 +27,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hamcrest.core.Is.is;
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
@@ -177,6 +179,7 @@ public class EntityJoinTest extends BaseNonConfigCoreFunctionalTestCase {
     }
 
     @Test
+    @SkipForDialect(value = NuoDBDialect.class, comment="NuoDB does not yet support right joins")
     public void testRightOuterEntityJoins() {
         doInHibernate( this::sessionFactory, session -> {
             // this should get all users even if they have no financial records

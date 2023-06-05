@@ -14,13 +14,14 @@ import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.dialect.DB2Dialect;
 import org.hibernate.dialect.SybaseASE15Dialect;
 import org.hibernate.query.spi.QueryImplementor;
-
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 @TestForIssue(jiraKey = "HHH-14585")
 public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase {
@@ -93,6 +94,7 @@ public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase 
 	@SkipForDialect(value = DB2Dialect.class, comment = "DB2 does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA db does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = SybaseASE15Dialect.class, comment = "Sybase does not support correlated subqueries in the ORDER BY clause")
+    @SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB does not support correlated subqueries in the ORDER BY clause")
 	public void orderBy_sizeOf() {
 		inSession( session -> {
 			QueryImplementor<Object[]> query = session.createQuery(
@@ -107,6 +109,7 @@ public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase 
 	@SkipForDialect(value = DB2Dialect.class, comment = "DB2 does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA db does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = SybaseASE15Dialect.class, comment = "Sybase does not support correlated subqueries in the ORDER BY clause")
+    @SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB does not support correlated subqueries in the ORDER BY clause")
 	public void orderBy_dotSize() {
 		inSession( session -> {
 			QueryImplementor<Object[]> query = session.createQuery(

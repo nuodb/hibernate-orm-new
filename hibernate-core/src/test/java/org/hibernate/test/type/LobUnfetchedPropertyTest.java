@@ -40,6 +40,8 @@ import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 @TestForIssue(jiraKey = "HHH-12555")
 @RequiresDialectFeature(DialectChecks.SupportsExpectedLobUsagePattern.class)
 @RunWith(BytecodeEnhancerRunner.class)
@@ -106,6 +108,8 @@ public class LobUnfetchedPropertyTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@RequiresDialectFeature(DialectChecks.SupportsNClob.class)
+	@SkipForDialect(value=NuoDBDialect.class,  // NuoDB 5-Jun-2023
+        comment="setNClob() unimplemented because strings are nationalized by default")
 	public void testNClob() {
 		final int id = doInHibernate( this::sessionFactory, s -> {
 			FileNClob file = new FileNClob();

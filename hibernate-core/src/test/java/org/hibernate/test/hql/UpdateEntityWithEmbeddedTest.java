@@ -11,11 +11,14 @@ import javax.persistence.Embedded;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 /**
  * @author Andrea Boriero
@@ -49,6 +52,8 @@ public class UpdateEntityWithEmbeddedTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	// NuoDB: 5-Jun-2023. Not supported: UPDATE Company SET (fileExtension, fileName)=(?, ?) 
+	@SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support multi-column update")
 	public void testUpdate() {
 		inTransaction(
 				session -> {

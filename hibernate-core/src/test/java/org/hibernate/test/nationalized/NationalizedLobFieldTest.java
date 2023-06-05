@@ -23,15 +23,20 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.resource.transaction.spi.TransactionStatus;
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 /**
  * @author Andrea Boriero
  */
 @TestForIssue(jiraKey = "HHH-10364")
 @RequiresDialectFeature(DialectChecks.SupportsNClob.class)
+@SkipForDialect(value=NuoDBDialect.class,  // NuoDB 5-Jun-2023
+    comment="setNClob() unimplemented because strings are nationalized by default")
 public class NationalizedLobFieldTest extends BaseCoreFunctionalTestCase {
 
 	@Override

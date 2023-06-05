@@ -24,6 +24,8 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
 
@@ -35,6 +37,7 @@ import static org.junit.Assert.assertEquals;
 @SkipForDialect(value = DerbyDialect.class, comment = "Derby jdbc driver doesn't support setNString")
 @SkipForDialect(value = PostgreSQL81Dialect.class, comment = "PostgreSQL jdbc driver doesn't support setNString")
 @SkipForDialect(value = SybaseASE15Dialect.class, comment = "jTDS jdbc driver doesn't support setNString")
+@SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB jdbc driver doesn't support setNString")
 public class NationalizedIgnoreCaseTest extends BaseCoreFunctionalTestCase {
 	
 	@Override

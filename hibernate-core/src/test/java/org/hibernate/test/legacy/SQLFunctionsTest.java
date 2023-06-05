@@ -37,6 +37,8 @@ import org.hibernate.dialect.function.SQLFunction;
 
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import org.jboss.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
@@ -445,7 +447,9 @@ public class SQLFunctionsTest extends LegacyTestCase {
 		Simple min = new Simple( Long.valueOf(30) );
 		min.setCount(-1);
 		s.save( min );
-		if ( ! (getDialect() instanceof MySQLDialect) && ! (getDialect() instanceof HSQLDialect) ) { //My SQL has no subqueries
+
+	    // NuoDB 5-Jun-2023: some(SELECT ...) not supported
+        if ( ! (getDialect() instanceof NuoDBDialect) && ! (getDialect() instanceof MySQLDialect) && ! (getDialect() instanceof HSQLDialect) ) { //My SQL has no subqueries
 			assertTrue(
 					s.createQuery( "from Simple s where s.count > ( select min(sim.count) from Simple sim )" )
 							.list()

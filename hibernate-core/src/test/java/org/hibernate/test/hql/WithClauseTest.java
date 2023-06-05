@@ -23,6 +23,8 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -67,6 +69,8 @@ public class WithClauseTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
 	public void testWithClause() {
 		TestData data = new TestData();
 		data.prepare();
@@ -155,6 +159,8 @@ public class WithClauseTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue(jiraKey = "HHH-9329")
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
 	public void testWithClauseAsSubquery() {
 		TestData data = new TestData();
 		data.prepare();
@@ -176,6 +182,8 @@ public class WithClauseTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue(jiraKey = "HHH-11230")
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
 	public void testWithClauseAsSubqueryWithEqualOperator() {
 		TestData data = new TestData();
 		data.prepare();
@@ -196,6 +204,8 @@ public class WithClauseTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue(jiraKey = "HHH-9329")
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
 	public void testWithClauseAsSubqueryWithKey() {
 		TestData data = new TestData();
 		data.prepare();
@@ -246,6 +256,8 @@ public class WithClauseTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@TestForIssue(jiraKey = "HHH-11401")
 	@SkipForDialect(value = DerbyDialect.class,comment = "Derby does not support cast from INTEGER to VARCHAR")
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
 	public void testWithClauseAsSubqueryWithKeyAndOtherJoinReference() {
 		TestData data = new TestData();
 		data.prepare();

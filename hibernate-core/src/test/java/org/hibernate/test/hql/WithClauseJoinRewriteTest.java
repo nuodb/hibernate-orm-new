@@ -8,9 +8,12 @@ package org.hibernate.test.hql;
 
 import org.hibernate.Session;
 import org.hibernate.Transaction;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -45,6 +48,8 @@ public class WithClauseJoinRewriteTest extends BaseCoreFunctionalTestCase {
 
     @Test
     @TestForIssue(jiraKey = "HHH-11230")
+    // NuoDB: 5-Jun-2023.
+    @SkipForDialect(value=NuoDBDialect.class, comment="NuoDB does not support parentheses in JOIN")
     public void testInheritanceReAliasing() {
         Session s = openSession();
         Transaction tx = s.beginTransaction();

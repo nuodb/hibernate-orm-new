@@ -6,6 +6,13 @@
  */
 package org.hibernate.test.legacy;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -16,12 +23,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import org.hibernate.dialect.*;
-import org.hibernate.testing.DialectChecks;
-import org.hibernate.testing.RequiresDialectFeature;
-import org.hibernate.testing.SkipForDialect;
-import org.junit.Test;
 
 import org.hibernate.Criteria;
 import org.hibernate.FetchMode;
@@ -34,19 +35,25 @@ import org.hibernate.ReplicationMode;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.criterion.Restrictions;
+import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.CockroachDB192Dialect;
+import org.hibernate.dialect.H2Dialect;
+import org.hibernate.dialect.HSQLDialect;
+import org.hibernate.dialect.IngresDialect;
+import org.hibernate.dialect.MySQLDialect;
+import org.hibernate.dialect.TeradataDialect;
 import org.hibernate.engine.spi.EntityEntry;
 import org.hibernate.internal.SessionImpl;
 import org.hibernate.jdbc.AbstractWork;
 import org.hibernate.proxy.HibernateProxy;
+import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.FailureExpected;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.type.StandardBasicTypes;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import com.nuodb.hibernate.NuoDBDialect;
 
 @RequiresDialectFeature(DialectChecks.SupportsNoColumnInsert.class)
 public class ParentChildTest extends LegacyTestCase {
@@ -1210,7 +1217,9 @@ public class ParentChildTest extends LegacyTestCase {
 	@SkipForDialect(value = CockroachDB192Dialect.class, comment = "Uses READ_COMMITTED isolation")
 	public void testLoadAfterNonExists() throws HibernateException, SQLException {
 		Session session = openSession();
-		if ( ( getDialect() instanceof MySQLDialect ) || ( getDialect() instanceof IngresDialect ) ) {
+
+		// NuoDB 5-Jun-2023: Switch to READ-COMMITTED isolation
+		if ( ( getDialect() instanceof NuoDBDialect ) || ( getDialect() instanceof MySQLDialect ) || ( getDialect() instanceof IngresDialect ) ) {
 			session.doWork(
 					new AbstractWork() {
 						@Override

@@ -6,10 +6,10 @@
  */
 package org.hibernate.test.resulttransformer;
 
-import java.sql.ResultSet;
-import java.util.List;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-import org.junit.Test;
+import java.util.List;
 
 import org.hibernate.Query;
 import org.hibernate.ScrollableResults;
@@ -19,9 +19,9 @@ import org.hibernate.dialect.AbstractHANADialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.transform.ResultTransformer;
+import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import com.nuodb.hibernate.NuoDBDialect;
 
 /**
  * @author Sharath Reddy
@@ -77,7 +77,8 @@ public class ResultTransformerTest extends BaseCoreFunctionalTestCase {
 		ScrollableResults sr = q.scroll();
 		// HANA supports only ResultSet.TYPE_FORWARD_ONLY and
 		// does not support java.sql.ResultSet.first()
-		if (getDialect() instanceof AbstractHANADialect) {
+		// NuoDB 5-Jun-22: NuoDB also.
+		if (getDialect() instanceof NuoDBDialect || getDialect() instanceof AbstractHANADialect) {
 			sr.next();
 		} else {
 			sr.first();

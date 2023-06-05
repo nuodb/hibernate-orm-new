@@ -891,10 +891,11 @@ public class HQLTest extends QueryTranslatorTestCase {
 	}
 
 	@Test
+	// NuoDB 5-Jun-2023: Why does this fail?  SQL uses extract() instead of year().
 	public void testGroupByFunction() {
 		disableOmittingJoinOfSuperclassTables();
 
-		if ( getDialect() instanceof Oracle8iDialect ) return; // the new hiearchy...
+		if ( getDialect() instanceof Oracle8iDialect ) return; // the new hierarchy...
 		if ( getDialect() instanceof PostgreSQLDialect || getDialect() instanceof PostgreSQL81Dialect ) return;
 		if ( getDialect() instanceof CockroachDB192Dialect ) return;
 		if ( getDialect() instanceof TeradataDialect) return;

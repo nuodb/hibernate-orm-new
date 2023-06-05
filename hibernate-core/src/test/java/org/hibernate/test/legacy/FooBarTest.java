@@ -6,6 +6,13 @@
  */
 package org.hibernate.test.legacy;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -45,7 +52,25 @@ import org.hibernate.criterion.Example;
 import org.hibernate.criterion.MatchMode;
 import org.hibernate.criterion.Order;
 import org.hibernate.criterion.Restrictions;
-import org.hibernate.dialect.*;
+import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.CockroachDB192Dialect;
+import org.hibernate.dialect.DB2Dialect;
+import org.hibernate.dialect.DerbyDialect;
+import org.hibernate.dialect.H2Dialect;
+import org.hibernate.dialect.HSQLDialect;
+import org.hibernate.dialect.InterbaseDialect;
+import org.hibernate.dialect.MckoiDialect;
+import org.hibernate.dialect.MySQLDialect;
+import org.hibernate.dialect.Oracle12cDialect;
+import org.hibernate.dialect.Oracle8iDialect;
+import org.hibernate.dialect.PointbaseDialect;
+import org.hibernate.dialect.PostgreSQL81Dialect;
+import org.hibernate.dialect.PostgreSQLDialect;
+import org.hibernate.dialect.SAPDBDialect;
+import org.hibernate.dialect.SQLServerDialect;
+import org.hibernate.dialect.SybaseDialect;
+import org.hibernate.dialect.TeradataDialect;
+import org.hibernate.dialect.TimesTenDialect;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.event.spi.EventSource;
@@ -54,22 +79,16 @@ import org.hibernate.internal.util.collections.JoinedIterator;
 import org.hibernate.jdbc.AbstractReturningWork;
 import org.hibernate.jdbc.AbstractWork;
 import org.hibernate.proxy.HibernateProxy;
-import org.hibernate.type.StandardBasicTypes;
-
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialect;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.env.ConnectionProviderBuilder;
+import org.hibernate.type.StandardBasicTypes;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import com.nuodb.hibernate.NuoDBDialect;
 
 //@RequiresDialectFeature(DialectChecks.SupportsNoColumnInsert.class)
 @RequiresDialectFeature(value = {DialectChecks.SupportsNoColumnInsert.class, DialectChecks.NotH2Version2.class}, comment = "See https://github.com/h2database/h2database/issues/3385")
@@ -458,6 +477,8 @@ public class FooBarTest extends LegacyTestCase {
 		foo.setString("fizard");
 		//The following test is disabled for databases with no subselects...also for Interbase (not sure why).
 		if (
+		        // NuoDB 5-Jun-2023: some(SELECT ...) not supported
+		        !(getDialect() instanceof NuoDBDialect) &&
 				!(getDialect() instanceof MySQLDialect) &&
 				!(getDialect() instanceof HSQLDialect) &&
 				!(getDialect() instanceof MckoiDialect) &&
@@ -2502,7 +2523,8 @@ public class FooBarTest extends LegacyTestCase {
 		assertTrue( baz.getStringGlarchMap().size()==1 );
 
 		//The following test is disabled databases with no subselects
-		if ( !(getDialect() instanceof MySQLDialect) && !(getDialect() instanceof HSQLDialect) && !(getDialect() instanceof PointbaseDialect) )  {
+		// NuoDB 5-Jun-2023: some(SELECT ...) not supported
+		if ( !(getDialect() instanceof NuoDBDialect) && !(getDialect() instanceof MySQLDialect) && !(getDialect() instanceof HSQLDialect) && !(getDialect() instanceof PointbaseDialect) )  {
 			List list = s.createQuery(
 					"select foo from Foo foo, Baz baz where foo in elements(baz.fooArray) and 3 = some elements(baz.intArray) and 4 > all indices(baz.intArray)"
 			).list();

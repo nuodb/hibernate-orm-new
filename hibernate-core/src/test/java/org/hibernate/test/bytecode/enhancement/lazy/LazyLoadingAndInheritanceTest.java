@@ -67,7 +67,8 @@ public class LazyLoadingAndInheritanceTest extends BaseCoreFunctionalTestCase {
 		} );
 	}
 
-	@Entity(name = "Containing")
+	// NuoDB 18-May-22: 'Containing' is reserved keyword
+	@Entity(name = "ContainingParent")
 	private static class Containing {
 
 		@Id
