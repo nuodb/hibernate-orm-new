@@ -1,6 +1,6 @@
 image::https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png[]
 
-# Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png"[height=50]
+# Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png[height=50]
 
 This is a fork of Hibernate ORM (http://github.com/hibernate/hibernate-orm) branch 6.1 to allow testing of NuoDB's Hibernate 6 dialect.
 The tests of interest are the matrix tests (which allow testing against multiple databases).
@@ -10,106 +10,137 @@ Unfortunately the section on Matrix testing (in the original README below) is ye
 
 To run the matrix tests for NuoDB:
 
-1. You must have Java JDK 8 installed.  Java 11 won't work.
-   * _Recommendation:_ Install `jenv` from https://github.com/jenv/jenv to manage your JVMs.
-      * You may need to tell it which JDKs you have.
-   * There is a `.java-version` file in this project, telling `jenv` to use Java 1.8.
-   * If necessary, to switch to Java 8, run `jenv local 1.8`.
+. You must have Java JDK 11 installed.  Java 8 is nt supported by Hibernate 6.x.
 
-1. Next, make sure you have our Hibernate 5 dialect jar available:
+* _Recommendation:_ Install `jenv` from https://github.com/jenv/jenv to manage your JVMs.
+   * You may need to tell it which JDKs you have.
+* There is a `.java-version` file in this project, telling `jenv` to use Java 11.
+* If necessary, use `jenv` to switch to Java 11.
+For example, to use 11.0.18, run `jenv local 11.0.18`.
 
-   * clone https://github.com/nuodb/HibernateDialect5
-   * Run `mvn install` - see [project README](https://github.com/nuodb/HibernateDialect5/blob/master/README.md)
-   * Check the version in the POM - it will be of the form `nuodb-hibernate.NN.x.x-hib5`
-      * You will need to set `DIALECT_VERSION` to `NN.x.x` to match - see below.
+. Next, make sure you have our Hibernate 6 dialect jar available:
 
-1. This project's gradle build file assumes you have your maven repository in
+* clone https://github.com/nuodb/HibernateDialect6
+* Run `mvn -Dgpg.skip install` - see [project README](https://github.com/nuodb/HibernateDialect6/blob/master/README.md)
+* Check the version in the POM - it will be of the form `nuodb-hibernate.NN.x.x-hib6`
+   * You will need to set `DIALECT_VERSION` to `NN.x.x-hib6` to match - see below.
+
+. This project's gradle build file assumes you have your maven repository in
    the default location (`.m2` in your home directory). If so, skip this step.
 
-   Otherwise you must tell gradle where this dependency can be found. For example
-   suppose you use `m2` instead of `.m2`:
+* Otherwise you must tell gradle where this dependency can be found. For example
+suppose you use `m2` instead of `.m2`:
++
+```sh
+export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6               (Linux/MacOS)
 
-   ```sh
-   export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib5               (Linux/MacOS)
+set ADDITIONAL_REPO=c:\Users\yourname\m2\repository\com\nuodb\hibernate\nuodb-hibernate\NN.x.x-hib6  (Windows)
+```
 
-   set ADDITIONAL_REPO=c:\Users\yourname\m2\repository\com\nuodb\hibernate\nuodb-hibernate\NN.x.x-hib5  (Windows)
-   ```
+. Set the Hibernate dialect - this must match the Hibernate 6 dialect you installed earlier.
 
-1. Set the Hibernate dialect - this must match the Hibernate 5 dialect you installed earlier.
+* **Note:** the value you set _should_ have `-hib6` in the end, but that's optional:
++
+```bash
+export DIALECT_VERSION=NN.x.x-hib6      (Linux/MacOS)
+set DIALECT_VERSION=NN.x.x-hib6         (Windows)
+```
 
-   * **Note:** the value you set _does not_ have `-hib5` in the end:
+* Alternatively, MacOS and Linux users may prepend it to any command:
+** `DIALECT_VERSION=NN.x.x-hib6 ./gradlew ...`
 
-     ```bash
-     export DIALECT_VERSION=NN.x.x      (Linux/MacOS)
-     set DIALECT_VERSION=NN.x.x         (Windows)
-     ```
+. You need a database called `hibernate_orm_test` running locally on your machine with username and password also `hibernate_orm_test`.
+If you do not have NuoDB installed locally, here are some options using Docker:
 
-   * Alternatively, non-Windows users may prepend it to any command: `DIALECT_VERSION=NN.x.x ./gradlew ...`
+* Optionally, on MacOS, download the lighter weight OrbStack instead of Docker Desktop.
+** Once OrbStack is running, the `docker` command works as normal.
 
-1. You need a database called `hibernate_orm_test` running locally on your machine with username and password also `hibernate_orm_test`.
-Here are two options using Docker:
+* To use `docker compose`:
+** clone http://github.com/nuodb/nuodb-compose and (per the README):
+** `cd nuodb` and `cp env_default` to `.env`.
+** Edit `.env` and set `DB_NAME`, `DB_USER` and `DB_PASSWORD` to `hibernate_orm_test`.
+Also (last line) set `EXTERNAL_ADDRESS=127.0.0.1`.
+** Run: `docker compose -p hib -f monolith.yaml up -d`
+** Run: `docker exec -it hib-monolith-1 nuocmd show domain`
 
-   * To use docker compose, clone http://github.com/nuodb/nuodb-compose and (per the README):
-       * `cd nuodb` and `cp env_default` to `.env`.
-       * Edit `.env` and set `DB_NAME`, `DB_USER` and `DB_PASSWORD` to `hibernate_orm_test`.
-         Also (last line) set `EXTERNAL_ADDRESS=127.0.0.1`.
-       * Run: `docker compose -p hib -f monolith.yaml up -d`
-       * Run: `docker exec -it hib-monolith-1 nuocmd show domain`
+* Or, setup a local database by running `setup.sh` inside `env` folder.
+   This script will create a NuoDB env with an admin service, a Storage Manager (SM) and a Transaction Engine (TE) to run the tests against.
 
-   * Or, setup a local database by running `setup.sh` inside `env` folder.
-     This script will create a NuoDB env with an admin service, a Storage Manager (SM) and a Transaction Engine (TE) to run the tests against. Requires docker to be installed on the server.
+. For information on `gradle` refer to the original `README` content <<gradle-primer,below>>.
 
-1. You need `gradle` installed.
-   To setup gradle, see original `README` content below.  The expected output is:
+. To run the matrix test-suite using NuoDB as the database, execute the following:
 
-1. To run the matrix test-suite using NuoDB as the database, execute:
+* Windows (using `gradlew.bat`):
++
+```sh
+set DIALECT_VERSION=22.0.1-hib6
+gradlew clean hibernate-core:matrix_nuodb
+```
 
-   * Windows (using `gradlew.bat`):
+* MacOS/Linux
++
+```sh
+DIALECT_VERSION=22.0.1-hib6 ./gradlew clean hibernate-core:matrix_nuodb
+```
 
-      ```sh
-      #set TEST_PLAN=green
-      set DIALECT_VERSION=22.0.1-hib5
-      gradlew clean hibernate-core:matrix_nuodb
-      ```
+* Expected final output is something like:
++
+```sh
+4243 tests completed, 1681 failed, 578 skipped
+```
 
-   * MacOS/Linux
+* Full details of all failing tests can be found at `hibernate-core/target/matrix/nuodb/reports/index.html`.
+** This directory is not fully populated until the test-run has finished and will be deleted by the next test run (take a copy if necessary).
 
-      ```sh
-      #TEST_PLAN=green ./gradlew clean hibernate-core:matrix_nuodb
-      DIALECT_VERSION=22.0.1-hib5 ./gradlew clean hibernate-core:matrix_nuodb
-      ```
+. **Notes and Warnings:**
 
-   * Expected output is something like:
+   * The run will fail with an error (and run no tests) if the required database cannot be connected to.
 
-     ```sh
-     10583 tests completed, 73 failed, 1984 skipped
-     ```
+   * These tests are intended for testing Hibernate as well as the underlying database.
+      Many tests will be skipped if they use features our dialect does not support, and that is normal.
+      We are just piggybacking on these tests for convenience.
 
-   * **Warnings:**
-     * If you run the tests without the `clean` option you may get a weird internal error in the compiler.
+   * Any test whose fully qualified class name is listed in `hibernate-core/skip-tests.txt` will be ignored.
+      The tests listed fail due to known limitations in NuoDB SQL (see comments in the file).
 
-     * Not all tests clean up after themselves.
-       If using the local database you may need to restart the environment by rerunning the script `env/setup.sh`.
+   * If you run the tests without the `clean` option you may get a weird internal error in the compiler.
 
-     * Test execution takes ~30m in average with a live database and ~3m without.
-        * The tests will keep running, and failing even if the database is not available.
-        * If the tests run quickly, that's the hint that your database isn't running!
+   * Not all tests clean up after themselves.
+     If using the local database you may need to reset the environment
+   ** Either by using `docker compose` to destroy the container and then recreate it.
+   ** Or by rerunning the script `env/setup.sh`.
 
-1. Run individual tests (does this actually work?).
+   * Test execution takes ~15-20 mins on average with a live database.
 
-   Example commands:
+. Run individual tests (does this actually work?). Better to use an IDE - see <<using-an-ide,below>>:
++
+Example commands:
++
+```sh
+./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
+./gradlew clean :hibernate-core:matrix_nuodb --tests *.PackagedEntityManagerTest
+./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
+```
++
+**NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`~
 
-   ```sh
-   ./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
-   ./gradlew clean :hibernate-core:matrix_nuodb --tests *.PackagedEntityManagerTest
-   ./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
-   ```
+[#using-an-ide]
+[start=10]
+. Run Tests in an IDE
++
+It is possible to run the tests in IntelliJ (but not currently Eclipse).
++
+Open `hibernate-core` as a _maven_ project in IntelliJ in the usual way - a `pom.xml` has been added.
++
+To allow it to use NuoDB, you may have to copy the hibernate properties file:
 
-   **NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`
+* `cp databases/nuodb/resources/hibernate.properties hibernate-core/src/test/resources/hibernate.properties`.
++
+An IDE is most useful for running individual tests that have failed and debugging them.
 
-1. Pull Jar from Sonatype
+. Pull Jar from Sonatype
 
-   Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib5/nuodb-hibernate-NN.x.x-hib5.jar.
+   Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6/nuodb-hibernate-NN.x.x-hib6.jar.
    Note the build number - YYYY (a 4 digit number such as 1050). To use this dependency run as follows:
 
    ```sh
@@ -119,56 +150,75 @@ Here are two options using Docker:
    gradle clean ...
    ```
 
-Please note that even if a NuoDB database is not available, 4588 tests complete, 2823 fail, and 840 are skipped. So many tests pass without using the database because the tests are intended for testing Hibernate not the underlying database.
-We are just piggybacking on them for convenience.
+## Configure the Database
+
+Modify properties in [`databases/nuodb/resources/hibernate.properties`](databases/nuodb/resources/hibernate.properties). 
+
+* DO NOT change the database name or credentials as they are used by Bamboo.
 
 ## Upgrade Hibernate Dialect
 
 If the Hibernate dialect has a new version number:
 
-1. Update the environment variable: `SET DIALECT_VERSION=NN.x.x`
+* Simply update the environment variable: `SET DIALECT_VERSION=NN.x.x`
 
-2. The JAR version is required in three places.
+The JAR version is required in several places and should pick up the version from the environment variable (therefore no other changes are necessary).
+
+For the record, our Hibernate jar is referred to in:
 
     * `build.gradle`
-       * Contains a "smart" class `NuodbHibernateVersion` which either picks up `DIALECT_VERSION` or looks in the local Maven repo to
-         find the latest version of the JAR in there.
-         If you have just built and installed a new version of the JAR, it should find it.
-       * The class sets variable `nuodbHibernateJarVersion` to the version it has found.
-    * `databases/nuodb/matrix.gradle` - referenced `${nuodbHibernateJarVersion}`.
-    * `hibernate-core/hibernate-core.gradle` - also references `${nuodbHibernateJarVersion}`.
+    ** Validates `DIALECT_VERSION` is set and adds `-hib6` on the end if necessary.
+    ** Sets variable `ext.nuodbHibernateJarVersion` to the version it has found.
+
+    * `nuodb/databases/matrix.gradle`
+    ** Contains a "smart" class `NuodbHibernateVersion` which uses `DIALECT_VERSION` and checks the JAR exists.
+       If you have just built and installed a new version of the JAR, it should find it - provided `DIALECT_VERSION` is set accordingly.
+
+    * `databases/nuodb/matrix.gradle`
+    ** References `${nuodbHibernateJarVersion}`.
+    * `hibernate-core/hibernate-core.gradle`
+    ** Also references `${nuodbHibernateJarVersion}`.
 
 ## Upgrade NuoDB JDBC Driver
 
-This must be changed manually in two places:
+This must be changed manually in three places. For example to set the version to `24.0.0`:
 
 1. `databases/nuodb/matrix.gradle`: `jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:24.0.0"`
-2. `hibernate-core/hibernate-core.gradle`:  `testRuntime( "com.nuodb.jdbc:nuodb-jdbc:24.0.0" )`
+2. `hibernate-core/hibernate-core.gradle`: `testRuntime( "com.nuodb.jdbc:nuodb-jdbc:24.0.0" )`
+3. `settings.gradle`: alias( "nuodb" ).to( "com.nuodb.jdbc", "nuodb-jdbc" ).version( "24.0.0" )
 
 ## Changes Made to Project
 
 To use NuoDB
 
-1. Added `databases/nuodb` to define dependencies and configuration required to use NuoDB.
+. Updated this `README.adoc`.
 
-1. Added references to the NuoDB dialect and/or NuoDB JDBC jars to:
-     * `build.gradle`
-     * `databases/nuodb/matrix.gradle`
-     * `hibernate-core/hibernate-core.gradle`
+. Added `databases/nuodb` to define dependencies and configuration required to use NuoDB.
+  * Added `jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:<version>"` (normally the only thing in this file).
+  * Extensive modifications to `databases/nuodb/matrix.gradle` to check that our JARs are on the class path and the database is available for testing.
 
-To configure NuoDB
+. Modified `gradle/java-module.gradle` to add `testRuntimeOnly dbLibs.nuodb` with all the other databases listed.
 
-1. Set the versions of NuoDB's JDBC and Dialect Jars in  [`databases/nuodb/matrix.gradle`](databases/nuodb/matrix.gradle)
-2. To configure the NuoDB data source modify [`databases/nuodb/resources/hibernate.properties`](databases/nuodb/resources/hibernate.properties)
-3. Make same modifications to [`hibernate-core/src/test/resources/hibernate.properties`](hibernate-core/src/test/resources/hibernate.properties) - this is the one that actually gets used.
+. Modified .gitignore to ignore .factorypath (another Eclipse file).
 
-## To Run in IntelliJ
+. Modified build.gradle:
+  * To look in the local maven repository (`.m2` in your home directory) for our dialect.
+  * To check that environment variable `DIALECT_VERSION` is correctly set, add -hib6 to the end if necessary and save it to `ext.nuodbHibernateJarVersion` for use in other Gradle scripts.
 
-It is possible to run the tests in IntelliJ (Eclipse's gradle support can't handle this project).
+. Modified `hibernate-core/hibernate-core.gradle`:
+  * To output the NuoDB dialect it is expecting to use.
+  * To also look in the local maven repository for our dialect.
+  * To add the NuoDB dialect and NuoDB JDBC jars to dependencies section:
 
-Open as a gradle project in IntelliJ in the usual way.
+. Added some classes to `hibernate-core/src/test/java/org/hibernate/testing/junit4` to override the defaults in `hibernate-testing`.
+  * Modified `BaseUnitTestCase` (the base class for most JUnit tests) and `CustomRunner` (a subclass of `BaseUnitTestCase`) to support ignoring classes listed in `hibernate-core/skip-tests.txt`.
+  Avoids having to add `SkipForDialect` to about 200 test classes.
 
-To force it to use NuoDB: `cp databases/nuodb/resources/hibernate.properties hibernate-core/out/test/resources/hibernate.properties`.
+. Added a `pom.xml` to `hibernate-core`.
+  * The gradle project is too complex to be loaded by an IDE (tried Eclipse and IntelliJ).
+  Besides we are only using tests in `hibernate-core`.
+  * Instead, `hibernate-core` can be loaded as a stand-alone project into IntelliJ
+  ** Eclipse currently fails due to the use of the JPA meta-data generation plugin - which generates the `XXX_` meta-data classes for each entity `XXX`.
 
 ---
 ---
@@ -204,6 +254,7 @@ Contributors should read the link:CONTRIBUTING.md[Contributing Guide].
 See the guides for setting up https://hibernate.org/community/contribute/intellij-idea/[IntelliJ] or
 https://hibernate.org/community/contribute/eclipse-ide/[Eclipse] as your development environment.
 
+[#gradle-primer]
 == Gradle Primer
 
 The Gradle build tool has amazing documentation.  2 in particular that are indispensable:
