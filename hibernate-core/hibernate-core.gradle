@@ -6,6 +6,8 @@
  */
 import org.apache.tools.ant.filters.ReplaceTokens
 
+
+
 plugins {
     id 'org.hibernate.build.xjc-jakarta'
 }
@@ -17,12 +19,23 @@ apply plugin: 'org.hibernate.orm.antlr'
 apply plugin: 'org.hibernate.matrix-test'
 
 
+// BEGIN: For NUODB
+println "hibernate-core: Using NuoDB Dialect V${nuodbHibernateJarVersion}"
+// END: For NUODB
+
 configurations {
     tests {
         description = 'Configuration for the produced test jar'
     }
 }
 
+// BEGIN: For NUODB
+// Look for our JAR locally
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+// END: For NUODB
 
 dependencies {
     api jakartaLibs.jpa
@@ -39,6 +52,8 @@ dependencies {
 
     implementation libs.antlrRuntime
 
+    //implementation( "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}" )
+ 
     compileOnly jakartaLibs.jacc
     compileOnly jakartaLibs.validation
     compileOnly jakartaLibs.cdi
@@ -61,6 +76,9 @@ dependencies {
         transitive = true
     }
     testImplementation "joda-time:joda-time:2.3"
+
+    testImplementation    'com.nuodb.jdbc:nuodb-jdbc:24.0.0'
+    testImplementation    "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}"
 
     testRuntimeOnly libs.byteBuddy
     testRuntimeOnly testLibs.weld
@@ -248,4 +266,3 @@ tasks.withType( Test.class ).each { test ->
         }
     }
 }
-

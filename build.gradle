@@ -6,9 +6,10 @@
  */
 
 buildscript {
-//	repositories {
-//		mavenCentral()
-//	}
+	repositories {
+		mavenCentral()
+		mavenLocal()
+	}
 
 	dependencies {
 		classpath 'org.hibernate.build.gradle:version-injection-plugin:1.0.0'
@@ -33,6 +34,20 @@ plugins {
 
 apply from: file( 'gradle/module.gradle' )
 
+// BEGIN: For NUODB
+var dialectVersion=System.env['DIALECT_VERSION']
+
+if (dialectVersion == null) {
+    println("build.gradle: DIALECT_VERSION environment variable should be set to 23.0.0-hib6 or later")
+	throw new GradleException("DIALECT_VERSION environment variable should be set to 23.0.0-hib6 or later")
+}
+else if (!dialectVersion.endsWith("-hib6")) {
+    dialectVersion = "${dialectVersion}-hib6"
+}
+
+println "Dialect version = ${dialectVersion}";
+ext.nuodbHibernateJarVersion = dialectVersion;
+// END: For NUODB
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Release Task
