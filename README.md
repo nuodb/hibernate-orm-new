@@ -1,7 +1,7 @@
 <img src="https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png" />
 <img align="right" height="50" src="https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png" />
 
-# Hibernate 5 and NuoDB
+# Hibernate 5.6 and NuoDB
 
 This is a fork of Hibernate ORM (http://github.com/hibernate/hibernate-orm) branch `5.6` to allow testing of NuoDB's Hibernate 5 dialect.
 The tests of interest are the matrix tests (which allow testing against multiple databases).
@@ -49,7 +49,6 @@ To run the matrix tests for NuoDB:
 
 1. You need a database called `hibernate_orm_test` running locally on your machine with username and password also `hibernate_orm_test`.
 Here are two options using Docker:
-
 
    * To use docker compose, clone http://github.com/nuodb/nuodb-compose and (per the README):
        * `cd nuodb` and `cp env_default` to `.env`.
@@ -174,6 +173,8 @@ To force it to use NuoDB: `cp databases/nuodb/resources/hibernate.properties hib
 
 ---
 ---
+
+# Original README
 
 Hibernate ORM is a library providing Object/Relational Mapping (ORM) support
 to applications, libraries, and frameworks.
