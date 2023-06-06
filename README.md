@@ -1,5 +1,5 @@
 <img src="https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png" />
-<img align="right" height="50" src="https://nuodb.com/themes/custom/nuodb/logo.svg" />
+<img align="right" height="50" src="https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png" />
 
 # Hibernate 5 and NuoDB
 
