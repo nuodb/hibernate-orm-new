@@ -8,6 +8,7 @@ package org.hibernate.orm.test.annotations.onetoone;
 
 import java.util.Iterator;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
@@ -20,6 +21,7 @@ import org.hibernate.mapping.Join;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Table;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.testing.transaction.TransactionUtil;
@@ -157,6 +159,7 @@ public class OneToOneTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testCompositePk() {
 		final ComputerPk cid = new ComputerPk();
 		final SerialNumber sn = new SerialNumber();

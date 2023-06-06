@@ -154,7 +154,7 @@ public class LockRefreshTest extends BaseNonConfigCoreFunctionalTestCase {
 		private String department;
 
 		@Version
-		@Column(name = "ver")
+		@Column(name = "ver1")  // NuoDB: VER is a reserved word
 		private int version;
 	}
 }

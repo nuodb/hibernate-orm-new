@@ -92,6 +92,7 @@ public class BatchOptimisticLockingTest extends
 			} );
 		}
 		catch (Exception expected) {
+			log.warn("Excption is a " + expected);
 			assertEquals( OptimisticLockException.class, expected.getClass() );
 			if ( getDialect() instanceof CockroachDialect ) {
 				// CockroachDB always runs in SERIALIZABLE isolation, and uses SQL state 40001 to indicate

@@ -148,7 +148,7 @@ public class OptionalSecondaryTableBatchTest extends BaseNonConfigCoreFunctional
 		private int id;
 
 		@Version
-		@Column( name = "ver" )
+		@Column( name = "ver1")  // NuoDB: VER is a reserved word
 		private int version;
 
 		private String name;

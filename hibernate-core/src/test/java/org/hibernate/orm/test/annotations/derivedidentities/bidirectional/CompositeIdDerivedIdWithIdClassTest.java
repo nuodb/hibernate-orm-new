@@ -11,8 +11,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.jpa.internal.PersistenceUnitUtilImpl;
 
+import org.hibernate.testing.Skip;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.ImplicitListAsBagProvider;
@@ -54,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 		}
 )
 @SessionFactory
+@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 public class CompositeIdDerivedIdWithIdClassTest {
 
 	@AfterEach
@@ -69,6 +73,10 @@ public class CompositeIdDerivedIdWithIdClassTest {
 	@Test
 	@TestForIssue(jiraKey = "HHH-11328")
 	public void testMergeTransientIdManyToOne(SessionFactoryScope scope) {
+System.err.println();
+System.err.println(">> >> >> CLASSPATH=\n" + System.getProperty("java.class.path").toString().replace(':', '\n'));
+System.err.println();
+
 		ShoppingCart transientCart = new ShoppingCart( "cart1" );
 		transientCart.addLineItem( new LineItem( 0, "description2", transientCart ) );
 

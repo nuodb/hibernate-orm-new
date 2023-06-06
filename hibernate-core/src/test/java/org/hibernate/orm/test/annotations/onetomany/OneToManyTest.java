@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -41,6 +43,7 @@ import org.hibernate.metamodel.CollectionClassification;
 
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.orm.test.annotations.Customer;
@@ -468,6 +471,7 @@ public class OneToManyTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testJoinColumns() throws Exception {
 		Parent parent = new Parent();
 		ParentPk pk = new ParentPk();
@@ -504,6 +508,7 @@ public class OneToManyTest extends BaseNonConfigCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-4394" )
+	@SkipForDialect(NuoDBDialect.class) // Parentheses in generated SQL
 	public void testOrderByOnSuperclassProperty() {
 		OrganisationUser user = new OrganisationUser();
 		user.setFirstName( "Emmanuel" );

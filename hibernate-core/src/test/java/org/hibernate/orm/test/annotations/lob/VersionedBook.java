@@ -32,7 +32,7 @@ public class VersionedBook extends AbstractBook{
 	}
 
 	@Version
-	@Column(name = "ver")
+	@Column(name = "ver1")  // NuoDB: VER is a reserved word
 	public Integer getVersion() {
 		return version;
 	}

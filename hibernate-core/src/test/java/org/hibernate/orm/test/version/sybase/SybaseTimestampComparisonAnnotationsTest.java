@@ -92,7 +92,7 @@ public class SybaseTimestampComparisonAnnotationsTest extends BaseCoreFunctional
 
 		@Version
 		@Generated(GenerationTime.ALWAYS)
-		@Column(name = "ver", columnDefinition = "timestamp")
+		@Column(name = "ver1", columnDefinition = "timestamp")  // NuoDB: VER is a reserved word
 		private byte[] version;
 
 		private String name;
