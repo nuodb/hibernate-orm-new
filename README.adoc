@@ -6,7 +6,7 @@ This is a fork of Hibernate ORM (http://github.com/hibernate/hibernate-orm) to a
 The tests of interest are the matrix tests (which allow testing against multiple databases).
 Unfortunately the section on Matrix testing (in the original README below) is yet to be written (for at least 4 years).
 
-For details, pick any of hte following branches 5.6, 6.2 and view its README.  Oher branches are unmodified from the original.
+For details, pick any of hte following branches 5.6, 6.1 and view its README.  Oher branches are unmodified from the original.
 
 ----
 ----
