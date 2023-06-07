@@ -17,8 +17,11 @@ import org.hibernate.cfg.Environment;
 import org.hibernate.service.ServiceRegistry;
 
 import org.hibernate.testing.ServiceRegistryBuilder;
+import org.hibernate.testing.util.ExceptionUtil;
 import org.junit.Assert;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Emmanuel Bernard
@@ -26,12 +29,19 @@ import org.junit.Test;
 public class SecuredBindingTest {
 
 
-     @Test
+	public static final String BAD_HSQLDB_JDBC_DRIVER_CLASSNAME = "org.hsqldb.jdbcDrive";
+
+	@Test
 	public void testConfigurationMethods() {
 		Configuration ac = new Configuration();
+
+		// Test should use these properties and ignore hibernate.properties on classpath.
 		Properties p = new Properties();
 		p.put( Environment.DIALECT, "org.hibernate.dialect.HSQLDialect" );
-		p.put( "hibernate.connection.driver_class", "org.hsqldb.jdbcDrive" );
+
+		// Deliberate error in classname - Drive not Driver
+		p.put( "hibernate.connection.driver_class", BAD_HSQLDB_JDBC_DRIVER_CLASSNAME );
+
 		p.put( "hibernate.connection.url", "jdbc:hsqldb:." );
 		p.put( "hibernate.connection.username", "sa" );
 		p.put( "hibernate.connection.password", "" );
@@ -48,9 +58,16 @@ public class SecuredBindingTest {
 			}
 			catch (Exception ignore) {
 			}
-            Assert.fail( "Driver property overriding should work" );
+
+			Assert.fail( "Driver property overriding should work" );
 		}
 		catch (HibernateException he) {
+			Throwable cause = ExceptionUtil.rootCause(he);
+			String exceptionMessage = cause.getLocalizedMessage();
+			String errorInfo = "Expected ClassNotFoundException for " + BAD_HSQLDB_JDBC_DRIVER_CLASSNAME + //
+					", but got " + cause.getClass().getName() + ": " + exceptionMessage;
+			Assert.assertTrue( errorInfo, cause instanceof ClassNotFoundException //
+					&& exceptionMessage.contains(BAD_HSQLDB_JDBC_DRIVER_CLASSNAME));
 			//success
 		}
 		finally {
