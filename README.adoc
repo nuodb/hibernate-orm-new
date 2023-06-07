@@ -10,7 +10,7 @@ Unfortunately the section on Matrix testing (in the original README below) is ye
 
 To run the matrix tests for NuoDB:
 
-. You must have Java JDK 11 installed.  Java 8 is nt supported by Hibernate 6.x.
+. You must have Java JDK 11 installed.  Java 8 isn't supported by Hibernate 6.x.
 
 * _Recommendation:_ Install `jenv` from https://github.com/jenv/jenv to manage your JVMs.
    * You may need to tell it which JDKs you have.
@@ -20,8 +20,8 @@ For example, to use 11.0.18, run `jenv local 11.0.18`.
 
 . Next, make sure you have our Hibernate 6 dialect jar available:
 
-* clone https://github.com/nuodb/HibernateDialect6
-* Run `mvn -Dgpg.skip install` - see [project README](https://github.com/nuodb/HibernateDialect6/blob/master/README.md)
+* Clone https://github.com/nuodb/HibernateDialect6
+* Run `mvn -Dgpg.skip install` - see https://github.com/nuodb/HibernateDialect6#readme[project README].
 * Check the version in the POM - it will be of the form `nuodb-hibernate.NN.x.x-hib6`
    * You will need to set `DIALECT_VERSION` to `NN.x.x-hib6` to match - see below.
 
@@ -140,21 +140,21 @@ An IDE is most useful for running individual tests that have failed and debuggin
 
 . Pull Jar from Sonatype
 
-   Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6/nuodb-hibernate-NN.x.x-hib6.jar.
-   Note the build number - YYYY (a 4 digit number such as 1050). To use this dependency run as follows:
+* Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6/nuodb-hibernate-NN.x.x-hib6.jar.
+** Note the build number - YYYY (a 4 digit number such as 1050). To use this dependency run as follows:
++
+```sh
+SONATYPE_VERSION=YYYY gradle clean ...   (Linux)
 
-   ```sh
-   SONATYPE_VERSION=YYYY gradle clean ...   (Linux)
-
-   set SONATYPE_VERSION=YYYY               (Windows)
-   gradle clean ...
-   ```
+set SONATYPE_VERSION=YYYY               (Windows)
+gradle clean ...
+```
 
 ## Configure the Database
 
-Modify properties in [`databases/nuodb/resources/hibernate.properties`](databases/nuodb/resources/hibernate.properties). 
+Modify properties in `databases/nuodb/resources/hibernate.properties`. 
 
-* DO NOT change the database name or credentials as they are used by Bamboo.
+* DO NOT change the database name or credentials as they are used by our build system.
 
 ## Upgrade Hibernate Dialect
 
@@ -162,7 +162,7 @@ If the Hibernate dialect has a new version number:
 
 * Simply update the environment variable: `SET DIALECT_VERSION=NN.x.x`
 
-The JAR version is required in several places and should pick up the version from the environment variable (therefore no other changes are necessary).
+The JAR version is required in several places and will pick up the version from the environment variable (therefore no other changes are necessary).
 
 For the record, our Hibernate jar is referred to in:
 
@@ -219,6 +219,8 @@ To use NuoDB
   Besides we are only using tests in `hibernate-core`.
   * Instead, `hibernate-core` can be loaded as a stand-alone project into IntelliJ
   ** Eclipse currently fails due to the use of the JPA meta-data generation plugin - which generates the `XXX_` meta-data classes for each entity `XXX`.
+
+See https://github.com/nuodb/hibernate-orm-new/commit/308fac3c73f6a53419d22d9dbad582ce47dc369c#diff-2895a46fe357ce8c805dd26452184cfce66241c4fdf5e9f0404106a56ed56ed8[Github Commit].
 
 ---
 ---
