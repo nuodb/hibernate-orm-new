@@ -14,8 +14,11 @@
 testdb
 lib
 
+# Additional files for skipping tests known to fail
 hibernate-core/errors.txt
 hibernate-core/extra-tests.txt
+hibernate-core/skip-tests-*.txt
+hibernate-core/updated-skip-tests.txt
 
 # IntelliJ specific files/directories
 out

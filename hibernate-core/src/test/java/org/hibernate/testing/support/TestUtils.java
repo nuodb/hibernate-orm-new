@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.sql.Date;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLSyntaxErrorException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
@@ -268,19 +269,18 @@ public class TestUtils {
 			String sql) {
 		String sqlError = TestUtils.getRootCause(sqlException).getLocalizedMessage();
 		LOGGER.error("         : " + sqlError);
-		String cause = "";
+		String cause = sqlError;
 
 		if (sqlException instanceof SQLFeatureNotSupportedException) {
-			cause = sqlError;
 			int ix = cause.indexOf('^');
 			String context = sqlError;
 
 			if (ix != -1) {
 				String l2 = cause.substring(0, ix);
 				cause = cause.substring(ix + 1).trim();
-				
+
 				int ix2 = l2.indexOf('\n');
-						
+
 				if (ix2 != -1) {
 					// Carot ^ is indented this many spaces
 					int nSpaces = ix - ix2;
@@ -288,17 +288,36 @@ public class TestUtils {
 					int end = nSpaces + 20 > l2.length() ? l2.length() : nSpaces + 20;
 					context = l2.substring(start, end);
 				}
+				
+				cause = cause + " in '" + context + '\'';
+			}
+
+		} else if (sqlException instanceof SQLSyntaxErrorException) {
+			String[] bits = sqlError.trim().split(System.lineSeparator());
+
+			if (bits.length == 3) { // error msg, sql, carat+error details
+				String sql2 = bits[1];
+				String causeLine = bits[2];
+				int ix = causeLine.indexOf('^');
+				cause = causeLine.substring(ix + 1);
+				int start = ix > 6 ? ix - 6 : 0;
+				String sqlFragment = sql2.substring(ix - 6, 6);
+
+				if (sqlFragment.equals("join (") && cause.equals("expected SELECT got"))
+					cause = "Unexpected parentheses in SQL JOIN";
 			}
 
 			SkipTestInfo.instance().extraTestToSkip(cause, sqlException);
 		} else if (sqlError.contains("expected SELECT got") & sqlError.contains(" join (")) {
 			// Known error: parentheses in SELECT, usually due to JOIN FETCH
-			SkipTestInfo.instance().extraTestToSkip(cause = "Parentheses in SQL using JOIN", sqlException);
+			cause = "Parentheses in SQL using JOIN";
 		} else {
-			return null;
+			cause = sqlException.getClass().getSimpleName() + ": " + cause;
 		}
 
-		return quietException(caller, message + " (" + cause + ')' , sqlException, sql);
+		SkipTestInfo.instance().extraTestToSkip(cause, sqlException);
+
+		return quietException(caller, message + " (" + cause + ')', sqlException, sql);
 	}
 
 	public static JDBCException checkForKnownException(Object caller, String message, SQLException sqlException,
