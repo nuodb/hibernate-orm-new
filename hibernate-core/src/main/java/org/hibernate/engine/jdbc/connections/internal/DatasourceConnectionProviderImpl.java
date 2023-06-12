@@ -9,6 +9,7 @@ package org.hibernate.engine.jdbc.connections.internal;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Map;
+import java.util.logging.Logger;
 import javax.sql.DataSource;
 
 import org.hibernate.HibernateException;
@@ -47,6 +48,9 @@ public class DatasourceConnectionProviderImpl implements ConnectionProvider, Con
 
 	public void setDataSource(DataSource dataSource) {
 		this.dataSource = dataSource;
+		// NuoDB: What datasource class is being used?
+		Logger.getGlobal().info("DatasourceConnectionProviderImpl.setDataSource: Using " + dataSource.getClass());
+		// NuoDB: End
 	}
 
 	@InjectService( required = false )

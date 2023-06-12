@@ -62,6 +62,8 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -132,6 +134,7 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@SkipForDialect(value = DB2Dialect.class, comment = "No support for the tinyint datatype so we use smallint")
 	@SkipForDialect(value = AbstractTransactSQLDialect.class, comment = "No support for the tinyint datatype so we use smallint")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "No support for the tinyint datatype so we use smallint")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "No support for the tinyint datatype so we use smallint")
 	public void tinyintType() {
 		createEntityManagerFactory( TinyintEntity.class );
 		doTest( TinyintEntity.class, (byte)127 );
@@ -140,6 +143,7 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@Test
 	@SkipForDialect(value = H2Dialect.class, comment = "Turns floats into doubles in result sets and advertises the type as double in the metadata")
 	@SkipForDialect(value = HSQLDialect.class, comment = "Turns floats into doubles in result sets and advertises the type as double in the metadata")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "Stores all floating point numbers as double, never returns a float")
 	public void floatType() {
 		createEntityManagerFactory( FloatEntity.class );
 		doTest( FloatEntity.class, 15516.125f );
@@ -148,6 +152,7 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@Test
 	@SkipForDialect(value = MySQLDialect.class, comment = "Turns reals into doubles in result sets and advertises the type as double in the metadata")
 	@SkipForDialect(value = HSQLDialect.class, comment = "Turns reals into doubles in result sets and advertises the type as double in the metadata")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "Stores all floating point numbers as double, never returns a float")
 	public void realType() {
 		createEntityManagerFactory( RealEntity.class );
 		doTest( RealEntity.class, 15516.125f );
@@ -159,11 +164,20 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@SkipForDialect(value = OracleDialect.class, comment = "Value is too big for the maximum allowed precision of Oracle")
 	@SkipForDialect(value = AbstractTransactSQLDialect.class, comment = "Value is too big for the maximum allowed precision of SQL Server and Sybase")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "Value is too big for the maximum allowed precision of HANA")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "Value is too big for the maximum allowed precision of NuoDB")
 	public void numericType() {
 		createEntityManagerFactory(
 				NumericEntity.class
 		);
 		doTest( NumericEntity.class, new BigDecimal( "5464384284258458485484848458.48465843584584684" ) );
+	}
+	
+	@RequiresDialect(value = NuoDBDialect.class, comment= "Max precision is 38, NumericEntity uses 50")
+	public void numericType2() {
+		createEntityManagerFactory(
+				NumericEntity2.class
+		);
+		doTest( NumericEntity2.class, new BigDecimal( "5464384284258458485484848458.48465843584584684" ) );
 	}
 
 	@Test
@@ -172,11 +186,21 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@SkipForDialect(value = OracleDialect.class, comment = "Value is too big for the maximum allowed precision of Oracle")
 	@SkipForDialect(value = AbstractTransactSQLDialect.class, comment = "Value is too big for the maximum allowed precision of SQL Server and Sybase")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "Value is too big for the maximum allowed precision of HANA")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "Value is too big for the maximum allowed precision of NuoDB")
 	public void decimalType() {
 		createEntityManagerFactory( DecimalEntity.class );
-		doTest( DecimalEntity.class, new BigDecimal( "5464384284258458485484848458.48465843584584684" )  );
+		doTest( DecimalEntity.class, new BigDecimal( "4258458485484848458.48465843584584684" )  );
 	}
 
+	@RequiresDialect(value = NuoDBDialect.class, comment= "Max precision is 38, NumericEntity uses 50")
+	public void decimalType2() {
+		createEntityManagerFactory(
+				DecimalEntity2.class
+		);
+		doTest( DecimalEntity2.class, new BigDecimal( "4258458485484848458.48465843584584684" ) );
+	}
+
+	
 	@Test
 	public void commonTextTypes() {
 		createEntityManagerFactory(
@@ -216,6 +240,7 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	}
 
 	@Test
+	@SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB maps BINARY and VARBINARY to BLOB")
 	public void binaryTypes() {
 		createEntityManagerFactory(
 				BinaryEntity.class,
@@ -231,6 +256,7 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 	@SkipForDialect(value = DB2Dialect.class, comment = "DB2 maps LONGVARBINARY to BLOB")
 	@SkipForDialect(value = SybaseDialect.class, comment = "Sybase maps LONGVARBINARY to BLOB")
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA maps LONGVARCHAR to BLOB")
+	@SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB maps LONGVARCHAR to BLOB")
 	public void longBinaryType() {
 		createEntityManagerFactory(
 				LongvarbinaryEntity.class
@@ -430,7 +456,17 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 
 	@Entity(name = "numericEntity")
 	public static class NumericEntity extends TestedEntity<BigDecimal> {
+
 		@Column(precision = 50, scale = 15)
+		public BigDecimal getTestedProperty() {
+			return testedProperty;
+		}
+	}
+	
+	@Entity(name = "numericEntity2")
+	public static class NumericEntity2 extends TestedEntity<BigDecimal> {
+
+		@Column(precision = 38, scale = 15)
 		public BigDecimal getTestedProperty() {
 			return testedProperty;
 		}
@@ -449,6 +485,19 @@ public class NativeQueryResultTypeAutoDiscoveryTest {
 		}
 	}
 
+	@Entity(name = "decimalEntity2")
+	public static class DecimalEntity2 extends TestedEntity<BigDecimal> {
+		/**
+		 * The custom type sets the SQL type to {@link Types#DECIMAL}
+		 * instead of the default {@link Types#NUMERIC}.
+		 */
+		@JdbcTypeCode( Types.DECIMAL )
+		@Column(precision = 38, scale = 15)
+		public BigDecimal getTestedProperty() {
+			return testedProperty;
+		}
+	}
+	
 	@Entity(name = "varcharEntity")
 	public static class VarcharEntity extends TestedEntity<String> {
 		public String getTestedProperty() {

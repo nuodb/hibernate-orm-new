@@ -6,6 +6,23 @@
  */
 package org.hibernate.orm.test.hql;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.Matchers.notNullValue;
+import static org.hibernate.testing.junit4.ExtraAssertions.assertClassAssignability;
+import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
+import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Time;
@@ -19,6 +36,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.hamcrest.CoreMatchers;
 import org.hibernate.Hibernate;
 import org.hibernate.HibernateException;
 import org.hibernate.QueryException;
@@ -46,6 +64,11 @@ import org.hibernate.orm.test.any.hbm.IntegerPropertyValue;
 import org.hibernate.orm.test.any.hbm.PropertySet;
 import org.hibernate.orm.test.any.hbm.PropertyValue;
 import org.hibernate.orm.test.any.hbm.StringPropertyValue;
+import org.hibernate.orm.test.cid.Customer;
+import org.hibernate.orm.test.cid.LineItem;
+import org.hibernate.orm.test.cid.LineItem.Id;
+import org.hibernate.orm.test.cid.Order;
+import org.hibernate.orm.test.cid.Product;
 import org.hibernate.query.Query;
 import org.hibernate.query.spi.QueryImplementor;
 import org.hibernate.query.sqm.ParsingException;
@@ -56,9 +79,6 @@ import org.hibernate.query.sqm.tree.expression.SqmFunction;
 import org.hibernate.query.sqm.tree.select.SqmSelectStatement;
 import org.hibernate.query.sqm.tree.select.SqmSelection;
 import org.hibernate.stat.QueryStatistics;
-import org.hibernate.transform.ResultTransformer;
-import org.hibernate.transform.Transformers;
-
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.FailureExpected;
 import org.hibernate.testing.RequiresDialect;
@@ -66,34 +86,10 @@ import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-
-import org.hibernate.orm.test.cid.Customer;
-import org.hibernate.orm.test.cid.LineItem;
-import org.hibernate.orm.test.cid.LineItem.Id;
-import org.hibernate.orm.test.cid.Order;
-import org.hibernate.orm.test.cid.Product;
-
+import org.hibernate.transform.ResultTransformer;
+import org.hibernate.transform.Transformers;
 import org.junit.After;
 import org.junit.Test;
-
-import org.hamcrest.CoreMatchers;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
-import static org.hamcrest.Matchers.notNullValue;
-import static org.hibernate.testing.junit4.ExtraAssertions.assertClassAssignability;
-import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
-import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 /**
  * Tests the integration of the new AST parser into the loading of query results using
@@ -105,11 +101,13 @@ import static org.junit.Assert.fail;
  *
  * @author Steve
  */
+@SuppressWarnings({"deprecation", "rawtypes"})
 @RequiresDialectFeature(DialectChecks.SupportsTemporaryTable.class)
 public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 
 	private final List<Long> createdAnimalIds = new ArrayList<>();
 
+	@SuppressWarnings({ "unchecked" })
 	@After
 	public void cleanUpTestData() {
 		inTransaction(
@@ -236,6 +234,7 @@ public class ASTParserLoadingTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	public void testSubSelectAsArithmeticOperand() {
+
 		inTransaction(
 				(s) -> {
 					s.createQuery( "from Zoo z where ( select count(*) from Zoo ) = 0" ).list();

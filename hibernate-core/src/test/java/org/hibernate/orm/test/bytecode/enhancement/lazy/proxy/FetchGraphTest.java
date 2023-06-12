@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.Hibernate;
 import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
@@ -29,6 +30,7 @@ import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.query.Query;
 import org.hibernate.stat.spi.StatisticsImplementor;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -216,6 +218,7 @@ public class FetchGraphTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void testFetchingScroll() {
 		final StatisticsImplementor stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -276,6 +279,7 @@ public class FetchGraphTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void testFetchingScroll2() {
 		final StatisticsImplementor stats = sessionFactory().getStatistics();
 		stats.clear();

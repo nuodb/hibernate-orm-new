@@ -40,6 +40,8 @@ import jakarta.persistence.PessimisticLockException;
 import jakarta.persistence.QueryTimeoutException;
 import jakarta.persistence.RollbackException;
 
+import javax.swing.*;
+
 /**
  * @author Andrea Boriero
  */
@@ -160,7 +162,12 @@ public class ExceptionConverterImpl implements ExceptionConverter {
 			//Spec 3.2.3 Synchronization rules
 			return new IllegalStateException( exception );
 		}
-		else {
+		// NuoDB 11-Jun-2023: We already know this is due to an unsupported SQL syntax.
+		else if (exception.getClass().getSimpleName().contains("QuietException")) {
+			// Don't wrap it as we don't want the stack trace (because we know what the error is).
+			return exception;
+		// NuoDB: End
+		} else {
 			final PersistenceException converted = new PersistenceException(
 					"Converting `" + exception.getClass().getName() + "` to JPA `PersistenceException` : " + exception.getMessage(),
 					exception

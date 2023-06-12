@@ -19,7 +19,9 @@ import java.util.Properties;
 import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.logging.Logger;
 import javax.sql.DataSource;
+//import javax.swing.JOptionPane;
 
 import org.hibernate.Internal;
 import org.hibernate.SessionFactory;
@@ -797,6 +799,9 @@ public class EntityManagerFactoryBuilderImpl implements EntityManagerFactoryBuil
 			MergedSettings mergedSettings,
 			PersistenceUnitDescriptor persistenceUnit) {
 		if ( dataSource != null ) {
+			// NuoDB
+			Logger.getGlobal().info("++++ EntityManagerFactoryBuilderImpl.withDataSource: Using " + dataSource.getClass());
+
 			applyDataSource(
 					dataSource,
 					// we don't explicitly know
@@ -1367,7 +1372,10 @@ public class EntityManagerFactoryBuilderImpl implements EntityManagerFactoryBuil
 	@Override
 	public EntityManagerFactoryBuilder withDataSource(DataSource dataSource) {
 		this.dataSource = dataSource;
-
+		// NuoDB: This method is never used
+		Logger.getGlobal().info("EntityManagerFactoryBuilderImpl.withDataSource: Using " + dataSource.getClass());
+		//JOptionPane.showMessageDialog(null, "Using " + dataSource.getClass());
+		// NuoDB: End
 		return this;
 	}
 

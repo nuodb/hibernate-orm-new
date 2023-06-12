@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.Hibernate;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -19,6 +20,7 @@ import org.hibernate.engine.spi.PersistentAttributeInterceptable;
 import org.hibernate.engine.spi.PersistentAttributeInterceptor;
 import org.hibernate.stat.Statistics;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -61,6 +63,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	}
 
 	@Test
+	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstract() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();

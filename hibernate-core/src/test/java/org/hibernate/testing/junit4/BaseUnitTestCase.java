@@ -29,92 +29,95 @@ import org.junit.runner.RunWith;
 import org.jboss.logging.Logger;
 
 /**
+ * <b>NUODB OVERRIDE CLASS</b>
+ * <p>
  * The base unit test adapter.
+ * <p>
+ * <b>NuoDB:</b> Change global timeout to 5 mins.
  *
  * @author Steve Ebersole
  */
-@RunWith( CustomRunner.class )
+@RunWith(CustomRunner.class)
 public abstract class BaseUnitTestCase {
 
-    private static Throwable schemaClearError;
+	// NuoDB: Reduce default timeout.
+	private static final int DEFAULT_GLOBAL_TIMEOUT_MINS = 5; // Was 30
 
-    static {
-        try {
-            DatabaseCleaner.clearSchemas();
-        }
-        catch (Throwable t) {
-            schemaClearError = t;
-        }
-    }
+	private static Throwable schemaClearError;
 
-    @BeforeClassOnce
-    public static void checkClearSchema() throws Throwable {
-        if (schemaClearError!=null) {
-            throw schemaClearError;
-        }
+	static {
+		try {
+			DatabaseCleaner.clearSchemas();
+		} catch (Throwable t) {
+			schemaClearError = t;
+		}
+	}
 
+	@BeforeClassOnce
+	public static void checkClearSchema() throws Throwable {
+		if (schemaClearError != null) {
+			throw schemaClearError;
+		}
 
-    }
+	}
 
-    protected final Logger log = Logger.getLogger( getClass() );
+	protected final Logger log = Logger.getLogger(getClass());
 
-    private static boolean enableConnectionLeakDetection = Boolean.TRUE.toString()
-            .equals( System.getenv( "HIBERNATE_CONNECTION_LEAK_DETECTION" ) );
+	private static boolean enableConnectionLeakDetection = Boolean.TRUE.toString()
+			.equals(System.getenv("HIBERNATE_CONNECTION_LEAK_DETECTION"));
 
-    private ConnectionLeakUtil connectionLeakUtil;
+	private ConnectionLeakUtil connectionLeakUtil;
 
-    protected final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	protected final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
-    @Rule
-    public TestRule globalTimeout = Timeout.millis( TimeUnit.MINUTES.toMillis( 30 ) ); // no test should run longer than 30 minutes
+	@Rule
+	// NuoDB: No test should run longer than 5 (was 30) minutes
+	public TestRule globalTimeout = //
+			Timeout.millis(TimeUnit.MINUTES.toMillis(DEFAULT_GLOBAL_TIMEOUT_MINS));
 
-    public BaseUnitTestCase() {
-        if ( enableConnectionLeakDetection ) {
-            connectionLeakUtil = new ConnectionLeakUtil();
-        }
-    }
+	public BaseUnitTestCase() {
+		if (enableConnectionLeakDetection) {
+			connectionLeakUtil = new ConnectionLeakUtil();
+		}
+	}
 
-    @AfterClassOnce
-    public void assertNoLeaks() {
-        if ( enableConnectionLeakDetection ) {
-            connectionLeakUtil.assertNoLeaks();
-        }
-    }
+	@AfterClassOnce
+	public void assertNoLeaks() {
+		if (enableConnectionLeakDetection) {
+			connectionLeakUtil.assertNoLeaks();
+		}
+	}
 
-    @After
-    public void releaseTransactions() {
-        if ( JtaStatusHelper.isActive( TestingJtaPlatformImpl.INSTANCE.getTransactionManager() ) ) {
-            log.warn( "Cleaning up unfinished transaction" );
-            try {
-                TestingJtaPlatformImpl.INSTANCE.getTransactionManager().rollback();
-            }
-            catch (SystemException ignored) {
-            }
-        }
-    }
+	@After
+	public void releaseTransactions() {
+		if (JtaStatusHelper.isActive(TestingJtaPlatformImpl.INSTANCE.getTransactionManager())) {
+			log.warn("Cleaning up unfinished transaction");
+			try {
+				TestingJtaPlatformImpl.INSTANCE.getTransactionManager().rollback();
+			} catch (SystemException ignored) {
+			}
+		}
+	}
 
-    protected void sleep(long millis) {
-        try {
-            Thread.sleep( millis );
-        }
-        catch ( InterruptedException e ) {
-            Thread.interrupted();
-        }
-    }
+	protected void sleep(long millis) {
+		try {
+			Thread.sleep(millis);
+		} catch (InterruptedException e) {
+			Thread.interrupted();
+		}
+	}
 
-    protected Future<?> executeAsync(Runnable callable) {
-        return executorService.submit(callable);
-    }
+	protected Future<?> executeAsync(Runnable callable) {
+		return executorService.submit(callable);
+	}
 
-    protected void executeSync(Runnable callable) {
-        try {
-            executeAsync( callable ).get();
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        catch (ExecutionException e) {
-            throw new RuntimeException( e.getCause() );
-        }
-    }
+	protected void executeSync(Runnable callable) {
+		try {
+			executeAsync(callable).get();
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		} catch (ExecutionException e) {
+			throw new RuntimeException(e.getCause());
+		}
+	}
 }

@@ -6,12 +6,27 @@
  */
 package org.hibernate.testing.junit4;
 
-import com.nuodb.hibernate.NuoDBDialect;
+import static org.hibernate.dialect.SimpleDatabaseVersion.ZERO_VERSION;
+
+import java.lang.annotation.Annotation;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
 import org.hibernate.dialect.Dialect;
 import org.hibernate.internal.util.StringHelper;
 import org.hibernate.internal.util.collections.CollectionHelper;
-import org.hibernate.testing.*;
+import org.hibernate.testing.DialectCheck;
+import org.hibernate.testing.FailureExpected;
+import org.hibernate.testing.RequiresDialect;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.RequiresDialects;
+import org.hibernate.testing.Skip;
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.orm.junit.DialectContext;
+import org.hibernate.testing.support.TestUtils;
 import org.jboss.logging.Logger;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
@@ -23,426 +38,376 @@ import org.junit.runners.model.FrameworkMethod;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.Statement;
 
-import java.io.File;
-import java.io.IOException;
-import java.lang.annotation.Annotation;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-
-import static org.hibernate.dialect.SimpleDatabaseVersion.ZERO_VERSION;
+import com.nuodb.hibernate.NuoDBDialect;
 
 /**
- * The Hibernate-specific {@link org.junit.runner.Runner} implementation which layers {@link ExtendedFrameworkMethod}
- * support on top of the standard JUnit {@link FrameworkMethod} for extra information after checking to make sure the
+ * <b>NUODB OVERRIDE CLASS</b>
+ * <p>
+ * <b>NuoDB:</b> Read the file {@code skip-tests.txt} and skip any test class listed in
+ * the file. Allows lots of classes, known not to pass tests due to NuoDB SQL
+ * incompatibilities, without having to annotate them with SkipForDialect.
+ * <p>
+ * The Hibernate-specific {@link org.junit.runner.Runner} implementation which
+ * layers {@link ExtendedFrameworkMethod} support on top of the standard JUnit
+ * {@link FrameworkMethod} for extra information after checking to make sure the
  * test should be run.
  *
  * @author Steve Ebersole
  */
 public class CustomRunner extends BlockJUnit4ClassRunner {
-    private static final Logger log = Logger.getLogger( CustomRunner.class );
+	private static final Logger log = Logger.getLogger(CustomRunner.class);
 
-    public static final String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
+	//public static final String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
 
-    private TestClassMetadata testClassMetadata;
+	private TestClassMetadata testClassMetadata;
 
-    public CustomRunner(Class<?> clazz) throws InitializationError, NoTestsRemainException {
-        super( clazz );
-    }
+	public CustomRunner(Class<?> clazz) throws InitializationError, NoTestsRemainException {
+		super(clazz);
+	}
 
-    @Override
-    protected void collectInitializationErrors(List<Throwable> errors) {
-        super.collectInitializationErrors( errors );
-        this.testClassMetadata = new TestClassMetadata( getTestClass().getJavaClass() );
-        testClassMetadata.validate( errors );
-    }
+	@Override
+	protected void collectInitializationErrors(List<Throwable> errors) {
+		super.collectInitializationErrors(errors);
+		this.testClassMetadata = new TestClassMetadata(getTestClass().getJavaClass());
+		testClassMetadata.validate(errors);
+	}
 
-    public TestClassMetadata getTestClassMetadata() {
-        return testClassMetadata;
-    }
+	public TestClassMetadata getTestClassMetadata() {
+		return testClassMetadata;
+	}
 
-    // NuoDB Specific: Skip tests in skip file
-    private Boolean skipAllTests = null;
+//	// NuoDB Specific: Skip tests in skip file
+//	private Boolean skipAllTests = null;
+//
+//	protected boolean skipAllTests() {
+//
+//		if (skipAllTests == null) {
+//			// Assume not
+//			Class<?> testClass = getTestClass().getJavaClass();
+//			skipAllTests = TestUtils.skipTest(testClass);
+//		}
+//
+//		return skipAllTests;
+//	}
+//	// END NuoDB Specific
 
-    protected boolean skipAllTests() {
+	private Boolean isAllTestsIgnored;
 
-        if (skipAllTests == null) {
-            // Assume not
-            skipAllTests = false;
+	protected boolean isAllTestsIgnored() {
+		if (isAllTestsIgnored == null) {
+			List<FrameworkMethod> frameworkMethods = computeTestMethods();
 
-            try {
-                Class<?> testClass = getTestClass().getJavaClass();
-                File skipFileList = new File(SKIP_TESTS_FILE_NAME);
+			if (frameworkMethods.isEmpty()) {
+				log.warn("No tests to run");
+				isAllTestsIgnored = true;
+			} else {
+				isAllTestsIgnored = true;
 
-                if (!skipFileList.exists()) {
-                    File current = new File(".").getAbsoluteFile();
-                    log.warn("current = " + current);
+				// Look for at least one test method without @Ignore
+				for (FrameworkMethod method : frameworkMethods) {
+					Ignore ignore = method.getAnnotation(Ignore.class);
+					if (ignore == null) {
+						isAllTestsIgnored = false;
+						break;
+					}
+				}
+			}
+		}
+		return isAllTestsIgnored;
+	}
 
-                    if (current.getPath().contains("/hibernate-core/")) {
-                        while (!current.getName().equals("hibernate-core")) {
-                            current = current.getParentFile();
-                            log.warn("current = " + current);
-                        }
-                    }
+	@Override
+	protected Statement withBeforeClasses(Statement statement) {
+		if (isAllTestsIgnored()) {
+			return super.withBeforeClasses(statement);
+		}
+		return new BeforeClassCallbackHandler(this, super.withBeforeClasses(statement));
+	}
 
-                    if (current != null)
-                        skipFileList = new File(current, SKIP_TESTS_FILE_NAME);
-                }
+	@Override
+	protected Statement withAfterClasses(Statement statement) {
+		if (isAllTestsIgnored()) {
+			return super.withAfterClasses(statement);
+		}
+		return new AfterClassCallbackHandler(this, super.withAfterClasses(statement));
+	}
 
-                log.debug("Checking if we skip tests in " + testClass + " when using NuoDB");
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @see org.junit.runners.ParentRunner#classBlock(RunNotifier)
+	 */
+	@Override
+	protected Statement classBlock(RunNotifier notifier) {
+		log.info(BeforeClass.class.getSimpleName() + ": " + getName());
 
-                for (String line : Files.readAllLines(skipFileList.toPath())) {
-                    line = line.replace('/','.');
-                    if (line.equals(testClass.getName())) {
-                        log.warn("Skipping " + testClass + " - listed in " + skipFileList);
-                        skipAllTests = true;
-                        break;
-                        //throw new RuntimeException("Skipping " + testClass + " - listed in " + skipFileList);
-                    }
-                }
-                log.warn("Skip all tests when running NuoDB? " + skipAllTests);
-            } catch (IOException e) {
-                skipAllTests = true;
-                throw new RuntimeException(
-                        "Unable to find '" + SKIP_TESTS_FILE_NAME + "' in directory " + new File(".").getAbsolutePath());
-            }
-        }
+		return super.classBlock(notifier);
+	}
 
-        return skipAllTests;
-    }
-    // END NuoDB Specific
+	@Override
+	protected Statement methodBlock(FrameworkMethod method) {
+		log.info(Test.class.getSimpleName() + ": " + method.getName());
 
-    private Boolean isAllTestsIgnored;
+		final Statement originalMethodBlock = super.methodBlock(method);
+		final ExtendedFrameworkMethod extendedFrameworkMethod = (ExtendedFrameworkMethod) method;
+		return new FailureExpectedHandler(originalMethodBlock, testClassMetadata, extendedFrameworkMethod,
+				testInstance);
+	}
 
-    protected boolean isAllTestsIgnored() {
-        if ( isAllTestsIgnored == null ) {
-            List<FrameworkMethod> frameworkMethods = computeTestMethods();
+	protected Object testInstance;
 
-            if ( frameworkMethods.isEmpty() ) {
-                log.warn("No tests to run");
-                isAllTestsIgnored = true;
-            }
-            else {
-                isAllTestsIgnored = true;
+	protected Object getTestInstance() throws Exception {
+		if (testInstance == null) {
+			testInstance = super.createTest();
+		}
+		return testInstance;
+	}
 
-                // Look for at least one test method  without @Ignore
-                for ( FrameworkMethod method : frameworkMethods) {
-                    Ignore ignore = method.getAnnotation(Ignore.class);
-                    if (ignore == null) {
-                        isAllTestsIgnored = false;
-                        break;
-                    }
-                }
-            }
-        }
-        return isAllTestsIgnored;
-    }
+	@Override
+	protected Object createTest() throws Exception {
+		return getTestInstance();
+	}
 
-    @Override
-    protected Statement withBeforeClasses(Statement statement) {
-        if ( isAllTestsIgnored() ) {
-            return super.withBeforeClasses( statement );
-        }
-        return new BeforeClassCallbackHandler(
-                this,
-                super.withBeforeClasses( statement )
-        );
-    }
+	private List<FrameworkMethod> computedTestMethods;
 
-    @Override
-    protected Statement withAfterClasses(Statement statement) {
-        if ( isAllTestsIgnored() ) {
-            return super.withAfterClasses( statement );
-        }
-        return new AfterClassCallbackHandler(
-                this,
-                super.withAfterClasses( statement )
-        );
-    }
+	@Override
+	protected List<FrameworkMethod> computeTestMethods() {
+		if (computedTestMethods == null) {
+			computedTestMethods = doComputation();
+			sortMethods(computedTestMethods);
+		}
+		return computedTestMethods;
+	}
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.junit.runners.ParentRunner#classBlock(RunNotifier)
-     */
-    @Override
-    protected Statement classBlock(RunNotifier notifier) {
-        log.info( BeforeClass.class.getSimpleName() + ": " + getName() );
+	protected void sortMethods(List<FrameworkMethod> computedTestMethods) {
+		if (CollectionHelper.isEmpty(computedTestMethods)) {
+			return;
+		}
+		Collections.sort(computedTestMethods, new Comparator<FrameworkMethod>() {
+			@Override
+			public int compare(FrameworkMethod o1, FrameworkMethod o2) {
+				return o1.getName().compareTo(o2.getName());
+			}
+		});
+	}
 
-        return super.classBlock( notifier );
-    }
+	protected List<FrameworkMethod> doComputation() {
+		// Next, get all the test methods as understood by JUnit
+		final List<FrameworkMethod> methods = super.computeTestMethods();
 
-    @Override
-    protected Statement methodBlock(FrameworkMethod method) {
-        log.info( Test.class.getSimpleName() + ": " + method.getName() );
+		// Now process that full list of test methods and build our custom result
+		final List<FrameworkMethod> result = new ArrayList<FrameworkMethod>();
+		final boolean doValidation = Boolean.getBoolean(Helper.VALIDATE_FAILURE_EXPECTED);
+		int testCount = 0;
 
-        final Statement originalMethodBlock = super.methodBlock( method );
-        final ExtendedFrameworkMethod extendedFrameworkMethod = (ExtendedFrameworkMethod) method;
-        return new FailureExpectedHandler(
-                originalMethodBlock,
-                testClassMetadata,
-                extendedFrameworkMethod,
-                testInstance
-        );
-    }
+		Ignore virtualIgnore = null;
 
-    protected Object testInstance;
+		for (FrameworkMethod frameworkMethod : methods) {
+			// potentially ignore based on expected failure
+			final FailureExpected failureExpected = Helper.locateAnnotation(FailureExpected.class, frameworkMethod,
+					getTestClass());
+			if (failureExpected != null && !doValidation) {
+				virtualIgnore = new IgnoreImpl(Helper.extractIgnoreMessage(failureExpected, frameworkMethod));
+			} else {
+				virtualIgnore = convertSkipToIgnore(frameworkMethod);
+			}
 
-    protected Object getTestInstance() throws Exception {
-        if ( testInstance == null ) {
-            testInstance = super.createTest();
-        }
-        return testInstance;
-    }
+			testCount++;
+			log.trace("adding test " + Helper.extractTestName(frameworkMethod) + " [#" + testCount + "]");
+			log.warn("adding test method=" + Helper.extractTestName(frameworkMethod) + " ignore=" + virtualIgnore);
+			result.add(new ExtendedFrameworkMethod(frameworkMethod, virtualIgnore, failureExpected));
+		}
+		return result;
+	}
 
-    @Override
-    protected Object createTest() throws Exception {
-        return getTestInstance();
-    }
+	//@SuppressWarnings({ "ClassExplicitlyAnnotation" })
+	public static class IgnoreImpl implements Ignore {
+		private final String value;
 
-    private List<FrameworkMethod> computedTestMethods;
+		public IgnoreImpl(String value) {
+			this.value = value;
+		}
 
-    @Override
-    protected List<FrameworkMethod> computeTestMethods() {
-        if ( computedTestMethods == null ) {
-            computedTestMethods = doComputation();
-            sortMethods(computedTestMethods);
-        }
-        return computedTestMethods;
-    }
+		@Override
+		public String value() {
+			return value;
+		}
 
-    protected void sortMethods(List<FrameworkMethod> computedTestMethods) {
-        if ( CollectionHelper.isEmpty( computedTestMethods ) ) {
-            return;
-        }
-        Collections.sort(
-                computedTestMethods, new Comparator<FrameworkMethod>() {
-                    @Override
-                    public int compare(FrameworkMethod o1, FrameworkMethod o2) {
-                        return o1.getName().compareTo( o2.getName() );
-                    }
-                }
-        );
-    }
+		@Override
+		public Class<? extends Annotation> annotationType() {
+			return Ignore.class;
+		}
+	}
+	
+	// NuoDB: Make it obvious we are ignoring specifically for NuoDB
+	public static class IgnoreForNuoDB extends IgnoreImpl {
 
-    protected List<FrameworkMethod> doComputation() {
-        // Next, get all the test methods as understood by JUnit
-        final List<FrameworkMethod> methods = super.computeTestMethods();
+		public IgnoreForNuoDB(String value) {
+			super(value);
+		}
+		
+		@Override
+		public String toString() {
+			return "Class listed in NuoDB's " + TestUtils.skipListFileName();
+		}
+	}
+	// NuoDB: End
 
-        // Now process that full list of test methods and build our custom result
-        final List<FrameworkMethod> result = new ArrayList<FrameworkMethod>();
-        final boolean doValidation = Boolean.getBoolean( Helper.VALIDATE_FAILURE_EXPECTED );
-        int testCount = 0;
+	private static Dialect dialect = determineDialect();
 
-        Ignore virtualIgnore = null;
+	private static Dialect determineDialect() {
+		try {
+			// System.out.println("DIALECT is " + DialectContext.getDialect());
 
-        for ( FrameworkMethod frameworkMethod : methods ) {
-            // potentially ignore based on expected failure
-            final FailureExpected failureExpected = Helper.locateAnnotation(
-                    FailureExpected.class,
-                    frameworkMethod,
-                    getTestClass()
-            );
-            if ( failureExpected != null && !doValidation ) {
-                virtualIgnore = new IgnoreImpl( Helper.extractIgnoreMessage( failureExpected, frameworkMethod ) );
-            }
-            else {
-                virtualIgnore = convertSkipToIgnore( frameworkMethod );
-            }
+			return DialectContext.getDialect();
+		} catch (Exception e) {
+			return new Dialect(ZERO_VERSION) {
+			};
+		}
+	}
 
-            testCount++;
-            log.trace( "adding test " + Helper.extractTestName( frameworkMethod ) + " [#" + testCount + "]" );
-            log.warn("adding test method=" + Helper.extractTestName( frameworkMethod ) + " ignore=" + virtualIgnore);
-            result.add( new ExtendedFrameworkMethod( frameworkMethod, virtualIgnore, failureExpected ) );
-        }
-        return result;
-    }
+	protected Ignore convertSkipToIgnore(FrameworkMethod frameworkMethod) {
+		// @Skip
+		Skip skip = Helper.locateAnnotation(Skip.class, frameworkMethod, getTestClass());
+		if (skip != null) {
+			if (isMatch(skip.condition())) {
+				return buildIgnore(skip);
+			}
+		}
 
-    @SuppressWarnings({"ClassExplicitlyAnnotation"})
-    public static class IgnoreImpl implements Ignore {
-        private final String value;
+		// @SkipForDialects & @SkipForDialect
+		for (SkipForDialect skipForDialectAnn : Helper.collectAnnotations(SkipForDialect.class, SkipForDialects.class,
+				frameworkMethod, getTestClass())) {
+			for (Class<? extends Dialect> dialectClass : skipForDialectAnn.value()) {
+				if (skipForDialectAnn.strictMatching()) {
+					if (dialectClass.equals(dialect.getClass())) {
+						return buildIgnore(skipForDialectAnn);
+					}
+				} else {
+					if (dialectClass.isInstance(dialect)) {
+						return buildIgnore(skipForDialectAnn);
+					}
 
-        public IgnoreImpl(String value) {
-            this.value = value;
-        }
+				}
+			}
+		}
 
-        @Override
-        public String value() {
-            return value;
-        }
+		// NuoDB: skip if test class listed in skip-file
+		if (CustomRunner.dialect instanceof NuoDBDialect) {
+			if (TestUtils.skipTest(getTestClass().getJavaClass(), frameworkMethod)) {
+				String msg = "Skipping " + getTestClass().getJavaClass() + '.' //
+						+ frameworkMethod.getMethod().getName() + " listed in " + TestUtils.skipListFileName();
+				return new IgnoreForNuoDB(msg);
+			}
+		}
+		// NuoDB: End
 
-        @Override
-        public Class<? extends Annotation> annotationType() {
-            return Ignore.class;
-        }
-    }
+		// @RequiresDialects & @RequiresDialect
+		final List<RequiresDialect> requiresDialects = Helper.collectAnnotations(RequiresDialect.class,
+				RequiresDialects.class, frameworkMethod, getTestClass());
 
-    private static Dialect dialect = determineDialect();
+		if (!requiresDialects.isEmpty() && !isDialectMatchingRequired(requiresDialects)) {
+			return buildIgnore(requiresDialects);
+		}
 
-    private static Dialect determineDialect() {
-        try {
-            return DialectContext.getDialect();
-        }
-        catch (Exception e) {
-            return new Dialect( ZERO_VERSION ) {};
-        }
-    }
+		// @RequiresDialectFeature
+		final List<RequiresDialectFeature> requiresDialectFeatures = Helper
+				.locateAllAnnotations(RequiresDialectFeature.class, frameworkMethod, getTestClass());
 
-    protected Ignore convertSkipToIgnore(FrameworkMethod frameworkMethod) {
-        // @Skip
-        Skip skip = Helper.locateAnnotation( Skip.class, frameworkMethod, getTestClass() );
-        if ( skip != null ) {
-            if ( isMatch( skip.condition() ) ) {
-                return buildIgnore( skip );
-            }
-        }
+		if (!requiresDialectFeatures.isEmpty()) {
+			for (RequiresDialectFeature requiresDialectFeature : requiresDialectFeatures) {
+				try {
+					for (Class<? extends DialectCheck> checkClass : requiresDialectFeature.value()) {
+						if (!checkClass.getDeclaredConstructor().newInstance().isMatch(dialect)) {
+							return buildIgnore(requiresDialectFeature);
+						}
+					}
+				} catch (RuntimeException e) {
+					throw e;
+				} catch (Exception e) {
+					throw new RuntimeException("Unable to instantiate DialectCheck", e);
+				}
+			}
+		}
 
-        // @SkipForDialects & @SkipForDialect
-        for ( SkipForDialect skipForDialectAnn : Helper.collectAnnotations(
-                SkipForDialect.class, SkipForDialects.class, frameworkMethod, getTestClass()
-        ) ) {
-            for ( Class<? extends Dialect> dialectClass : skipForDialectAnn.value() ) {
-                if ( skipForDialectAnn.strictMatching() ) {
-                    if ( dialectClass.equals( dialect.getClass() ) ) {
-                        return buildIgnore( skipForDialectAnn );
-                    }
-                }
-                else {
-                    if ( dialectClass.isInstance( dialect ) ) {
-                        return buildIgnore( skipForDialectAnn );
-                    }
+		return null;
+	}
 
-                }
-            }
-        }
+	private boolean isDialectMatchingRequired(List<RequiresDialect> requiresDialects) {
+		boolean foundMatch = false;
+		for (RequiresDialect requiresDialectAnn : requiresDialects) {
+			for (Class<? extends Dialect> dialectClass : requiresDialectAnn.value()) {
+				foundMatch = requiresDialectAnn.strictMatching() ? dialectClass.equals(dialect.getClass())
+						: dialectClass.isInstance(dialect);
+				if (foundMatch) {
+					break;
+				}
+			}
+			if (foundMatch) {
+				break;
+			}
+		}
+		return foundMatch;
+	}
 
-        // NuoDB skip if test class listed in skip-file
-        if (this.dialect instanceof NuoDBDialect) {
-            if (skipAllTests())
-                return new IgnoreImpl("Skipping test class listed in " + SKIP_TESTS_FILE_NAME);
-        }
+	private Ignore buildIgnore(Skip skip) {
+		return new IgnoreImpl("@Skip : " + skip.message());
+	}
 
-        // @RequiresDialects & @RequiresDialect
-        final List<RequiresDialect> requiresDialects = Helper.collectAnnotations(
-                RequiresDialect.class, RequiresDialects.class, frameworkMethod, getTestClass()
-        );
+	private Ignore buildIgnore(SkipForDialect skip) {
+		return buildIgnore("@SkipForDialect match", skip.comment(), skip.jiraKey());
+	}
 
-        if ( !requiresDialects.isEmpty() && !isDialectMatchingRequired( requiresDialects ) ) {
-            return buildIgnore( requiresDialects );
-        }
+	private Ignore buildIgnore(String reason, String comment, String jiraKey) {
+		return new IgnoreImpl(getIgnoreMessage(reason, comment, jiraKey));
+	}
 
-        // @RequiresDialectFeature
-        final List<RequiresDialectFeature> requiresDialectFeatures = Helper.locateAllAnnotations(
-                RequiresDialectFeature.class,
-                frameworkMethod,
-                getTestClass()
-        );
+	private String getIgnoreMessage(String reason, String comment, String jiraKey) {
+		StringBuilder buffer = new StringBuilder(reason);
+		if (StringHelper.isNotEmpty(comment)) {
+			buffer.append("; ").append(comment);
+		}
 
-        if ( !requiresDialectFeatures.isEmpty() ) {
-            for ( RequiresDialectFeature requiresDialectFeature : requiresDialectFeatures ) {
-                try {
-                    for ( Class<? extends DialectCheck> checkClass : requiresDialectFeature.value() ) {
-                        if ( !checkClass.newInstance().isMatch( dialect ) ) {
-                            return buildIgnore( requiresDialectFeature );
-                        }
-                    }
-                }
-                catch (RuntimeException e) {
-                    throw e;
-                }
-                catch (Exception e) {
-                    throw new RuntimeException( "Unable to instantiate DialectCheck", e );
-                }
-            }
-        }
+		if (StringHelper.isNotEmpty(jiraKey)) {
+			buffer.append(" (").append(jiraKey).append(')');
+		}
 
-        return null;
-    }
+		return buffer.toString();
+	}
 
-    private boolean isDialectMatchingRequired(List<RequiresDialect> requiresDialects) {
-        boolean foundMatch = false;
-        for ( RequiresDialect requiresDialectAnn : requiresDialects ) {
-            for ( Class<? extends Dialect> dialectClass : requiresDialectAnn.value() ) {
-                foundMatch = requiresDialectAnn.strictMatching()
-                        ? dialectClass.equals( dialect.getClass() )
-                        : dialectClass.isInstance( dialect );
-                if ( foundMatch ) {
-                    break;
-                }
-            }
-            if ( foundMatch ) {
-                break;
-            }
-        }
-        return foundMatch;
-    }
+	private Ignore buildIgnore(RequiresDialect requiresDialect) {
+		return buildIgnore("@RequiresDialect non-match", requiresDialect.comment(), requiresDialect.jiraKey());
+	}
 
-    private Ignore buildIgnore(Skip skip) {
-        return new IgnoreImpl( "@Skip : " + skip.message() );
-    }
+	private Ignore buildIgnore(List<RequiresDialect> requiresDialects) {
+		String ignoreMessage = "";
+		for (RequiresDialect requiresDialect : requiresDialects) {
+			ignoreMessage += getIgnoreMessage("@RequiresDialect non-match", requiresDialect.comment(),
+					requiresDialect.jiraKey());
+			ignoreMessage += System.lineSeparator();
+		}
+		return new IgnoreImpl(ignoreMessage);
+	}
 
-    private Ignore buildIgnore(SkipForDialect skip) {
-        return buildIgnore( "@SkipForDialect match", skip.comment(), skip.jiraKey() );
-    }
+	private Ignore buildIgnore(RequiresDialectFeature requiresDialectFeature) {
+		return buildIgnore("@RequiresDialectFeature non-match", requiresDialectFeature.comment(),
+				requiresDialectFeature.jiraKey());
+	}
 
-    private Ignore buildIgnore(String reason, String comment, String jiraKey) {
-        return new IgnoreImpl( getIgnoreMessage( reason, comment, jiraKey ) );
-    }
+	private boolean isMatch(Class<? extends Skip.Matcher> condition) {
+		try {
+			Skip.Matcher matcher = condition.getDeclaredConstructor().newInstance();
+			return matcher.isMatch();
+		} catch (Exception e) {
+			throw new MatcherInstantiationException(condition, e);
+		}
+	}
 
-    private String getIgnoreMessage(String reason, String comment, String jiraKey) {
-        StringBuilder buffer = new StringBuilder( reason );
-        if ( StringHelper.isNotEmpty( comment ) ) {
-            buffer.append( "; " ).append( comment );
-        }
-
-        if ( StringHelper.isNotEmpty( jiraKey ) ) {
-            buffer.append( " (" ).append( jiraKey ).append( ')' );
-        }
-
-        return buffer.toString();
-    }
-
-    private Ignore buildIgnore(RequiresDialect requiresDialect) {
-        return buildIgnore( "@RequiresDialect non-match", requiresDialect.comment(), requiresDialect.jiraKey() );
-    }
-
-    private Ignore buildIgnore(List<RequiresDialect> requiresDialects) {
-        String ignoreMessage = "";
-        for ( RequiresDialect requiresDialect : requiresDialects ) {
-            ignoreMessage += getIgnoreMessage(
-                    "@RequiresDialect non-match",
-                    requiresDialect.comment(),
-                    requiresDialect.jiraKey()
-            );
-            ignoreMessage += System.lineSeparator();
-        }
-        return new IgnoreImpl( ignoreMessage );
-    }
-
-    private Ignore buildIgnore(RequiresDialectFeature requiresDialectFeature) {
-        return buildIgnore(
-                "@RequiresDialectFeature non-match",
-                requiresDialectFeature.comment(),
-                requiresDialectFeature.jiraKey()
-        );
-    }
-
-    private boolean isMatch(Class<? extends Skip.Matcher> condition) {
-        try {
-            Skip.Matcher matcher = condition.newInstance();
-            return matcher.isMatch();
-        }
-        catch (Exception e) {
-            throw new MatcherInstantiationException( condition, e );
-        }
-    }
-
-    private static class MatcherInstantiationException extends RuntimeException {
-        private MatcherInstantiationException(Class<? extends Skip.Matcher> matcherClass, Throwable cause) {
-            super( "Unable to instantiate specified Matcher [" + matcherClass.getName(), cause );
-        }
-    }
+	@SuppressWarnings("serial")
+	private static class MatcherInstantiationException extends RuntimeException {
+		private MatcherInstantiationException(Class<? extends Skip.Matcher> matcherClass, Throwable cause) {
+			super("Unable to instantiate specified Matcher [" + matcherClass.getName(), cause);
+		}
+	}
 
 }

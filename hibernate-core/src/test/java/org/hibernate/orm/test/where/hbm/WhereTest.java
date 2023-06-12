@@ -6,26 +6,27 @@
  */
 package org.hibernate.orm.test.where.hbm;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.util.HashSet;
 import java.util.List;
+
+import org.hibernate.Hibernate;
+import org.hibernate.query.NativeQuery;
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+
+import com.nuodb.hibernate.NuoDBDialect;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Root;
-
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import org.hibernate.Hibernate;
-import org.hibernate.query.NativeQuery;
-
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 /**
  * @author Max Rydahl Andersen
@@ -86,6 +87,7 @@ public class WhereTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value=NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void testHqlWithFetch() {
 		inTransaction(
 				s -> {
