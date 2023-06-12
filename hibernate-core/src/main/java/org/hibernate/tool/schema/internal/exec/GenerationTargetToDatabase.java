@@ -50,7 +50,8 @@ public class GenerationTargetToDatabase implements GenerationTarget {
 
 		// NuoDB 9-Jun-2023: DROP ... CASCADE not supported so a table will not be
 		// dropped if a foreign key constraint won't let it be dropped. Truncate the
-		// table instead.
+		// table instead.  Similarly, if a CREATE TABLE fails because table already
+		// exists, drop the table and try again.
 		for (int i = 0; i < 2; i++) {
 			try {
 				final Statement jdbcStatement = jdbcStatement();
@@ -67,11 +68,32 @@ public class GenerationTargetToDatabase implements GenerationTarget {
 				}
 				break;
 			} catch (SQLException e) {
-				// Change command to truncate and try again
-				if (command.startsWith("drop "))
+				String emsg = e.getLocalizedMessage();
+				if (command.contains("DROP CONSTRAINT") && (emsg.contains("can't find table") || emsg.contains("has no constraint")))
+					break;  // Constraint or its table no longer exists. Ignore error and carry on
+				else if (command.startsWith("drop ")) {
+					// Change drop command to truncate and try again
 					command = "truncate " + command.substring(5);
+				}
 				else if (command.contains(" drop "))
+					// Change drop command to truncate and try again
 					command.replaceAll(" drop ", " truncate ");
+				else if (command.contains("create table") && emsg.contains("already exists")) {
+					// Table exists, remove it first
+					log.info("Failed running \"" + command + "\" because table already exists.  Will try to drop it first.");
+					int ix = command.indexOf('(');
+					String command2 = command.substring(0, ix);
+					command2 = command2.replaceAll("create", "drop");
+
+					try {
+						jdbcStatement.execute(command2);
+					} catch (SQLException ex) {
+						// Failed to drop table
+						throw new CommandAcceptanceException(
+								"Create table failed, because table already exists. Unable to drop it using \"" + command2 + "\"",
+								ex);
+					}
+				}
 				else
 					// Failed
 					throw new CommandAcceptanceException(
