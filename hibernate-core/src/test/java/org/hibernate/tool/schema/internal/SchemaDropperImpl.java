@@ -361,7 +361,7 @@ public class SchemaDropperImpl implements SchemaDropper {
 			try {
 				target.accept(sqlStringFormatted);
 			} catch (CommandAcceptanceException e) {
-				// NuoDB 10-Jun-2023: Suppress unnecessary stack-trace
+				// NuoDB 10-Jun-2023: Suppress unnecessary, distracting stack-trace
 				// -- Drop table or constraint failure on a table or constraint that no longer exists
 				String sql2 = sqlStringFormatted.toUpperCase();
 				String emsg = TestUtils.getRootCause(e).getLocalizedMessage();
@@ -371,8 +371,8 @@ public class SchemaDropperImpl implements SchemaDropper {
 					log.warn("Failed to run" + System.lineSeparator() + "    [" + sqlStringFormatted.trim() + "] -> "
 							+ emsg);
 				else
-					// NuoDB End
-					options.getExceptionHandler().handleException(e);
+				// NuoDB End
+				options.getExceptionHandler().handleException(e);
 			}
 		}
 	}
