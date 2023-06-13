@@ -368,8 +368,10 @@ public class TestUtils {
 	}
 
 	public static JDBCException quietException(Object caller, String message, SQLException sqlException, String sql) {
+		
 		String msg = ">>> TEST FAILED " + message //
-				+ " running " + System.lineSeparator() + "    [" + sql.trim() + ']';
+				+ (sql != null ? " running " + System.lineSeparator() + "    [" + sql.trim() + ']' : "");
+
 		logException(caller, msg, sqlException);
 		return new QuietException(msg, sqlException);
 	}
