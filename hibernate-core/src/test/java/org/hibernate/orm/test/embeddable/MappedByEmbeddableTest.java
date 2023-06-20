@@ -110,7 +110,7 @@ public class MappedByEmbeddableTest extends BaseCoreFunctionalTestCase {
 
 	private void queryContaining(Session session, Integer id, String data) {
 		Query<Containing> query = session.createQuery(
-				"select c from containing c where c.embed.contained.data = :data",
+				"select c from containing1 c where c.embed.contained.data = :data",
 				Containing.class
 		);
 
@@ -125,7 +125,7 @@ public class MappedByEmbeddableTest extends BaseCoreFunctionalTestCase {
 		assertThat( containing.getId() ).isEqualTo( containingId );
 	}
 
-	@Entity(name = "containing")
+	@Entity(name = "containing1")  // NUODB 13-Jun-2023: CONTAINING is a reserved keyword
 	public static class Containing {
 
 		@Id

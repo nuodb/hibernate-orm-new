@@ -12,14 +12,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import javax.naming.Reference;
@@ -153,6 +146,9 @@ import static org.hibernate.engine.internal.ManagedTypeHelper.isHibernateProxy;
  * @author Chris Cranford
  */
 public class SessionFactoryImpl implements SessionFactoryImplementor {
+
+	public static boolean showProperties = false;
+
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SessionFactoryImpl.class );
 
 	private final String name;
@@ -229,8 +225,10 @@ public class SessionFactoryImpl implements SessionFactoryImplementor {
 
 		ConfigurationService configurationService = serviceRegistry.getService( ConfigurationService.class );
 
-		this.properties = new HashMap<>();
+		this.properties = new TreeMap<>();
 		this.properties.putAll( configurationService.getSettings() );
+		if (showProperties)
+			LOG.info("Properties = " + this.properties.toString().replaceAll(",", System.lineSeparator()));
 		if ( !properties.containsKey( AvailableSettings.JPA_VALIDATION_FACTORY )
 				&& !properties.containsKey( AvailableSettings.JAKARTA_VALIDATION_FACTORY ) ) {
 			if ( getSessionFactoryOptions().getValidatorFactoryReference() != null ) {

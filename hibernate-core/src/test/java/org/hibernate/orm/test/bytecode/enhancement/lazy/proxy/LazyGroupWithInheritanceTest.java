@@ -128,6 +128,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	 * fetching to issues just a single select
 	 */
 	@Test
+	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstractRuntimeFetch() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();

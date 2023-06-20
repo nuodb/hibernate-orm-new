@@ -88,7 +88,7 @@ public class OneToOneOwnerByContainedEagerCyclesTest extends BaseCoreFunctionalT
 		} );
 	}
 
-	@Entity(name = "Containing")
+	@Entity(name = "containing1")  // NUODB 13-Jun-2023: CONTAINING is a reserved keyword
 	public static class Containing {
 
 		@Id

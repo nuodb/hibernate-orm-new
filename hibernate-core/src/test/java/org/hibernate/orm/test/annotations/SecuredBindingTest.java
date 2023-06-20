@@ -14,6 +14,7 @@ import org.hibernate.HibernateException;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
+import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.service.ServiceRegistry;
 
 import org.hibernate.testing.ServiceRegistryBuilder;
@@ -51,7 +52,9 @@ public class SecuredBindingTest {
 		SessionFactory sf=null;
 		ServiceRegistry serviceRegistry = null;
 		try {
+			LoggerFactory.getLogger(getClass()).info("Properties = " + p);
 			serviceRegistry = ServiceRegistryBuilder.buildServiceRegistry( p );
+			SessionFactoryImpl.showProperties = true;
 			sf = ac.buildSessionFactory( serviceRegistry );
 			try {
 				sf.close();
@@ -69,6 +72,11 @@ public class SecuredBindingTest {
 			Assert.assertTrue( errorInfo, cause instanceof ClassNotFoundException //
 					&& exceptionMessage.contains(BAD_HSQLDB_JDBC_DRIVER_CLASSNAME));
 			//success
+		}
+		catch(Exception e) {
+			String errorInfo = "Expected ClassNotFoundException for " + BAD_HSQLDB_JDBC_DRIVER_CLASSNAME + //
+					", but got " + e.getClass().getName() + ": " + e.getLocalizedMessage();
+			Assert.fail(errorInfo);
 		}
 		finally {
 			if(sf!=null){

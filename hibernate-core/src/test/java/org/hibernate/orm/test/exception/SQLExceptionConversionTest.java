@@ -24,6 +24,8 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.junit.Assert.fail;
 
 /**
@@ -45,8 +47,8 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@SkipForDialect(
-			value = { AbstractHANADialect.class, TiDBDialect.class},
-			comment = "MySQL (MyISAM) / Hana / TiDB do not support FK violation checking"
+			value = { AbstractHANADialect.class, TiDBDialect.class, NuoDBDialect.class},
+			comment = "MySQL (MyISAM) / Hana / TiDB / NuoDB do not support FK violation checking"
 	)
 	public void testIntegrityViolation() {
 		final Session session = openSession();

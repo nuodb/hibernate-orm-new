@@ -56,6 +56,9 @@ public class NuoDBDatabaseCleaner implements DatabaseCleaner {
 					clearSchema(connection, line);
 				}
 
+				// Restore DBO
+				LOGGER.info("  Creating schema DBO");
+				connection.createStatement().execute("CREATE SCHEMA DBO");
 			} else {
 				LOGGER.error("No schema list returned from NuoDB");
 			}

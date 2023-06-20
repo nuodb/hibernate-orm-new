@@ -270,6 +270,7 @@ public class TestUtils {
 		String sqlError = TestUtils.getRootCause(sqlException).getLocalizedMessage();
 		LOGGER.error("         : " + sqlError);
 		String cause = sqlError;
+		SkipTestInfo skipTestInfo = SkipTestInfo.instance();
 
 		if (sqlException instanceof SQLFeatureNotSupportedException) {
 			int ix = cause.indexOf('^');
@@ -282,40 +283,45 @@ public class TestUtils {
 				int ix2 = l2.indexOf('\n');
 
 				if (ix2 != -1) {
-					// Carot ^ is indented this many spaces
+					// Caret ^ is indented this many spaces
 					int nSpaces = ix - ix2;
 					int start = nSpaces > 20 ? nSpaces - 20 : 0;
 					int end = nSpaces + 20 > l2.length() ? l2.length() : nSpaces + 20;
 					context = l2.substring(start, end);
 				}
-				
+
 				cause = cause + " in '" + context + '\'';
 			}
 
 		} else if (sqlException instanceof SQLSyntaxErrorException) {
-			String[] bits = sqlError.trim().split(System.lineSeparator());
 
-			if (bits.length == 3) { // error msg, sql, carat+error details
-				String sql2 = bits[1];
-				String causeLine = bits[2];
-				int ix = causeLine.indexOf('^');
-				cause = causeLine.substring(ix + 1);
-				int start = ix > 6 ? ix - 6 : 0;
-				String sqlFragment = sql2.substring(ix - 6, 6);
-
-				if (sqlFragment.equals("join (") && cause.equals("expected SELECT got"))
-					cause = "Unexpected parentheses in SQL JOIN";
+			if (sqlError.contains("can't find") || sqlError.contains("not found") || sqlError.contains("undefined reference")) {
+				// Missing/undefined table, schema or field error
+				skipTestInfo.recordError(message, sqlException, sqlError, sql);
+				return null;
 			}
-
-			SkipTestInfo.instance().extraTestToSkip(cause, sqlException);
-		} else if (sqlError.contains("expected SELECT got") & sqlError.contains(" join (")) {
-			// Known error: parentheses in SELECT, usually due to JOIN FETCH
-			cause = "Parentheses in SQL using JOIN";
+			else if (sqlError.contains("expected SELECT got") && sqlError.contains(" join ("))
+				// Known error: parentheses in SELECT, usually due to JOIN FETCH
+				cause = "Parentheses in SQL using JOIN";
+			else if (sqlError.contains("subqueries are not allowed in the ORDER BY clause"))
+				cause = "Subqueries in ORDER BY clause";
+			else if (sqlError.contains("^")) {
+				cause = sqlError.substring(sqlError.indexOf('^') + 1).trim();
+			}
+			else {
+				// Some SQL syntax exceptions are part of the test
+				return null;
+			}
+		} else if (sqlError.toUpperCase().contains("INTERNAL ERROR")) {
+			cause = "Internal error";
+			skipTestInfo.recordError(message, sqlException, sqlError, sql);
 		} else {
-			cause = sqlException.getClass().getSimpleName() + ": " + cause;
+			// NOT an error known to upset NuoDB SQL parser
+			skipTestInfo.recordError(message, sqlException, sqlError, sql);
+			return null;
 		}
 
-		SkipTestInfo.instance().extraTestToSkip(cause, sqlException);
+		skipTestInfo.extraTestToSkip(cause, sqlException);
 
 		return quietException(caller, message + " (" + cause + ')', sqlException, sql);
 	}
@@ -368,12 +374,28 @@ public class TestUtils {
 	}
 
 	public static JDBCException quietException(Object caller, String message, SQLException sqlException, String sql) {
-		
+	
 		String msg = ">>> TEST FAILED " + message //
 				+ (sql != null ? " running " + System.lineSeparator() + "    [" + sql.trim() + ']' : "");
-
+	
 		logException(caller, msg, sqlException);
 		return new QuietException(msg, sqlException);
+	}
+
+	protected String findSyntaxErrorContext(String sqlError) {
+		String[] bits = sqlError.trim().split(System.lineSeparator());
+	
+		if (bits.length == 3) { // error msg, sql, carat+error details
+			String sql2 = bits[1];
+			String causeLine = bits[2];
+			int ix = causeLine.indexOf('^');
+			//cause = causeLine.substring(ix + 1);
+			int start = ix > 6 ? ix - 6 : 0;
+			String sqlFragment = sql2.substring(start, ix + 6);
+			return sqlFragment;
+		}
+		
+		return "";
 	}
 
 }

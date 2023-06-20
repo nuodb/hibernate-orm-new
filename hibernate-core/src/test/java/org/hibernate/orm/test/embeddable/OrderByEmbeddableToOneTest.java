@@ -49,7 +49,8 @@ public class OrderByEmbeddableToOneTest extends BaseCoreFunctionalTestCase {
 		} );
 
 		inTransaction( session -> {
-			Query<Containing> query = session.createQuery( "select c from containing c order by c.id asc", Containing.class );
+			// NUODB 13-Jun-2023: CONTAINING is a reserved keyword
+			Query<Containing> query = session.createQuery( "select c from containing1 c order by c.id asc", Containing.class );
 
 			List<Containing> resultList = query.getResultList();
 			assertThat( resultList ).hasSize( 3 );
@@ -95,7 +96,7 @@ public class OrderByEmbeddableToOneTest extends BaseCoreFunctionalTestCase {
 		session.persist( contained3 );
 	}
 
-	@Entity(name = "containing")
+	@Entity(name = "containing1")  // NUODB 13-Jun-2023: CONTAINING is a reserved keyword
 	public static class Containing {
 
 		@Id

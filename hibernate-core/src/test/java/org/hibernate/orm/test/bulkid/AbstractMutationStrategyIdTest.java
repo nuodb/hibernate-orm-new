@@ -58,7 +58,9 @@ public abstract class AbstractMutationStrategyIdTest extends BaseCoreFunctionalT
 
 	@Before
 	public void setUp() {
+		log.info("Setup start +++++++++++++++++++++++++++");
 		doInHibernate( this::sessionFactory, session -> {
+			log.info("Setup start do +++++++++++++++++++++++++++");
 			for ( int i = 0; i < entityCount(); i++ ) {
 				Doctor doctor = new Doctor();
 				doctor.setEmployed( ( i % 2 ) == 0 );
@@ -71,7 +73,9 @@ public abstract class AbstractMutationStrategyIdTest extends BaseCoreFunctionalT
 				engineer.setFellow( ( i % 2 ) == 1 );
 				session.persist( engineer );
 			}
+			log.info("Setup end do +++++++++++++++++++++++++++");
 		});
+		log.info("Setup end +++++++++++++++++++++++++++");
 	}
 
 	protected int entityCount() {

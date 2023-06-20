@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.batch;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -21,6 +22,7 @@ import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.CockroachDialect;
 
 import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.hibernate.testing.support.TestUtils;
 import org.junit.Test;
 
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
@@ -92,7 +94,14 @@ public class BatchOptimisticLockingTest extends
 			} );
 		}
 		catch (Exception expected) {
-			log.warn("Excption is a " + expected);
+			// NuoDB: Start
+			log.warn("Exception is a " + expected);
+			expected.printStackTrace();
+			Throwable t = TestUtils.getRootCause(expected);
+			if (t instanceof SQLException) {
+				log.warn(" -> SQL Exception error-code=" + ((SQLException)t).getErrorCode());
+			}
+			// NuooDB: end
 			assertEquals( OptimisticLockException.class, expected.getClass() );
 			if ( getDialect() instanceof CockroachDialect ) {
 				// CockroachDB always runs in SERIALIZABLE isolation, and uses SQL state 40001 to indicate

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Properties;
 import javax.sql.DataSource;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.boot.model.relational.SqlStringGenerationContext;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
@@ -25,6 +26,7 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.persister.entity.EntityPersister;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.env.ConnectionProviderBuilder;
 import org.hibernate.testing.jdbc.DataSourceStub;
@@ -53,6 +55,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class PersistenceUnitOverridesTests extends BaseUnitTestCase {
 
 	@Test
+	@SkipForDialect(value=NuoDBDialect.class, comment="Fails with '`'Schema \"DBO\" not found', but is using H2 anyway")
 	public void testPassingIntegrationJpaJdbcOverrides() {
 
 		// the integration overrides say to use the "db2" JPA connection settings (which should override the persistence unit values)
@@ -129,6 +132,7 @@ public class PersistenceUnitOverridesTests extends BaseUnitTestCase {
 	}
 
 	@Test
+	@SkipForDialect(value=NuoDBDialect.class, comment="Fails with '`'Schema \"DBO\" not found', but is using H2 anyway")
 	public void testPassingIntegrationJpaJdbcOverrideForJtaDataSourceProperty() {
 		PersistenceProvider provider = new HibernatePersistenceProvider() {
 			@Override
@@ -202,6 +206,7 @@ public class PersistenceUnitOverridesTests extends BaseUnitTestCase {
 //			message = "Even though the JDBC settings override a DataSource *property*, it" +
 //					" does not override a DataSource defined using the dedicated persistence.xml element"
 //	)
+	@SkipForDialect(value=NuoDBDialect.class, comment="Fails with '`'Schema \"DBO\" not found', but is using H2 anyway")
 	public void testPassingIntegrationJpaJdbcOverridesForJtaDataSourceElement() {
 		PersistenceProvider provider = new HibernatePersistenceProvider() {
 			@Override
@@ -356,6 +361,7 @@ public class PersistenceUnitOverridesTests extends BaseUnitTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-13640" )
+	@SkipForDialect(value=NuoDBDialect.class, comment="Fails with '`'Schema \"DBO\" not found', but is using H2 anyway")
 	public void testIntegrationOverridesOfPersistenceXmlDataSourceWithDriverManagerInfo() {
 
 		// mimics a DataSource defined in the persistence.xml
@@ -395,6 +401,7 @@ public class PersistenceUnitOverridesTests extends BaseUnitTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-13640" )
+	@SkipForDialect(value=NuoDBDialect.class, comment="Fails with '`'Schema \"DBO\" not found', but is using H2 anyway")
 	public void testIntegrationOverridesOfPersistenceXmlDataSourceWithDriverManagerInfoUsingJakarta() {
 
 		// mimics a DataSource defined in the persistence.xml
