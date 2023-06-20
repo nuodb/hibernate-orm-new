@@ -1,0 +1,1 @@
+{"uri": "http://ad1:8888/api/1/archives/0", "process": "http://ad1:8888/api/1/processes?filterBy=archiveId&archiveId=0", "id": 0, "dbName": "hibernate_orm_test", "path": "/var/opt/nuodb/archive", "state": "PROVISIONED", "observerStorageGroups": []}
