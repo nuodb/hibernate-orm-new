@@ -59,3 +59,6 @@ databases/postgis/
 # Vim
 *.swp
 *.swo
+
+# Temporary environment
+env/vol*
