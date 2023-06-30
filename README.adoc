@@ -14,9 +14,10 @@ To run the matrix tests for NuoDB:
 
 * _Recommendation:_ Install `jenv` from https://github.com/jenv/jenv to manage your JVMs.
    * You may need to tell it which JDKs you have.
-* There is a `.java-version` file in this project, telling `jenv` to use Java 11.
-* If necessary, use `jenv` to switch to Java 11.
+** There is a `.java-version` file in this project, telling `jenv` to use Java 11.
+** If necessary, use `jenv` to switch to Java 11.
 For example, to use 11.0.18, run `jenv local 11.0.18`.
+* Alternatively use `sdkman`: https://sdkman.io
 
 . Next, make sure you have our Hibernate 6 dialect jar available:
 
@@ -73,24 +74,30 @@ Also (last line) set `EXTERNAL_ADDRESS=127.0.0.1`.
 * Windows (using `gradlew.bat`):
 +
 ```sh
-set DIALECT_VERSION=22.0.1-hib6
+set DIALECT_VERSION=23.0.0-hib6
 gradlew clean hibernate-core:matrix_nuodb
 ```
 
 * MacOS/Linux
 +
 ```sh
-DIALECT_VERSION=22.0.1-hib6 ./gradlew clean hibernate-core:matrix_nuodb
+DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
 ```
 
 * Expected final output is something like:
 +
 ```sh
-4243 tests completed, 1681 failed, 578 skipped
+6186 tests completed, 14 failed, 1709 skipped
 ```
 
-* Full details of all failing tests can be found at `hibernate-core/target/matrix/nuodb/reports/index.html`.
+* Full details of all failing and ignored tests can be found at `hibernate-core/target/matrix/nuodb/reports/index.html`.
 ** This directory is not fully populated until the test-run has finished and will be deleted by the next test run (take a copy if necessary).
+
+. To run individual tests, put the fully-qualified name of the JUnit test class(es) in `hibernate-core/green-list.txt`.
+* If this class contains _any_ test names, _only_ the tests in this file will be run.
+* This is _not_ equivalent to the old green `TEST_PLAN`, it is intended only to allow one or more individual tests to be run, typically for debugging failing tests.
+* To run all the tests again, simply delete or comment out the tests in hibernate-core/green-list.txt (to comment, put a `#` at the start of each line).
+
 
 . **Notes and Warnings:**
 
@@ -101,7 +108,7 @@ DIALECT_VERSION=22.0.1-hib6 ./gradlew clean hibernate-core:matrix_nuodb
       We are just piggybacking on these tests for convenience.
 
    * Any test whose fully qualified class name is listed in `hibernate-core/skip-tests.txt` will be ignored.
-      The tests listed fail due to known limitations in NuoDB SQL (see comments in the file).
+     The tests listed fail due to known limitations in NuoDB SQL (see comments in the file).
 
    * If you run the tests without the `clean` option you may get a weird internal error in the compiler.
 
@@ -111,6 +118,8 @@ DIALECT_VERSION=22.0.1-hib6 ./gradlew clean hibernate-core:matrix_nuodb
    ** Or by rerunning the script `env/setup.sh`.
 
    * Test execution takes ~15-20 mins on average with a live database.
+
+   * When running the matrix tests `hibernate-core/target/matrix/nuodb` is the working directory.
 
 . Run individual tests (does this actually work?). Better to use an IDE - see <<using-an-ide,below>>:
 +
@@ -122,22 +131,27 @@ Example commands:
 ./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
 ```
 +
-**NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`~
+**NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`.
 
 [#using-an-ide]
-[start=10]
-. Run Tests in an IDE
+[start=11]
+. Running Tests in an IDE
 +
-It is possible to run the tests in IntelliJ (but not currently Eclipse).
+It is possible to run the tests in IntelliJ (but not currently Eclipse - it won't run the Hibernate metadata compiler which generates `_XXX` metadata classes for use with JPA criteria queries).
 +
 Open `hibernate-core` as a _maven_ project in IntelliJ in the usual way - a `pom.xml` has been added.
 +
-To allow it to use NuoDB, you may have to copy the hibernate properties file:
-
-* `cp databases/nuodb/resources/hibernate.properties hibernate-core/src/test/resources/hibernate.properties`.
-+
 An IDE is most useful for running individual tests that have failed and debugging them.
++
+When running tests with from the IDE, `hibernate-core` is the working directory and the tests automatically detect this and use `src/test/sources/hibernate-nuodb.properties` to configure Hibernate.
 
+* Make sure this matches `databases/nuodb/resources/hibernate.properties`.
+* Do _not_ modify `hibernate-core/src/test/resources/hibernate.properties` which is used by the matrix tests.
+
+
+## Testing JAR from Sonatype
+
+[start=12]
 . Pull Jar from Sonatype
 
 * Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6/nuodb-hibernate-NN.x.x-hib6.jar.
@@ -152,9 +166,11 @@ gradle clean ...
 
 ## Configure the Database
 
-Modify properties in `databases/nuodb/resources/hibernate.properties`. 
+Modify properties in `databases/nuodb/resources/hibernate.properties`.
 
-* DO NOT change the database name or credentials as they are used by our build system.
+* If using an IDE, modify `hibernate-core/src/test/resources/hibernate-nuodb.properties` to match;
+
+* _DO NOT_ change the database name or credentials as they are used by our build system.
 
 ## Upgrade Hibernate Dialect
 
@@ -168,7 +184,7 @@ For the record, our Hibernate jar is referred to in:
 
     * `build.gradle`
     ** Validates `DIALECT_VERSION` is set and adds `-hib6` on the end if necessary.
-    ** Sets variable `ext.nuodbHibernateJarVersion` to the version it has found.
+    ** Sets global variable `ext.nuodbHibernateJarVersion` to the version it has found.
 
     * `nuodb/databases/matrix.gradle`
     ** Contains a "smart" class `NuodbHibernateVersion` which uses `DIALECT_VERSION` and checks the JAR exists.
@@ -176,6 +192,7 @@ For the record, our Hibernate jar is referred to in:
 
     * `databases/nuodb/matrix.gradle`
     ** References `${nuodbHibernateJarVersion}`.
+
     * `hibernate-core/hibernate-core.gradle`
     ** Also references `${nuodbHibernateJarVersion}`.
 
@@ -219,6 +236,60 @@ To use NuoDB
   Besides we are only using tests in `hibernate-core`.
   * Instead, `hibernate-core` can be loaded as a stand-alone project into IntelliJ
   ** Eclipse currently fails due to the use of the JPA meta-data generation plugin - which generates the `XXX_` meta-data classes for each entity `XXX`.
+
+. Test framework modifications:
++
+The test framework used by `hibernate-core` can be found in `hibernate-test`. The `hibernate-test` JAR is included in the POM but the matrix tests compiles and uses the classes in  `hibernate-test` directly.
+So changes have been made completely internally to `hibernate-core` _only_.
++
+Changes are:
++
+.. Support the skipping of tests listed in `hibernate-core/skip-tests.txt`.
+Tests known to fail due to NuoDB SQL limitations are listed in this file rather than adding `@SkipForDialect`.
+When a SQL limitation is removed, the affected tests can be removed from the file.
+.. Also added support for `hibernate-core/green-list.txt` to only run specific test(s) for debugging.
+.. Suppress misleading stacktraces during test setup and cleanup such as:
+* Dropping tables that don't exist
+* Failing to create tables that already exist (truncating them instead)
+* Dropping PK constraints on tables that no longer exist.
+.. Handle exceptions due to known NuoDB SQL limitations, adding them to `extra-tests.txt` so they can be copied into `skip-tests.txt` and ignored in future.
+
+. Specific changes:
++
+* Modified/added the following files:
+** `hibernate-core/src/main/java/org/hibernate/internal/ExceptionConverterImpl.java`
+*** Allow QuietExceptions (see below) to pass through and add SQL to exceptions when available.
+** `hibernate-core/src/main/java/org/hibernate/tool/schema/internal/exec/GenerationTargetToDatabase.java`
+*** This class sends SQL to the database. Modified to use NuoDBSqlRunner (see below).
+** `hibernate-core/src/main/java/org/hibernate/tool/schema/internal/exec/NuoDBSqlRunner.java`
+*** Runs SQL for `GenerationTargetToDatabase` but attempts to work around and/or suppress irrelevant exceptions.
+`
+* Overrode the following files by putting copies in `src/test`:
+** `hibernate-core/src/test/java/org/hibernate/internal/SessionFactoryImpl.java`
+*** Optionally print the Hibernate configuration properties used to initialize the SessionFactory
+** `hibernate-core/src/test/java/org/hibernate/testing/junit4/BaseUnitTestCase.java`
+*** Reduce `DEFAULT_GLOBAL_TIMEOUT_MINS` to 5 mins from 30.
+** `hibernate-core/src/test/java/org/hibernate/testing/junit4/CustomRunner.java`
+*** Add support for skipping tests listed in `skip-tests.txt`.
+** `hibernate-core/src/test/java/org/hibernate/tool/schema/internal/SchemaDropperImpl.java`
+*** Suppress unnecessary (and potentially misleading) stack traces when schemas are dropped during tests.
+** `hibernate-core/src/test/java/org/hibernate/testing/transaction/TransactionUtil.java`
+*** Added timeout for NuoDB
+** `hibernate-core/src/test/java/org/hibernate/testing/cleaner/DatabaseCleanerContext.java`
+*** Add `NuoDBDatabaseCleaner` to list of cleaners.
+** `hibernate-core/src/test/java/org/hibernate/testing/cleaner/JdbcConnectionContext.java`
+*** Switch to using hibernate-core/src/test/resources/hibernate-nuodb.properties when _not_ running matrix tests.
+
+* Added new files:
+** `hibernate-core/src/test/java/org/hibernate/testing/cleaner/NuoDBDatabaseCleaner.java`
+*** Removes all schemas, in preparation for a new test.
+** `hibernate-core/src/test/java/org/hibernate/testing/support/TestUtils.java`
+*** Assorted utilities such as exception logging, determining which test class caused an exception by hunting up the exception stack trace and, most useful, detecting ignorable exceptions (such as known SQL limitations) and throwing `QuietExceptions` instead (which suppress any stack trace, just generating the exception method).
+** `hibernate-core/src/test/java/org/hibernate/testing/support/SkipTests.java`
+*** Implements skip-tests and green-list.
+
+
+   the JUnit `CustomRunner` and several related classes to support the skip-test.txt file.
 
 See https://github.com/nuodb/hibernate-orm-new/commit/308fac3c73f6a53419d22d9dbad582ce47dc369c#diff-2895a46fe357ce8c805dd26452184cfce66241c4fdf5e9f0404106a56ed56ed8[Github Commit].
 

@@ -16,6 +16,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+
+import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -86,10 +88,13 @@ public class SchemaUpdateTest {
 	public void setUp() throws IOException {
 		if ( SQLServerDialect.class.isAssignableFrom( DialectContext.getDialect().getClass() )
 				|| SybaseDialect.class.isAssignableFrom( DialectContext.getDialect().getClass() )
-				|| TiDBDialect.class.isAssignableFrom( DialectContext.getDialect().getClass() ) ) {
-			// SQLServerDialect, SybaseDialect and TiDB store case-insensitive quoted identifiers in mixed case,
-			// so the checks at the end of this method won't work.
-			// For TiDB, only 'lower_case_table_names=2' is supported.
+				|| TiDBDialect.class.isAssignableFrom( DialectContext.getDialect().getClass() )
+		        || NuoDBDialect.class.isAssignableFrom( DialectContext.getDialect().getClass() ) ) {
+			// 1. SQLServerDialect, SybaseDialect and TiDB store case-insensitive quoted identifiers in mixed case,
+			//    so the checks at the end of this method won't work.
+			// 2. For TiDB, only 'lower_case_table_names=2' is supported.
+			// 3. NuoDB supports mixed case by quoting, but not in the same context, so you cannot have tables
+			//    called TestEntity, testentity, TESTENTITY and TESTentity in same schema.
 			skipTest = true;
 			return;
 		}

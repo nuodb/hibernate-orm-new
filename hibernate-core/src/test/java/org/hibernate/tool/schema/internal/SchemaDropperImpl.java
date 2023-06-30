@@ -65,8 +65,8 @@ import org.hibernate.tool.schema.spi.TargetDescriptor;
 import org.jboss.logging.Logger;
 
 /**
- * <b>NUODB OVERRIDE CLASS: Suppress unnecessary (and potentially misleading) stack
- * traces.</b>
+ * <b>NUODB OVERRIDE CLASS:</b> Suppress unnecessary (and potentially misleading) stack
+ * traces.
  * <p/>
  * This is functionally nothing more than the creation script from the older
  * SchemaExport class (plus some additional stuff in the script).

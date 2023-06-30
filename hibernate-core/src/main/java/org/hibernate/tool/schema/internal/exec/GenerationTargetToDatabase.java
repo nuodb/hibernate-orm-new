@@ -6,17 +6,19 @@
  */
 package org.hibernate.tool.schema.internal.exec;
 
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.sql.Statement;
-
 import org.hibernate.engine.jdbc.internal.DDLFormatterImpl;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.resource.transaction.spi.DdlTransactionIsolator;
-import org.hibernate.tool.schema.spi.CommandAcceptanceException;
+
+import java.sql.SQLException;
+import java.sql.SQLWarning;
+import java.sql.Statement;
 
 /**
+ * <b>NuoDB modified class:</b> Avoid irrelevant exceptions and stack traces during test
+ * setup and cleanup.
+ * <p>
  * GenerationTarget implementation for handling generation directly to the
  * database
  *
@@ -44,64 +46,31 @@ public class GenerationTargetToDatabase implements GenerationTarget {
 	}
 
 	@Override
-	public void accept(String command) {
+	public void accept(final String command) {
 		ddlTransactionIsolator.getJdbcContext().getSqlStatementLogger().logStatement(command,
 				DDLFormatterImpl.INSTANCE);
 
-		// NuoDB 9-Jun-2023: DROP ... CASCADE not supported so a table will not be
-		// dropped if a foreign key constraint won't let it be dropped. Truncate the
-		// table instead.  Similarly, if a CREATE TABLE fails because table already
-		// exists, drop the table and try again.
-		for (int i = 0; i < 2; i++) {
+		// NuoDB 9-Jun-2023: run command using custom SQL runner to suppress reporting and
+		// stack-traces from irrelevant errors during test setup and/or cleanup.
+		// This is not specific to using NuoDB, just wanted to get rid of unnecessary stack
+		// traces in the test output.
+		//final Statement jdbcStatement = jdbcStatement();
+
+		new NuoDBSqlRunner(jdbcStatement(), command).runCommand((jdbcStatement, sql) -> {
+			// This is the original code ...
+			jdbcStatement.execute(sql);
+
 			try {
-				final Statement jdbcStatement = jdbcStatement();
-				jdbcStatement.execute(command);
-
-				try {
-					SQLWarning warnings = jdbcStatement.getWarnings();
-					if (warnings != null) {
-						ddlTransactionIsolator.getJdbcContext().getSqlExceptionHelper()
-								.logAndClearWarnings(jdbcStatement);
-					}
-				} catch (SQLException e) {
-					log.unableToLogSqlWarnings(e);
+				SQLWarning warnings = jdbcStatement.getWarnings();
+				if (warnings != null) {
+					ddlTransactionIsolator.getJdbcContext().getSqlExceptionHelper()
+							.logAndClearWarnings(jdbcStatement);
 				}
-				break;
 			} catch (SQLException e) {
-				String emsg = e.getLocalizedMessage();
-				if (command.contains("DROP CONSTRAINT") && (emsg.contains("can't find table") || emsg.contains("has no constraint")))
-					break;  // Constraint or its table no longer exists. Ignore error and carry on
-				else if (command.startsWith("drop ")) {
-					// Change drop command to truncate and try again
-					command = "truncate " + command.substring(5);
-				}
-				else if (command.contains(" drop "))
-					// Change drop command to truncate and try again
-					command.replaceAll(" drop ", " truncate ");
-				else if (command.contains("create table") && emsg.contains("already exists")) {
-					// Table exists, remove it first
-					log.info("Failed running \"" + command + "\" because table already exists.  Will try to drop it first.");
-					int ix = command.indexOf('(');
-					String command2 = command.substring(0, ix);
-					command2 = command2.replaceAll("create", "drop");
-
-					try {
-						jdbcStatement.execute(command2);
-					} catch (SQLException ex) {
-						// Failed to drop table
-						throw new CommandAcceptanceException(
-								"Create table failed, because table already exists. Unable to drop it using \"" + command2 + "\"",
-								ex);
-					}
-				}
-				else
-					// Failed
-					throw new CommandAcceptanceException(
-							"Error executing DDL \"" + command + "\" via JDBC Statement",
-							e);
+				log.unableToLogSqlWarnings(e);
 			}
-		}
-		// NuoDB: End
+		});
+		// NuoDB 9-Jun-2023: End
 	}
 
 	private Statement jdbcStatement() {

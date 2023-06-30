@@ -169,3 +169,11 @@ org.hibernate.orm.test.jpa.criteria.fetchscroll.CriteriaToScrollableResultsFetch
 org.hibernate.orm.test.jpa.graphs.EntityGraphAttributeResolutionTest (Parentheses in SQL using JOIN)
 org.hibernate.orm.test.jpa.graphs.EntityGraphTest.attributeNodeInheritanceTest (Parentheses in SQL using JOIN)
 org.hibernate.orm.test.jpa.graphs.EntityGraphTest.inheritanceTest (Parentheses in SQL using JOIN)
+
+# Failing tests that need fixing
+org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.batch.BatchOptimisticLockingTest (Raises wrong type of exception)
+org.hibernate.orm.test.hql.BulkManipulationTest (Internal error raised)
+org.hibernate.orm.test.pagination.PaginationTest (Internal error raised)
+#org.hibernate.orm.test.type.LocalDateTest (Dates shifting across midnight due to timezone when they shouldn't)
+

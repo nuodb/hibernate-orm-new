@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.jpa.graphs;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.MapKey;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,6 +31,7 @@ import jakarta.persistence.criteria.Root;
 import org.hibernate.Hibernate;
 import org.hibernate.orm.test.jpa.BaseEntityManagerFunctionalTestCase;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.junit.Test;
 
@@ -171,6 +173,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 	 */
 	@Test
 	@TestForIssue(jiraKey = "HHH-8640")
+	@SkipForDialect(value=NuoDBDialect.class, comment="Parentheses in SQL using JOIN")
 	public void inheritanceTest() {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -218,7 +221,8 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 
     @Test
     @TestForIssue(jiraKey = "HHH-9080")
-    public void attributeNodeInheritanceTest() {
+	@SkipForDialect(value=NuoDBDialect.class, comment="Parentheses in SQL using JOIN")
+	public void attributeNodeInheritanceTest() {
         EntityManager em = getOrCreateEntityManager();
         em.getTransaction().begin();
 

@@ -126,6 +126,10 @@ import static org.hibernate.engine.internal.ManagedTypeHelper.isHibernateProxy;
 
 
 /**
+ * <b>NUODB OVERRIDE CLASS</b>
+ * <p>
+ * <b>NuoDB:</b> Allow properties used to configure the factory to be logged.
+ * <p>
  * Concrete implementation of the {@code SessionFactory} interface. Has the following
  * responsibilities
  * <ul>
@@ -146,6 +150,9 @@ import static org.hibernate.engine.internal.ManagedTypeHelper.isHibernateProxy;
  * @author Chris Cranford
  */
 public class SessionFactoryImpl implements SessionFactoryImplementor {
+
+	// NuoDB: 20-Jun-2023
+	public static boolean showProperties = false;
 
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SessionFactoryImpl.class );
 
@@ -225,6 +232,10 @@ public class SessionFactoryImpl implements SessionFactoryImplementor {
 
 		this.properties = new TreeMap<>();
 		this.properties.putAll( configurationService.getSettings() );
+		// NuoDB Start: 20-Jun-2023
+		if (showProperties)
+			LOG.info("Properties = " + this.properties.toString().replaceAll(",", System.lineSeparator()));
+		// NuoDB SEndtart: 20-Jun-2023
 		if ( !properties.containsKey( AvailableSettings.JPA_VALIDATION_FACTORY )
 				&& !properties.containsKey( AvailableSettings.JAKARTA_VALIDATION_FACTORY ) ) {
 			if ( getSessionFactoryOptions().getValidatorFactoryReference() != null ) {

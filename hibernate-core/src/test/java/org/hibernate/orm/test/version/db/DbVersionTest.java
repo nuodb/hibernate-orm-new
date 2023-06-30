@@ -71,6 +71,7 @@ public class DbVersionTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 
+		log.info("steveTimestamp=" + steveTimestamp + ", steve.getTimestamp()=" + steve.getTimestamp());
 		assertFalse( "owner version not incremented", JdbcTimestampJavaType.INSTANCE.areEqual( steveTimestamp, steve.getTimestamp() ) );
 
 		s = openSession();
@@ -102,6 +103,7 @@ public class DbVersionTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 
+		log.info("steveTimestamp=" + steveTimestamp + ", steve.getTimestamp()=" + steve.getTimestamp());
 		assertTrue( "owner version was incremented", JdbcTimestampJavaType.INSTANCE.areEqual( steveTimestamp, steve.getTimestamp() ) );
 
 		s = openSession();
@@ -111,6 +113,7 @@ public class DbVersionTest extends BaseCoreFunctionalTestCase {
 		t.commit();
 		s.close();
 
+		log.info("steveTimestamp=" + steveTimestamp + ", steve.getTimestamp()=" + steve.getTimestamp());
 		assertTrue( "owner version was incremented", JdbcTimestampJavaType.INSTANCE.areEqual( steveTimestamp, steve.getTimestamp() ) );
 
 		s = openSession();

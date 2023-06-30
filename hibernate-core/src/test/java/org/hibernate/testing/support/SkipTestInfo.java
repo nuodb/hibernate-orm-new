@@ -1,5 +1,11 @@
 package org.hibernate.testing.support;
 
+import org.hibernate.orm.test.jpa.criteria.mapjoin.MapJoinTestWithEmbeddable;
+import org.hibernate.orm.test.pagination.OraclePaginationTest;
+import org.hibernate.testing.support.TestUtils.TestInfo;
+import org.jboss.logging.Logger;
+import org.junit.runners.model.FrameworkMethod;
+
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -8,516 +14,552 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+public class SkipTestInfo {
 
-class SkipTestInfo {
-	private static final String SKIP_FILE_HEADING = "# Tests to skip because they generate SQL syntax not supported by NuoDB";
+	/**
+     * Hold information about a test class and its methods.
+     */
+    public static class TestClassInfo {
+        public final String className;
+        public final String comment;
+        public final List<String> methods;
+        public final List<String> methodComments;
+
+        public static TestClassInfo allMethods(String className, String comment) {
+            return new TestClassInfo(className, comment, true);
+        }
+
+        public TestClassInfo(String className, String comment) {
+            this(className, comment, false);
+        }
+
+        private TestClassInfo(String className, String comment, boolean allMethods) {
+            this.className = className;
+            this.comment = comment;
+            this.methods = allMethods ? ALL_METHODS : new ArrayList<>();
+            this.methodComments = allMethods ? null : new ArrayList<>();
+        }
+
+        @Override
+        public String toString() {
+            if (methods == ALL_METHODS)
+                return "All methods " + comment;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{ ");
+
+            for (int i = 0; i < methods.size(); i++) {
+                sb.append(methods.get(i)).append(" ").append(methodComments.get(i)).append(", ");
+            }
+
+            sb.append(" }");
+            return sb.toString();
+        }
+    }
+
+	class Context {
+	    protected final String purpose;
+	    protected final File errorFile;
+	    protected final File updatedFile;
+	
+	    protected int errors = 0;
+	    protected boolean needToRewriteSource = false;
+	
+	    public Context(String purpose, File errorFile, File updatedFile) {
+	        this.purpose = purpose;
+	        this.errorFile = errorFile;
+	        this.updatedFile = updatedFile;
+	    }
+	}
 
 	public static final String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
 
-	@SuppressWarnings("unchecked")
-	static final List<String> ALL_METHODS = Collections.EMPTY_LIST;
+    public static final String GREEN_LIST_FILE_NAME = "green-list.txt";
 
-	private static final String[] POSSIBLE_TEST_CLASS_NAME_ENDINGS = //
-			{ "Test", "Tests", "Test2" };
+    @SuppressWarnings("unchecked")
+    public static final List<String> ALL_METHODS = Collections.EMPTY_LIST;
 
-	private static final String NL = System.lineSeparator();
+    private static final String SKIP_FILE_HEADING = "# Tests to skip because they generate SQL syntax not supported by NuoDB";
 
-	private static SkipTestInfo instance = null;
+    private static final String NL = System.lineSeparator();
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(SkipTestInfo.class);
+    private static SkipTestInfo instance = null;
 
-	Map<String, List<String>> methodsToSkip = new HashMap<>();
-	String skipListFileName = null;
-	private File errorFile = null;
-	private File extraTestsToSkip = null;
-	boolean needToRewriteSkipFile = false;
-	File newSkipFile = null;
-	StringBuilder skipFileContents = new StringBuilder();
-	private int errors = 0;
+    private static final Logger LOGGER = Logger.getLogger(SkipTestInfo.class);
 
-	private String srcFileName;
+    private Map<String, TestClassInfo> methodsToRun = new HashMap<>();
+    private Map<String, TestClassInfo> methodsToSkip = new HashMap<>();
 
-	public static SkipTestInfo instance() {
-		if (instance == null)
-			instance = new SkipTestInfo();
+    private boolean initialized = false;
 
-		return instance;
+    private String skipListFileName = null;
+    private File errorFile = null;
+    private File extraTestsToSkip = null;
+    boolean needToRewriteSkipFile = false;
+    private File newSkipFile = null;
+    private StringBuilder skipFileContents = null;
+    private int errors = 0;
+
+    private String srcFileName;
+
+    public static SkipTestInfo instance() {
+        if (instance == null)
+            instance = new SkipTestInfo();
+
+        return instance;
+    }
+
+	private static StringBuilder saveTests(Context context, File source, Map<String, TestClassInfo> methods) {
+	    LOGGER.debug("Loading tests to " + context.purpose + " from " + source);
+	    List<String> allLines = TestUtils.loadFile(source);
+	    StringBuilder fileContents = new StringBuilder();
+	    int lineNum = 0;
+	
+	    for (String line : allLines) {
+	        lineNum++;
+	        line = line.trim();
+	
+	        // Ignore blank lines and comments
+	        if (line.length() == 0 || line.charAt(0) == '#') {
+	            fileContents.append(line).append(NL);
+	            continue;
+	        }
+	
+	        // Expecting FQCN, not a path to the class.
+	        if (line.indexOf('/') != -1)
+	            sourceFileError(context, source, lineNum, "Line contains /");
+	
+	        String originalLine = line;
+	
+	        int ix = line.indexOf('(');
+	        String comment = "";
+	
+	        if (ix != -1) {
+	            comment = ' ' + line.substring(ix);
+	            line = line.substring(0, ix).trim();
+	        }
+	
+	        String lineWithoutComment = line;
+	        ix = line.lastIndexOf('.');
+	        String lastWord = ix == -1 ? line : line.substring(ix + 1);
+	        line = line.substring(0, ix);
+	        boolean isMethodName = false;
+	
+	        if (lastWord.startsWith("lambda$")) {
+	            context.needToRewriteSource = true;
+	            lastWord = lastWord.substring("lambda$".length());
+	
+	            ix = lastWord.indexOf('$');
+	
+	            if (ix != -1)
+	                lastWord = lastWord.substring(0, ix);
+	
+	            isMethodName = true;
+	        }
+	
+	        if ((!isMethodName) && TestUtils.isTestClass(lastWord, lineWithoutComment)) {
+	            // Name of a test class, skip all its methods
+	            line = line + '.' + lastWord;
+	            methods.put(line, TestClassInfo.allMethods(line, comment));
+	            fileContents.append(line).append(comment).append(NL);
+	        } else {
+	            // Name of test, find its class
+	            String methodName = lastWord;
+	            ix = line.lastIndexOf('.');
+	            String className = ix == -1 ? line : line.substring(ix + 1);
+	
+	            if (lastWord.startsWith("test")) {
+	
+	                if (TestUtils.isTestClass(className, line)) {
+	                    // Class name
+	                    TestClassInfo testClassInfo = methods.get(line);
+	
+	                    if (testClassInfo == null) {
+	                        testClassInfo = new TestClassInfo(line, "");
+	                        methods.put(line, testClassInfo);
+	                    }
+	
+	                    List<String> methodsList = testClassInfo.methods;
+	
+	                    if (methodsList == ALL_METHODS) {
+	                        sourceFileError(context, source, lineNum,
+	                                "This class already marked without any specific methods");
+	                    } else {
+	                        if (methodsList.contains(methodName))
+	                            sourceFileError(context, source, lineNum,
+	                                    "Duplicate entry for " + line + '.' + methodName);
+	                        else {
+	                            methodsList.add(methodName);
+	                            testClassInfo.methodComments.add(comment);
+	                            fileContents.append(line).append('.').append(methodName).append(comment)
+	                                    .append(NL);
+	
+	                        }
+	                    }
+	                } else {
+	                    sourceFileError(context, source, lineNum, "Expected test class for " //
+	                            + methodName + " in line: " + originalLine);
+	                }
+	            } else {
+	                boolean isTestMethod = false;
+	
+	                if (TestUtils.isTestClass(className, line)) {
+	                    try {
+	                        Class<?> testClass = Class.forName(line);
+	                        Method testMethod = testClass.getDeclaredMethod(methodName, (Class<?>[]) null);
+	
+	                        if (testMethod.getAnnotation(org.junit.Test.class) != null
+	                                || testMethod.getAnnotation(org.junit.jupiter.api.Test.class) != null) {
+	                            fileContents.append(line).append('.').append(methodName).append(comment)
+	                                    .append(NL);
+	                            isTestMethod = true;
+	                        }
+	                    } catch (ClassNotFoundException | NoSuchMethodException | SecurityException e) {
+	                        ; // Ignore
+	                    }
+	                }
+	
+	                if (!isTestMethod)
+	                    sourceFileError(context, source, lineNum, "Bad line: " + originalLine);
+	            }
+	        }
+	
+	    }
+	
+	    // Write out modified list of tests?
+	    boolean isProcessingSkipFile = context.purpose.equals("skip");
+	
+	    if (isProcessingSkipFile && context.needToRewriteSource) {
+	    	TestUtils.initFile(context.updatedFile, fileContents.toString());
+	    }
+	
+	    // Errors? Give up
+	    if (context.errors > 0)
+	        throw new RuntimeException(context.errors + " errors reading " + source);
+	
+	    return fileContents;
 	}
 
-	protected SkipTestInfo() {
-		this(SKIP_TESTS_FILE_NAME);
+	private static void sourceFileError(Context context, File source, int lineNum, String msg) {
+	    String emsg = "Error in " + source + "(" + lineNum + "): " + msg;
+	    LOGGER.warn(emsg);
+	    context.errors++;
+	    context.needToRewriteSource = true;
+	    TestUtils.appendToFile(context.errorFile, emsg);
 	}
 
-	protected SkipTestInfo(String fileName) {
-		this.srcFileName = fileName;
-		initialize(fileName);
+	public String doSkipCheck(Class<?> testClass, FrameworkMethod frameworkMethod) {
+
+		// Run test?
+		if (!methodsToRun.isEmpty()) {
+			LOGGER.warn("Checking if we run green tests in " + testClass + " when using NuoDB");
+			TestClassInfo testClassInfo = methodsToRun.get(testClass.getName());
+
+			if (testClassInfo == null)
+				return "true";  // Not in the list, skip
+
+			List<String> methods = testClassInfo.methods;
+
+			if (methods == ALL_METHODS)
+				return "false";   // Don't skip, run this method
+
+			// Skip _unless_ this method is in the list
+			return methods.contains(frameworkMethod.getName()) ? "false" : "true";
+		}
+
+		// Skip test?
+		LOGGER.warn("Checking if we skip tests in " + testClass + " when using NuoDB (" //
+				 + methodsToSkip.size()	+ " methods marked for skip)");
+
+		TestClassInfo testClassInfo = methodsToSkip.get(testClass.getName());
+
+		if (testClassInfo == null) {
+			return "false";
+		}
+
+		List<String> methods = testClassInfo.methods;
+
+		if (methods == SkipTestInfo.ALL_METHODS)
+			return testClassInfo.comment;
+
+		int ix = methods.indexOf(frameworkMethod.getName());
+	    return ix == -1 ? "false" : testClassInfo.methodComments.get(ix);
 	}
+
+	public String skipListFileName() {
+		return skipListFileName;
+	}
+
 
 	protected void recordError(String message, SQLException sqlException, String sqlError, String sql) {
-		TestInfo testInfo = findTestIFromStack(sqlException);
+        TestInfo testInfo = TestUtils.findTestInfoFromStack(sqlException);
 
-		appendToFile(errorFile, message + " <-- " + sqlError + NL //
-				+ "Exception=" + sqlException.getClass().getSimpleName() + ", sql-state=" + sqlException.getSQLState()
-				+ ", sql-code=" + sqlException.getErrorCode() + " running:" + NL //
-				+ "   [" + sql + ']' + NL //
-				+ "   " + sqlException.getLocalizedMessage() + NL //
-				+ (testInfo.state == TestInfoState.TEST_FOUND ? " at " + testInfo.fullyQualifiedTestName : "") //
-		);
+        // Ignore deliberate error
+        if (sqlException.getErrorCode() == -25 //
+                && (sql.contains("from NON_EXISTENT") || sql.contains("from NotExistedTable") || sql.contains("FROM tbl_no_there")))
+            return;
+
+        TestUtils.appendToFile(errorFile, message + " <-- " + sqlError + NL //
+                + "Exception=" + sqlException.getClass().getSimpleName() + ", sql-state=" + sqlException.getSQLState()
+                + ", sql-code=" + sqlException.getErrorCode() + " running:" + NL //
+                + "   [" + sql + ']' + NL //
+                + "   " + sqlException.getLocalizedMessage() + NL //
+                + (testInfo.status == TestInfo.Status.TEST_FOUND ? " at " + testInfo.fullyQualifiedTestName : "") //
+        );
+    }
+
+    protected void saveExtraTestToSkip(String causeOfFailure, SQLException sqlException) {
+        TestInfo testInfo = TestUtils.findTestInfoFromStack(sqlException);
+
+        if (testInfo.status == TestInfo.Status.TEST_NOT_FOUND) {
+            String emsg = "# UNABLE TO DETERMINE FAILING TEST DETAILS" + NL //
+                    + "failure=" + causeOfFailure + NL //
+                    + "exception=" + sqlException + NL //
+                    + testInfo.stackTrace.toString();
+
+            LOGGER.error("# UNABLE TO DETERMINE FAILING TEST DETAILS", sqlException);
+            TestUtils.appendToFile(errorFile, emsg);
+            return;
+        }
+
+        if (testInfo.status == TestInfo.Status.IGNORE)
+            return;
+
+        String fullyQualifiedTestName = testInfo.fullyQualifiedTestName;
+        TestClassInfo testClassInfo = methodsToSkip.get(testInfo.testClassName);
+        List<String> methods = testClassInfo == null ? null : testClassInfo.methods;
+
+        if (methods != null) {
+            if (methods.contains(testInfo.testMethodName)) {
+                // We have this method already. Why has it come up twice?
+                LOGGER.warn("Duplicate test? " + fullyQualifiedTestName, sqlException);
+                String emsg = "Test already in skip list: " + fullyQualifiedTestName + NL //
+                        + "failure=" + causeOfFailure + NL //
+                        + "exception=" + sqlException + NL //
+                        + testInfo.stackTrace.toString();
+                TestUtils.appendToFile(errorFile, emsg);
+                return;
+            }
+        }
+
+        extraTestToSkip(fullyQualifiedTestName, causeOfFailure);
+    }
+
+    private SkipTestInfo() {
+	    this(SKIP_TESTS_FILE_NAME);
 	}
 
-	protected void extraTestToSkip(String causeOfFailure, SQLException sqlException) {
-		TestInfo testInfo = findTestIFromStack(sqlException);
-
-		if (testInfo.state == TestInfoState.TEST_NOT_FOUND) {
-			String emsg = "# UNABLE TO DETERMINE FAILING TEST DETAILS" + NL //
-					+ "failure=" + causeOfFailure + NL //
-					+ "exception=" + sqlException + NL //
-					+ testInfo.stackTrace.toString();
-
-			TestUtils.LOGGER.error("# UNABLE TO DETERMINE FAILING TEST DETAILS", sqlException);
-			appendToFile(errorFile, emsg);
-			return;
-		}
-
-		if (testInfo.state == TestInfoState.IGNORE)
-			return;
-
-		String fullyQualifiedTestName = testInfo.fullyQualifiedTestName;
-		List<String> methods = methodsToSkip.get(testInfo.testClassName);
-
-		if (methods != null) {
-			if (methods.contains(testInfo.testMethodName)) {
-				// We have this method already. Why has it come up twice?
-				TestUtils.LOGGER.warn("Duplicate test? " + fullyQualifiedTestName, sqlException);
-				String emsg = "Test already in skip list: " + fullyQualifiedTestName + NL //
-						+ "failure=" + causeOfFailure + NL //
-						+ "exception=" + sqlException + NL //
-						+ testInfo.stackTrace.toString();
-				appendToFile(errorFile, emsg);
-				return;
-			}
-		}
-
-		extraTestToSkip(fullyQualifiedTestName, causeOfFailure);
+	private SkipTestInfo(String fileName) {
+	    if (instance != null)
+	        throw new IllegalStateException("An instance already exists, only one is allowed");
+	
+	    this.srcFileName = fileName;
+	    initialize(fileName);
+	    instance = this;
 	}
 
 	private void extraTestToSkip(String fullyQualifiedTestName, String causeOfFailure) {
-		errors++;
-		LOGGER.info("Errors = " + errors + " needToRewriteSkipFile = " + needToRewriteSkipFile);
-
-		// Haven't initialized the new file yet, do it now
-		if (!needToRewriteSkipFile) {
-			initFile(newSkipFile, skipFileContents.toString());
-		}
-
-		if (errors == 1) {
-			// Section heading
-			appendToFile(newSkipFile, NL + "# " + LocalDateTime.now());
-		}
-
-		needToRewriteSkipFile = true;
-		String line = fullyQualifiedTestName + " (" + causeOfFailure + ')';
-		TestUtils.LOGGER.warn("You need to add " + fullyQualifiedTestName + " to " + skipListFileName);
-		appendToFile(newSkipFile, line);
-		appendToFile(extraTestsToSkip, line);
-	}
-
-	private void initFile(File fileToInitialize, String text) {
-		try {
-			// We will put these in the same directory
-			Files.write(fileToInitialize.toPath(), text.getBytes(), StandardOpenOption.CREATE,
-					StandardOpenOption.TRUNCATE_EXISTING);
-		} catch (IOException e) {
-			TestUtils.logException(TestUtils.LOGGER, "Failed initializing " + fileToInitialize, e);
-		}
-	}
-
-	private List<String> loadFile(File file) {
-		try {
-			return Files.readAllLines(file.toPath());
-		} catch (IOException e) {
-			TestUtils.logException(TestUtils.LOGGER, "Failed reading " + file, e);
-			return new ArrayList<>();
-		}
-	}
-
-	private void appendToFile(File file, String line) {
-		try {
-			// We will put these in the same directory
-			Files.write(file.toPath(), (line + NL).getBytes(), StandardOpenOption.APPEND);
-		} catch (IOException e) {
-			TestUtils.logException(TestUtils.LOGGER, "Failed appending to " + file, e);
-		}
-	}
-
-	private void initialize(String skipListFileName) {
-		if (methodsToSkip.isEmpty()) {
-			this.skipListFileName = skipListFileName;
-
-			File skipListFile = getSkipFile(skipListFileName);
-			TestUtils.LOGGER.trace("Using " + skipListFile);
-
-			File workingDir = skipListFile.getParentFile();
-			errorFile = new File(workingDir, "errors.txt");
-			extraTestsToSkip = new File(workingDir, "extra-tests.txt");
-			newSkipFile = new File(workingDir, "updated-" + SKIP_TESTS_FILE_NAME);
-
-			initFile(errorFile, "# Errors from run " + LocalDateTime.now() + NL);
-			initFile(extraTestsToSkip, "# Extra classes to skip " + LocalDateTime.now() + NL);
-
-			// No skip file yet - create it now
-			if (!skipListFile.exists()) {
-				TestUtils.LOGGER.debug("Creating " + skipListFile);
-				initFile(skipListFile, SKIP_FILE_HEADING);
-				skipFileContents.append(SKIP_FILE_HEADING).append(NL);
-				return;
-			}
-
-			TestUtils.LOGGER.debug("Loading tests to skip from " + skipListFile);
-			List<String> allLines = loadFile(skipListFile);
-
-			int lineNum = 0;
-			errors = 0;
-
-			for (String line : allLines) {
-				lineNum++;
-				line = line.trim();
-
-				// Ignore blank lines and comments
-				if (line.length() == 0 || line.charAt(0) == '#') {
-					skipFileContents.append(line).append(NL);
-					continue;
-				}
-
-				// Expecting FQCN, not a path to the class.
-				if (line.indexOf('/') != -1)
-					skipFileError(skipListFile, lineNum, "Line contains /");
-
-				String originalLine = line;
-				
-				int ix = line.indexOf('(');
-				String comment = "";
-
-				if (ix != -1) {
-					comment = ' ' + line.substring(ix);
-					line = line.substring(0, ix).trim();
-				}
-
-				String lineWithoutComment = line;
-				ix = line.lastIndexOf('.');
-				String lastWord = ix == -1 ? line : line.substring(ix + 1);
-				line = line.substring(0, ix);
-				boolean isMethodName = false;
-				
-				if (lastWord.startsWith("lambda$")) {
-					needToRewriteSkipFile = true;
-					lastWord = lastWord.substring("lambda$".length());
-
-					ix = lastWord.indexOf('$');
-
-					if (ix != -1)
-						lastWord = lastWord.substring(0, ix);
-					
-					isMethodName = true;
-				}
-
-				if ((!isMethodName) && possibleTestClass(lastWord, lineWithoutComment)) {
-					// Name of a test class, skip all its methods
-					line = line + '.' + lastWord;
-					methodsToSkip.put(line, ALL_METHODS);
-					skipFileContents.append(line).append(comment).append(NL);
-				} else {
-					// Name of test, find its class
-					String methodName = lastWord;
-					ix = line.lastIndexOf('.');
-					String className = ix == -1 ? line : line.substring(ix + 1);
-
-					if (lastWord.startsWith("test")) {
-
-						if (possibleTestClass(className, line)) {
-							// Class name
-							List<String> methodsList = methodsToSkip.get(line);
-
-							if (methodsList == ALL_METHODS) {
-								skipFileError(skipListFile, lineNum,
-										"This class aready marked without any specific methods");
-							} else {
-								if (methodsList == null) {
-									methodsList = new ArrayList<>();
-									methodsToSkip.put(line, methodsList);
-								}
-								if (methodsList.contains(methodName))
-									skipFileError(skipListFile, lineNum,
-											"Duplicate entry for " + line + '.' + methodName);
-								else {
-									methodsList.add(methodName);
-									skipFileContents.append(line).append('.').append(methodName).append(comment)
-											.append(NL);
-
-								}
-							}
-						} else {
-							skipFileError(skipListFile, lineNum, "Expected test class for " //
-									+ methodName + " in line: " + originalLine);
-						}
-					} else {
-						boolean isTestMethod = false;
-
-						if (possibleTestClass(className, line)) {
-							try {
-								Class<?> testClass = Class.forName(line);
-								Method testMethod = testClass.getDeclaredMethod(methodName, (Class<?>[]) null);
-
-								if (testMethod.getAnnotation(org.junit.Test.class) != null
-										|| testMethod.getAnnotation(org.junit.jupiter.api.Test.class) != null) {
-									skipFileContents.append(line).append('.').append(methodName).append(comment)
-											.append(NL);
-									isTestMethod = true;
-								}
-							} catch (ClassNotFoundException | NoSuchMethodException | SecurityException e) {
-								; // Ignore
-							}
-						}
-
-						if (!isTestMethod)
-							skipFileError(skipListFile, lineNum, "Bad line: " + originalLine);
-					}
-				}
-
-			}
-
-			if (needToRewriteSkipFile) {
-				initFile(newSkipFile, skipFileContents.toString());
-			}
-
-			if (errors > 0)
-				throw new RuntimeException(errors + " errors reading " + skipListFile);
-		}
-	}
-
-	private boolean possibleTestClass(String className, String fqcn) {
-		if (className.startsWith("test"))
-			return false; // Is a method name
-
-		for (String word : POSSIBLE_TEST_CLASS_NAME_ENDINGS) {
-			if (className.endsWith(word))
-				return true;
-		}
-
-		if (className.contains("Test")) {
-			try {
-				Class<?> clazz = Class.forName(fqcn);
-				Class<?> superClass = clazz.getSuperclass();
-
-				if (superClass.getSimpleName().endsWith("TestCase"))
-					return true;
-
-				if (clazz.getAnnotation(org.hibernate.testing.orm.junit.SessionFactory.class) != null)
-					return true;
-			} catch (Exception e) {
-				LOGGER.info(e.getClass().getSimpleName() + " finding " + className); // give up
-			}
-		}
-
-		return false;
-	}
-
-	private File getSkipFile(String skipListFileName) {
-		// Is it in the local directory?
-		TestUtils.LOGGER.trace("Looking for " + skipListFileName);
-		File skipFileList = new File(skipListFileName);
-
-		if (skipFileList.exists()) {
-			return skipFileList;
-		}
-
-		// When running matrix tests, current dir is hibernate-core/target/matrix/nuodb
-		File current = new File(".").getAbsoluteFile();
-		TestUtils.LOGGER.trace("Current = " + current + " looking for hibernate-core in path");
-
-		if (current.getPath().contains("/hibernate-core/")) {
-			while (!current.getName().equals("hibernate-core")) {
-				current = current.getParentFile();
-				TestUtils.LOGGER.trace("current = " + current);
-			}
-
-			if (current != null)
-				return new File(current, skipListFileName);
-		}
-
-		throw new RuntimeException(
-				"Unable to find '" + skipListFileName + "' in directory " + new File(".").getAbsolutePath());
-	}
-
-	private void skipFileError(File skipFileList, int lineNum, String msg) {
-		String emsg = "Error in " + skipFileList + "(" + lineNum + "): " + msg;
-		TestUtils.LOGGER.warn(emsg);
-		errors++;
-		needToRewriteSkipFile = true;
-		appendToFile(errorFile, emsg);
-	}
-
-	enum TestInfoState {
-		TEST_NOT_FOUND, IGNORE, TEST_FOUND
-	}
-
-	protected static class TestInfo {
-		public final TestInfoState state;
-		public final StringBuilder stackTrace;
-		public final String fullyQualifiedTestName;
-		public final String testClassName;
-		public final String testMethodName;
-
-		public TestInfo() {
-			this.state = TestInfoState.IGNORE;
-			this.stackTrace = null;
-			this.fullyQualifiedTestName = null;
-			this.testClassName = null;
-			this.testMethodName = null;
-		}
-
-		public TestInfo(StringBuilder stackTrace) {
-			this.state = TestInfoState.TEST_NOT_FOUND;
-			this.stackTrace = stackTrace;
-			this.fullyQualifiedTestName = null;
-			this.testClassName = null;
-			this.testMethodName = null;
-		}
-
-		public TestInfo(StringBuilder stackTrace, String fullyQualifiedTestName, String testClassName,
-				String testMethodName) {
-			this.state = TestInfoState.TEST_FOUND;
-			this.stackTrace = stackTrace;
-			this.fullyQualifiedTestName = fullyQualifiedTestName;
-			this.testClassName = testClassName;
-			this.testMethodName = testMethodName;
-		}
-	}
-
-	protected TestInfo findTestIFromStack(SQLException sqlException) {
-		String fullyQualifiedTestName = null;
-		boolean matchFound = false;
-		String testClassName = null;
-		String testMethodName = null;
-		StringBuilder sb = new StringBuilder();
-		sb.append(NL);
-
-		for (StackTraceElement ste : sqlException.getStackTrace()) {
-			String className = ste.getClassName();
-			sb.append("#    ").append(className).append('.').append(ste.getMethodName()).append(NL);
-
-			if (possibleTestClass(simpleClassName(className), className)) {
-				String methodName = ste.getMethodName();
-
-				if (methodName.startsWith("lambda$"))
-					methodName = methodName.substring("lambda$".length());
-
-				int ix = methodName.indexOf('$');
-
-				if (ix != -1)
-					methodName = methodName.substring(0, ix);
-
-				if (className.equals("org.hibernate.testing.junit4.BaseCoreFunctionalTestCase")
-						&& methodName.equals("cleanupTestData")) {
-					// This is invoked in an @AfterTest method, not sure why it is generating
-					// multi-column syntax. Ignore for now.
-					return new TestInfo();
-				}
-
-				if (!methodName.startsWith("test")) {
-					if (matchFound)
-						break;
-					else
-						return new TestInfo(sb, fullyQualifiedTestName, testClassName, testMethodName); // Not a test
-																										// method
-				}
-
-				testClassName = className;
-				testMethodName = methodName;
-				fullyQualifiedTestName = className + '.' + methodName;
-				matchFound = true;
-			}
-		}
-
-		return new TestInfo(sb);
-	}
-
-	private String simpleClassName(String fqcn) {
-		int ix = fqcn.lastIndexOf('.');
-		return ix == -1 ? fqcn : fqcn.substring(ix + 1);
-	}
-
-	/**
-	 * Test program for SkipTestInfo class.
-	 * 
-	 * @param args Unused.
-	 */
-	public static void main(String[] args) {
-		String[] lines = { //
-				"com.nuodb.test.HereIsATest (a comment)", //
-				"com.nuodb.test.MoreTests.testIgnoreMe", //
-				"org.hibernate.orm.test.hql.CollectionMapWithComponentValueTest.lambda$testJoinMapKey$9 (Parentheses in SQL using JOIN)", //
-				"org.hibernate.orm.test.hql.size.filter.WhereAnnotatedOneToManySizeTest.orderBy_sizeOf (Subqueries in ORDER BY clause)", //
-				"org.hibernate.orm.test.jpa.criteria.mapjoin.MapJoinTestWithEmbeddable.testSelectingKeyOfMapJoin (Parentheses in SQL using JOIN)", //
-		};
-
-		List<String> listOfLines = new ArrayList<>();
-
-		for (String line : lines)
-			listOfLines.add(line);
-
-		boolean useTestFile = true; // False to process actual skip-test.txt file
-
-		File testSkipFile = new File("target/test-skip-file.txt");
-		testSkipFile.delete();
-		SkipTestInfo skipTestInfo = null;
-
-		if (useTestFile) {
-			// Create test file from listOfLines (see above)
-			try {
-				Files.write(testSkipFile.toPath(), listOfLines, StandardOpenOption.CREATE_NEW);
-			} catch (IOException e) {
-				TestUtils.logException(TestUtils.LOGGER, "Failed creating " + SKIP_TESTS_FILE_NAME, e);
-				throw new RuntimeException(e);
-			}
-		} else {
-			// Make a copy of the actual file for use in this test
-			try {
-				File original = new File(SKIP_TESTS_FILE_NAME);
-				if (original.exists())
-					Files.copy(original.toPath(), testSkipFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-			} catch (IOException e) {
-				TestUtils.logException(TestUtils.LOGGER,
-						"Failed copying " + SKIP_TESTS_FILE_NAME + " to " + testSkipFile, e);
-				throw new RuntimeException(e);
-			}
-		}
-
-		try {
-			skipTestInfo = new SkipTestInfo(testSkipFile.getPath());
-
-			skipTestInfo.extraTestToSkip("MyTest.testItWorks", "I just didn't like it");
-			LOGGER.info("Processed " + skipTestInfo.srcFileName + ". Methods to skip are:");
-
-			for (Map.Entry<String, List<String>> entry : skipTestInfo.methodsToSkip.entrySet()) {
-				LOGGER.info("    " + entry.getKey() + '=' + entry.getValue());
-			}
-
-			LOGGER.info("Skip file is now:");
-			for (String line : skipTestInfo.loadFile(skipTestInfo.newSkipFile)) {
-				LOGGER.info("    " + line);
-			}
-		} finally {
-			testSkipFile.delete();
-		}
-
-	}
+        errors++;
+        LOGGER.debug("Errors = " + errors + ", needToRewriteSkipFile = " + needToRewriteSkipFile);
+
+        // Haven't initialized the new file yet, do it now
+        if (!needToRewriteSkipFile) {
+        	TestUtils.initFile(newSkipFile, skipFileContents.toString());
+        }
+
+        if (errors == 1) {
+            // Section heading
+        	TestUtils.appendToFile(newSkipFile, NL + "# " + LocalDateTime.now());
+        }
+
+        needToRewriteSkipFile = true;
+        String line = fullyQualifiedTestName + " (" + causeOfFailure + ')';
+        LOGGER.warn("You need to add " + fullyQualifiedTestName + " to " + skipListFileName);
+        TestUtils.appendToFile(newSkipFile, line);
+        TestUtils.appendToFile(extraTestsToSkip, line);
+    }
+
+    private void initialize(String skipListFileName) {
+        if (initialized)
+            return;
+
+        initialized = true;
+        this.skipListFileName = skipListFileName;
+        File skipListFile = getSkipFile(skipListFileName);
+        File workingDir = skipListFile.getParentFile();
+        File greenListFile = new File(workingDir, GREEN_LIST_FILE_NAME);
+        LOGGER.trace("Using " + skipListFile + " and " + greenListFile);
+
+        errorFile = new File(workingDir, "skip-errors.txt");
+        extraTestsToSkip = new File(workingDir, "extra-tests.txt");
+        newSkipFile = new File(workingDir, "updated-" + SKIP_TESTS_FILE_NAME);
+
+        TestUtils.initFile(errorFile, "# Test errors from run " + LocalDateTime.now() + NL);
+        TestUtils.initFile(extraTestsToSkip, "# Extra classes to skip " + LocalDateTime.now() + NL);
+
+        if (skipListFile.exists()) {
+            // Process the contents
+            LOGGER.warn("Processing " + skipListFile);
+            skipFileContents = saveTests(new Context("skip", errorFile, newSkipFile), skipListFile, methodsToSkip);
+        } else {
+            // No skip file yet - create it now
+            LOGGER.debug("Creating " + skipListFile);
+            TestUtils.initFile(skipListFile, SKIP_FILE_HEADING);
+            skipFileContents.append(SKIP_FILE_HEADING).append(NL);
+        }
+
+
+        if (greenListFile.exists()) {
+            // Process the contents
+            LOGGER.warn("Processing " + greenListFile);
+            File greenListErrorFile = new File(workingDir, "green-list-errors.txt");
+            File updatedGreenListFile = new File(workingDir, "updated-" + GREEN_LIST_FILE_NAME);
+            TestUtils.initFile(greenListErrorFile, "# Green list errors from run " + LocalDateTime.now() + NL);
+            saveTests(new Context("run", greenListErrorFile, updatedGreenListFile), greenListFile, methodsToRun);
+            LOGGER.warn("Tests to run: " + methodsToRun.toString());
+        }
+        else {
+            // Create empty file
+            initFile(errorFile, "# Test to run " + LocalDateTime.now() + NL //
+                    + "#  - If this is non-empty, only these tests will be run." + NL //
+                    + "#  - Leave empty unless you wish to run and debug specific test(s)." + NL  );
+        }
+    }
+
+    private File getSkipFile(String skipListFileName) {
+        // Is it in the local directory?
+        LOGGER.trace("Looking for " + skipListFileName);
+        File skipFileList = new File(skipListFileName);
+
+        if (skipFileList.exists()) {
+            return skipFileList;
+        }
+
+        // When running matrix tests, current dir is hibernate-core/target/matrix/nuodb
+        File current = new File(".").getAbsoluteFile();
+        LOGGER.trace("Current = " + current + " looking for hibernate-core in path");
+
+        if (current.getPath().contains("/hibernate-core/")) {
+            while (!current.getName().equals("hibernate-core")) {
+                current = current.getParentFile();
+                LOGGER.trace("current = " + current);
+            }
+
+            if (current != null)
+                return new File(current, skipListFileName);
+        }
+
+        throw new RuntimeException(
+                "Unable to find '" + skipListFileName + "' in directory " + new File(".").getAbsolutePath());
+    }
+
+    /**
+     * Test program for SkipTestInfo class.
+     *
+     * @param args Unused.
+     */
+    public static void main(String[] args) {
+        String[] lines = { //
+                "com.nuodb.test.HereIsATest (a comment)", //
+                "com.nuodb.test.MoreTests.testIgnoreMe", //
+                "org.hibernate.orm.test.hql.CollectionMapWithComponentValueTest.lambda$testJoinMapKey$9 (Parentheses in SQL using JOIN)", //
+                "org.hibernate.orm.test.hql.size.filter.WhereAnnotatedOneToManySizeTest.orderBy_sizeOf (Subqueries in ORDER BY clause)", //
+                "org.hibernate.orm.test.jpa.criteria.mapjoin.MapJoinTestWithEmbeddable.testSelectingKeyOfMapJoin (Parentheses in SQL using JOIN)", //
+        };
+
+        List<String> listOfLines = new ArrayList<>();
+
+        for (String line : lines)
+            listOfLines.add(line);
+
+        boolean useTestFile = true; // False to process actual skip-test.txt file
+
+        File testSkipFile = new File("target/test-skip-file.txt");
+        testSkipFile.delete();
+        SkipTestInfo skipTestInfo = null;
+
+        if (useTestFile) {
+            // Create test file from listOfLines (see above)
+            try {
+                Files.write(testSkipFile.toPath(), listOfLines, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            } catch (IOException e) {
+                TestUtils.logException(LOGGER, "Failed creating " + SKIP_TESTS_FILE_NAME, e);
+                throw new RuntimeException(e);
+            }
+        } else {
+            // Make a copy of the actual file for use in this test
+            try {
+                File original = new File(SKIP_TESTS_FILE_NAME);
+                if (original.exists()) {
+                    Files.copy(original.toPath(), testSkipFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException e) {
+                TestUtils.logException(LOGGER,
+                        "Failed copying " + SKIP_TESTS_FILE_NAME + " to " + testSkipFile, e);
+                throw new RuntimeException(e);
+            }
+        }
+
+        // Setup a green-list file for use in this test
+        File testGreenFile = new File("target/green-list.txt");
+
+        if (useTestFile) {
+            ; // Do nothing
+        }
+        else {
+            // Make a copy of the actual green-list file for use in this test
+
+            try {
+                File original = new File(GREEN_LIST_FILE_NAME);
+                if (original.exists()) {
+                    Files.copy(original.toPath(), testGreenFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException e) {
+                TestUtils.logException(LOGGER,
+                        "Failed copying " + GREEN_LIST_FILE_NAME + " to " + testGreenFile, e);
+                throw new RuntimeException(e);
+            }
+        }
+
+        // Now run the tests
+        try {
+            skipTestInfo = new SkipTestInfo(testSkipFile.getPath());
+
+            skipTestInfo.extraTestToSkip("MyTest.testItWorks", "I just didn't like it");
+            LOGGER.info("Processed " + skipTestInfo.srcFileName + ". Contents:");
+
+            for (Map.Entry<String, TestClassInfo> entry : skipTestInfo.methodsToSkip.entrySet()) {
+                LOGGER.info("    " + entry.getKey() + '=' + entry.getValue());
+            }
+
+            LOGGER.info("Skip file is now:");
+            for (String line : TestUtils.loadFile(skipTestInfo.newSkipFile)) {
+                LOGGER.info("    " + line);
+            }
+
+            Class<?> testClass = null;
+            String testMethod = "";
+
+            try {
+                testClass = OraclePaginationTest.class;
+                Method method1 = testClass.getDeclaredMethod(testMethod = "testPagination");
+                FrameworkMethod fm1 = new FrameworkMethod(method1);
+                TestUtils.skipTest(testClass, fm1);
+
+                testClass = MapJoinTestWithEmbeddable.class;
+                Method method2 = testClass.getDeclaredMethod(testMethod = "testSelectingKeyOfMapJoin");
+                FrameworkMethod fm2 = new FrameworkMethod(method2);
+                TestUtils.skipTest(testClass, fm2);
+            }
+            catch(Exception e) {
+                // ignore
+                TestUtils.logException(LOGGER, "Unable to find " + testClass + "." + testMethod, e);
+            }
+        } finally {
+            testSkipFile.delete();
+        }
+
+    }
 }

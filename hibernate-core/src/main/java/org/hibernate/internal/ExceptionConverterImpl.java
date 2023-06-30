@@ -23,6 +23,7 @@ import org.hibernate.dialect.lock.OptimisticEntityLockException;
 import org.hibernate.dialect.lock.PessimisticEntityLockException;
 import org.hibernate.engine.spi.ExceptionConverter;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.exception.DataException;
 import org.hibernate.exception.LockAcquisitionException;
 import org.hibernate.loader.MultipleBagFetchException;
 import org.hibernate.query.SemanticException;
@@ -164,14 +165,19 @@ public class ExceptionConverterImpl implements ExceptionConverter {
 		}
 		// NuoDB 11-Jun-2023: We already know this is due to an unsupported SQL syntax.
 		else if (exception.getClass().getSimpleName().contains("QuietException")) {
-			// Don't wrap it as we don't want the stack trace (because we know what the error is).
+			// Don't wrap it as we don't want the stack trace (because we know what the error is,
+			// and we don't care about it).
 			return exception;
 		// NuoDB: End
 		} else {
+			// NuoDB 25-Jun-2023: Add SQL to exception info, if available
+			String errorMsg = exception instanceof DataException ? exception.getMessage() + System.lineSeparator() + //
+					"    sql=[" + ((DataException)exception).getSQL() + "]" : exception.getMessage();
 			final PersistenceException converted = new PersistenceException(
-					"Converting `" + exception.getClass().getName() + "` to JPA `PersistenceException` : " + exception.getMessage(),
+					"Converting `" + exception.getClass().getName() + "` to JPA `PersistenceException` : " + errorMsg,
 					exception
 			);
+			// NuoDB: End
 			handlePersistenceException( converted );
 			return converted;
 		}

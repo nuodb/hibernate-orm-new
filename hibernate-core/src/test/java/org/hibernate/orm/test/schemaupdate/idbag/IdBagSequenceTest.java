@@ -10,11 +10,13 @@ import java.io.File;
 import java.nio.file.Files;
 import java.util.EnumSet;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.Environment;
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.tool.hbm2ddl.SchemaUpdate;
 import org.hibernate.tool.schema.TargetType;
 
@@ -32,6 +34,8 @@ import static org.junit.Assert.assertThat;
  */
 @TestForIssue(jiraKey = "HHH-10373")
 @RequiresDialectFeature(DialectChecks.SupportsSequences.class)
+@SkipForDialect(value= NuoDBDialect.class, comment="NuoDB supports sequences but not pooled sequences," +
+		" so sequence generators are implemented using a table.")
 public class IdBagSequenceTest extends BaseUnitTestCase {
 
 	@Test
@@ -56,6 +60,7 @@ public class IdBagSequenceTest extends BaseUnitTestCase {
 					.execute( EnumSet.of( TargetType.SCRIPT ), metadata );
 
 			String fileContent = new String( Files.readAllBytes( output.toPath() ) );
+			log.info(fileContent);
 			assertThat( fileContent.toLowerCase().contains( "create sequence seq_child_id" ), is( true ) );
 		}
 		finally {

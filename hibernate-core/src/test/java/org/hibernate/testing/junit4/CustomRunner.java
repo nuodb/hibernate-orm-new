@@ -26,6 +26,7 @@ import org.hibernate.testing.Skip;
 import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.SkipForDialects;
 import org.hibernate.testing.orm.junit.DialectContext;
+import org.hibernate.testing.support.SkipTestInfo;
 import org.hibernate.testing.support.TestUtils;
 import org.jboss.logging.Logger;
 import org.junit.BeforeClass;
@@ -57,8 +58,6 @@ import com.nuodb.hibernate.NuoDBDialect;
 public class CustomRunner extends BlockJUnit4ClassRunner {
 	private static final Logger log = Logger.getLogger(CustomRunner.class);
 
-	//public static final String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
-
 	private TestClassMetadata testClassMetadata;
 
 	public CustomRunner(Class<?> clazz) throws InitializationError, NoTestsRemainException {
@@ -75,21 +74,6 @@ public class CustomRunner extends BlockJUnit4ClassRunner {
 	public TestClassMetadata getTestClassMetadata() {
 		return testClassMetadata;
 	}
-
-//	// NuoDB Specific: Skip tests in skip file
-//	private Boolean skipAllTests = null;
-//
-//	protected boolean skipAllTests() {
-//
-//		if (skipAllTests == null) {
-//			// Assume not
-//			Class<?> testClass = getTestClass().getJavaClass();
-//			skipAllTests = TestUtils.skipTest(testClass);
-//		}
-//
-//		return skipAllTests;
-//	}
-//	// END NuoDB Specific
 
 	private Boolean isAllTestsIgnored;
 
@@ -248,7 +232,7 @@ public class CustomRunner extends BlockJUnit4ClassRunner {
 		
 		@Override
 		public String toString() {
-			return "Class listed in NuoDB's " + TestUtils.skipListFileName();
+			return "Class marked as do-not-run by NuoDB";
 		}
 	}
 	// NuoDB: End
@@ -296,7 +280,8 @@ public class CustomRunner extends BlockJUnit4ClassRunner {
 		if (CustomRunner.dialect instanceof NuoDBDialect) {
 			if (TestUtils.skipTest(getTestClass().getJavaClass(), frameworkMethod)) {
 				String msg = "Skipping " + getTestClass().getJavaClass() + '.' //
-						+ frameworkMethod.getMethod().getName() + " listed in " + TestUtils.skipListFileName();
+						+ frameworkMethod.getMethod().getName() + " (marked as do-not-run by NuoDB). See "
+						+  TestUtils.skipListFileName() + " and " + SkipTestInfo.GREEN_LIST_FILE_NAME;
 				return new IgnoreForNuoDB(msg);
 			}
 		}

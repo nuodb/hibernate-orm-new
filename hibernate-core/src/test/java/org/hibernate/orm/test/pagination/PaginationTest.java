@@ -105,6 +105,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 				session -> {
 					List result;
 
+					log.info("Query1: from 0 for 20");
 					result = generateBaseHQLQuery( session )
 							.setFirstResult( 0 )
 							.setMaxResults( 20 )
@@ -113,6 +114,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 					assertEquals( 0, ( (DataPoint) result.get( 0 ) ).getSequence() );
 					assertEquals( 1, ( (DataPoint) result.get( 1 ) ).getSequence() );
 
+					log.info("Query2: from 1 for 20");
 					result = generateBaseQuery( session )
 							.setFirstResult( 1 )
 							.setMaxResults( 20 )
@@ -121,6 +123,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 					assertEquals( 1, ( (DataPoint) result.get( 0 ) ).getSequence() );
 					assertEquals( 2, ( (DataPoint) result.get( 1 ) ).getSequence() );
 
+					log.info("Query3: from 99 for " + (Integer.MAX_VALUE - 200));
 					result = generateBaseQuery( session )
 							.setFirstResult( 99 )
 							.setMaxResults( Integer.MAX_VALUE - 200 )
@@ -128,6 +131,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 					assertEquals( 1, result.size() );
 					assertEquals( 99, ( (DataPoint) result.get( 0 ) ).getSequence() );
 
+					log.info("Query4: from 2 for 3");
 					result = session.createQuery( "select distinct description from DataPoint order by description" )
 							.setFirstResult( 2 )
 							.setMaxResults( 3 )
@@ -137,6 +141,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 					assertEquals( "Description: 3", result.get( 1 ) );
 					assertEquals( "Description: 4", result.get( 2 ) );
 
+					log.info("Query5: from 2 for 5");
 					result = session.createNativeQuery(
 							"select description, xval, yval from DataPoint order by xval, yval" )
 							.setFirstResult( 2 )
@@ -146,6 +151,7 @@ public class PaginationTest extends BaseNonConfigCoreFunctionalTestCase {
 					Object[] row = (Object[]) result.get( 0 );
 					assertTrue( row[0] instanceof String );
 
+					log.info("Query6: from 2 for 5");
 					result = session.createNativeQuery( "select * from DataPoint order by xval, yval" )
 							.setFirstResult( 2 )
 							.setMaxResults( 5 )

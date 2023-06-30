@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.version;
 
+import java.sql.Timestamp;
 import java.time.ZonedDateTime;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -27,65 +28,71 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @TestForIssue( jiraKey = "HHH-10026" )
 public class ZonedDateTimeVersionTest extends BaseNonConfigCoreFunctionalTestCase {
 
-	@Override
-	protected Class[] getAnnotatedClasses() {
-		return new Class[] { TheEntity.class };
-	}
+    @Override
+    protected Class[] getAnnotatedClasses() {
+        return new Class[] { TheEntity.class };
+    }
 
-	@Test
-	public void testInstantUsageAsVersion() {
-		Session session = openSession();
-		session.getTransaction().begin();
-		TheEntity e = new TheEntity( 1 );
-		session.save( e );
-		session.getTransaction().commit();
-		session.close();
+    @Test
+    public void testInstantUsageAsVersion() {
+        Session session = openSession();
+        session.getTransaction().begin();
+        TheEntity e = new TheEntity( 1 );
+        log.info("New instance: e timestamp = " + e.getTs());
+        session.save( e );
+        session.getTransaction().commit();
+        session.close();
+        log.info("After commit: e timestamp = " + e.getTs());
 
-		session = openSession();
-		session.getTransaction().begin();
-		e = session.byId( TheEntity.class ).load( 1 );
-		assertThat( e.getTs(), notNullValue() );
-		session.getTransaction().commit();
-		session.close();
+        session = openSession();
+        session.getTransaction().begin();
+        Object ts = session.createNativeQuery("select ts from the_entity where id = 1", String.class).getResultList().get(0);
+        log.info("SQL by id: ts is a " + ts.getClass() + ", ts=" + ts);
+        e = session.byId( TheEntity.class ).load( 1 );
+        log.info("Load by id: e timestamp = " + e.getTs());
+        assertThat( e.getTs(), notNullValue() );
+        session.getTransaction().commit();
+        session.close();
 
-		session = openSession();
-		session.getTransaction().begin();
-		e = session.byId( TheEntity.class ).load( 1 );
-		session.delete( e );
-		session.getTransaction().commit();
-		session.close();
-	}
+        session = openSession();
+        session.getTransaction().begin();
+        e = session.byId( TheEntity.class ).load( 1 );
+        log.info("Delete: e timestamp = " + e.getTs());
+        session.delete( e );
+        session.getTransaction().commit();
+        session.close();
+    }
 
 
-	@Entity(name = "TheEntity")
-	@Table(name="the_entity")
-	public static class TheEntity {
-		private Integer id;
-		private ZonedDateTime ts;
+    @Entity(name = "TheEntity")
+    @Table(name="the_entity")
+    public static class TheEntity {
+        private Integer id;
+        private ZonedDateTime ts;
 
-		public TheEntity() {
-		}
+        public TheEntity() {
+        }
 
-		public TheEntity(Integer id) {
-			this.id = id;
-		}
+        public TheEntity(Integer id) {
+            this.id = id;
+        }
 
-		@Id
-		public Integer getId() {
-			return id;
-		}
+        @Id
+        public Integer getId() {
+            return id;
+        }
 
-		public void setId(Integer id) {
-			this.id = id;
-		}
+        public void setId(Integer id) {
+            this.id = id;
+        }
 
-		@Version
-		public ZonedDateTime getTs() {
-			return ts;
-		}
+        @Version
+        public ZonedDateTime getTs() {
+            return ts;
+        }
 
-		public void setTs(ZonedDateTime ts) {
-			this.ts = ts;
-		}
-	}
+        public void setTs(ZonedDateTime ts) {
+            this.ts = ts;
+        }
+    }
 }
