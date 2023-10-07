@@ -5,8 +5,7 @@
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 import org.apache.tools.ant.filters.ReplaceTokens
-
-
+import java.io.File
 
 plugins {
     id 'org.hibernate.build.xjc-jakarta'
@@ -77,7 +76,7 @@ dependencies {
     }
     testImplementation "joda-time:joda-time:2.3"
 
-    testImplementation    'com.nuodb.jdbc:nuodb-jdbc:24.0.0'
+    testImplementation    'com.nuodb.jdbc:nuodb-jdbc:24.1.1'
     testImplementation    "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}"
 
     testRuntimeOnly libs.byteBuddy
@@ -264,5 +263,73 @@ tasks.withType( Test.class ).each { test ->
         test.filter {
             excludeTestsMatching project.property('excludeTests').toString()
         }
+    }
+    else {
+        String[] testsToIgnore = SkipTests.processSkipTests(test.filter, projectDir);
+
+        test.filter {
+
+            if (testsToIgnore) {
+                println("Telling gradle to exclude ${testsToIgnore.length} tests");
+                //setExcludePatterns(testsToIgnore);
+
+                for (String fqTestName: testsToIgnore)
+                    excludeTestsMatching "${fqTestName}";
+
+                //println("EXCLUDE: " + excludePatterns.contains("org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods"));
+                //println("EXCLUDE: " + excludePatterns.contains("org.hibernate.orm.test.annotations.cid.CompositeIdTest.testGetWithDetachedEntityInCompositeIDWithManagedCopy"));
+            }
+
+            //excludeTestsMatching "org.hibernate.orm.test.annotations.cid.CompositeIdTest"
+            //excludeTestsMatching "org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods"
+            //excludeTestsMatching "org.hibernate.orm.test.type.VarbinaryArrayTest"
+            println("Gradle claims it will ignore ${excludePatterns.size()} tests")
+        }
+    }
+}
+
+class SkipTests {
+    static String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
+    static boolean PROCESS_SKIP_TESTS = true;
+    static String[] testsToIgnore;
+
+    public static String[] processSkipTests(var testFilter, File projectDir) {
+        if (!PROCESS_SKIP_TESTS)
+            return testsToIgnore;
+
+        File skipTests = new File(projectDir, SKIP_TESTS_FILE_NAME);
+        println("Processing ${skipTests.absoluteFile}, filter is a " + testFilter.class)
+        PROCESS_SKIP_TESTS = false;
+        List<String> testsToIgnore = new ArrayList<>();
+
+        if (skipTests.exists()) {
+            List lines = java.nio.file.Files.readAllLines(skipTests.toPath());
+            println("Lines = ${lines.size}")
+            int testCount = 0;
+
+            for (String line: lines) {
+                line = line.trim();
+
+                if (line.length() == 0 || line.charAt(0) == '#')
+                    continue
+                else {
+                    int ix = line.indexOf('(');
+
+                    if (ix != -1)
+                        line = line.substring(0,ix).trim();
+
+                    if (line.contains("CompositeIdTest"))
+                        println("excluding [${line}]");
+
+                    // Exclude this test
+                    testsToIgnore.add(line);
+                    testCount++;
+                }
+            }
+
+            println("Excluding ${testCount} tests");
+        }
+
+        return this.testsToIgnore = testsToIgnore.toArray();
     }
 }

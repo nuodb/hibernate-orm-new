@@ -1,11 +1,15 @@
 package org.hibernate.testing.support;
 
+import org.hibernate.orm.test.constraint.NonRootTablePolymorphicTests;
+import org.hibernate.orm.test.inheritance.TransientOverrideAsPersistentJoined;
 import org.hibernate.orm.test.jpa.criteria.mapjoin.MapJoinTestWithEmbeddable;
 import org.hibernate.orm.test.pagination.OraclePaginationTest;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
 import org.hibernate.testing.support.TestUtils.TestInfo;
 import org.jboss.logging.Logger;
 import org.junit.runners.model.FrameworkMethod;
 
+import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -208,8 +212,15 @@ public class SkipTestInfo {
 	                if (TestUtils.isTestClass(className, line)) {
 	                    try {
 	                        Class<?> testClass = Class.forName(line);
-	                        Method testMethod = testClass.getDeclaredMethod(methodName, (Class<?>[]) null);
-	
+                            Method testMethod;
+
+                            try {
+                                testMethod = testClass.getDeclaredMethod(methodName, (Class<?>[]) null);
+                            }
+                            catch (NoSuchMethodException e) {
+                                testMethod = testClass.getDeclaredMethod(methodName, SessionFactoryScope.class);
+                            }
+
 	                        if (testMethod.getAnnotation(org.junit.Test.class) != null
 	                                || testMethod.getAnnotation(org.junit.jupiter.api.Test.class) != null) {
 	                            fileContents.append(line).append('.').append(methodName).append(comment)
@@ -217,7 +228,7 @@ public class SkipTestInfo {
 	                            isTestMethod = true;
 	                        }
 	                    } catch (ClassNotFoundException | NoSuchMethodException | SecurityException e) {
-	                        ; // Ignore
+	                        TestUtils.logException(LOGGER, "Error validating " + originalLine, e); // Ignore
 	                    }
 	                }
 	
@@ -245,6 +256,7 @@ public class SkipTestInfo {
 	private static void sourceFileError(Context context, File source, int lineNum, String msg) {
 	    String emsg = "Error in " + source + "(" + lineNum + "): " + msg;
 	    LOGGER.warn(emsg);
+        JOptionPane.showMessageDialog(null, emsg);
 	    context.errors++;
 	    context.needToRewriteSource = true;
 	    TestUtils.appendToFile(context.errorFile, emsg);
@@ -410,7 +422,6 @@ public class SkipTestInfo {
             skipFileContents.append(SKIP_FILE_HEADING).append(NL);
         }
 
-
         if (greenListFile.exists()) {
             // Process the contents
             LOGGER.warn("Processing " + greenListFile);
@@ -422,7 +433,7 @@ public class SkipTestInfo {
         }
         else {
             // Create empty file
-            initFile(errorFile, "# Test to run " + LocalDateTime.now() + NL //
+            TestUtils.initFile(errorFile, "# Test to run " + LocalDateTime.now() + NL //
                     + "#  - If this is non-empty, only these tests will be run." + NL //
                     + "#  - Leave empty unless you wish to run and debug specific test(s)." + NL  );
         }
@@ -474,7 +485,7 @@ public class SkipTestInfo {
         for (String line : lines)
             listOfLines.add(line);
 
-        boolean useTestFile = true; // False to process actual skip-test.txt file
+        boolean useTestFile = false; // False to process actual skip-test.txt file
 
         File testSkipFile = new File("target/test-skip-file.txt");
         testSkipFile.delete();

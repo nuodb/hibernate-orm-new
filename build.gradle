@@ -35,7 +35,7 @@ plugins {
 apply from: file( 'gradle/module.gradle' )
 
 // BEGIN: For NUODB
-var dialectVersion=System.env['DIALECT_VERSION']
+var dialectVersion = System.env['DIALECT_VERSION']
 
 if (dialectVersion == null) {
     println("build.gradle: DIALECT_VERSION environment variable should be set to 23.0.0-hib6 or later")

@@ -171,8 +171,16 @@ public class ExceptionConverterImpl implements ExceptionConverter {
 		// NuoDB: End
 		} else {
 			// NuoDB 25-Jun-2023: Add SQL to exception info, if available
-			String errorMsg = exception instanceof DataException ? exception.getMessage() + System.lineSeparator() + //
-					"    sql=[" + ((DataException)exception).getSQL() + "]" : exception.getMessage();
+			boolean useDataException = false;
+			DataException de = null;
+
+			if (exception instanceof DataException) {
+				de = ((DataException)exception);
+				useDataException = !(de.getSQL().equals("n/a"));
+			}
+
+			String errorMsg = useDataException ? exception.getMessage() + System.lineSeparator() + //
+					"    sql=[" + de.getSQL() + "]" : exception.getMessage();
 			final PersistenceException converted = new PersistenceException(
 					"Converting `" + exception.getClass().getName() + "` to JPA `PersistenceException` : " + errorMsg,
 					exception

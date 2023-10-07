@@ -12,14 +12,21 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 
+import org.hibernate.Session;
 import org.hibernate.StaleObjectStateException;
 import org.hibernate.StaleStateException;
+import org.hibernate.Transaction;
+import org.hibernate.cfg.Configuration;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
+import org.hibernate.internal.SessionFactoryImpl;
 import org.hibernate.metamodel.MappingMetamodel;
 
+import org.hibernate.testing.BeforeClassOnce;
 import org.hibernate.testing.orm.junit.SessionFactory;
 import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.BeforeClass;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,8 +50,24 @@ public abstract class AbstractEntityWithManyToManyTest {
 	private boolean isContractVersioned;
 
 
+	@BeforeAll
+	@BeforeClass
+	protected static void removeSchema() {
+		Configuration config = new Configuration();
+		config.configure();
+
+		try (org.hibernate.SessionFactory sf = config.buildSessionFactory()){
+			sf.inSession(session -> {
+				Transaction txn = session.getTransaction();
+				txn.begin();
+				session.createNativeQuery("DROP SCHEMA DBO CASCADE").executeUpdate();
+				txn.commit();
+			});
+		}
+	}
 	@BeforeEach
 	protected void prepareTest(SessionFactoryScope scope) throws Exception {
+
 		SessionFactoryImplementor sessionFactory = scope.getSessionFactory();
 		MappingMetamodel domainModel = sessionFactory.getRuntimeMetamodels().getMappingMetamodel();
 		isPlanContractsInverse = domainModel.getCollectionDescriptor( Plan.class.getName() + ".contracts" )

@@ -7,6 +7,8 @@
 package org.hibernate.orm.test.id.enhanced;
 
 import java.util.function.Consumer;
+
+import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -29,6 +31,7 @@ import org.hibernate.id.enhanced.StandardNamingStrategy;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.service.ServiceRegistry;
 
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.orm.junit.BaseUnitTest;
 import org.hibernate.testing.orm.junit.DialectFeatureChecks;
 import org.hibernate.testing.orm.junit.RequiresDialectFeature;
@@ -39,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @BaseUnitTest
 @RequiresDialectFeature(feature = DialectFeatureChecks.SupportsSequences.class)
+@SkipForDialect(value= NuoDBDialect.class, comment="NuoDB supports sequences, but not pooled sequences (as Hibernate uses them)")
 public class SequenceNamingStrategyTest {
 
 	@Test

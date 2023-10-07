@@ -11,8 +11,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Properties;
 
+import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.dialect.H2Dialect;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.service.spi.EventListenerRegistry;
 import org.hibernate.event.spi.EventType;
@@ -39,6 +41,9 @@ import org.hibernate.orm.test.jpa.pack.various.Airplane;
 import org.hibernate.orm.test.jpa.pack.various.Seat;
 import org.hibernate.stat.Statistics;
 
+import org.hibernate.testing.SkipForDialect;
+import org.hibernate.testing.orm.junit.RequiresDialect;
+import org.hibernate.testing.support.TestUtils;
 import org.hibernate.testing.transaction.TransactionUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -65,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * @author Hardy Ferentschik
  */
 @SuppressWarnings("unchecked")
+@RequiresDialect( H2Dialect.class ) // NuoDB 3-Jul-2023: These tests expect to use H2
 public class PackagedEntityManagerTest extends PackagingTestCase {
 	private EntityManagerFactory emf;
 	@AfterEach

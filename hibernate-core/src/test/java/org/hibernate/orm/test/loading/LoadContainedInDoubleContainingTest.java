@@ -49,7 +49,7 @@ public class LoadContainedInDoubleContainingTest {
 		} );
 	}
 
-	@Entity(name = "Containing")
+	@Entity(name = "Containing_")  // NuoDB 3-Jul-2023: Containing os reserved keyword for NuoDB.
 	public static class Containing {
 
 		@Id

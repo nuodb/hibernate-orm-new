@@ -37,6 +37,7 @@ import org.hibernate.service.spi.ServiceException;
 import org.hibernate.service.spi.ServiceRegistryAwareService;
 import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.service.spi.Stoppable;
+import org.jboss.logging.Logger;
 
 import static org.hibernate.internal.log.ConnectionPoolingLogger.CONNECTIONS_LOGGER;
 import static org.hibernate.internal.log.ConnectionPoolingLogger.CONNECTIONS_MESSAGE_LOGGER;
@@ -107,6 +108,8 @@ public class DriverManagerConnectionProviderImpl
 
 	private static ConnectionCreator buildCreator(Map<String,Object> configurationValues, ServiceRegistryImplementor serviceRegistry) {
 		final String url = (String) configurationValues.get( AvailableSettings.URL );
+		Logger.getLogger(DriverManagerConnectionProviderImpl.class) //
+			.warn("Using connection properties: " + configurationValues);
 
 		String driverClassName = (String) configurationValues.get( AvailableSettings.DRIVER );
 		boolean success = false;
@@ -114,6 +117,10 @@ public class DriverManagerConnectionProviderImpl
 		if ( driverClassName != null ) {
 			driver = loadDriverIfPossible( driverClassName, serviceRegistry );
 			success = true;
+			if (driverClassName.contains("h2")) {
+				if (configurationValues.get("hibernate.connection.schema").equals("DBO"))
+					configurationValues.remove("hibernate.connection.schema");
+			}
 		}
 		else if ( url != null ) {
 			//try to guess the driver class from the JDBC URL

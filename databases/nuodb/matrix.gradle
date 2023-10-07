@@ -14,7 +14,7 @@ buildscript {
         }
     }
     dependencies {
-        classpath 'com.nuodb.jdbc:nuodb-jdbc:24.0.0'
+        classpath 'com.nuodb.jdbc:nuodb-jdbc:24.1.1'
         classpath 'org.hibernate:hibernate-core:6.1.7.Final'
         //classpath "com.nuodb.hibernate:nuodb-hibernate:${System.env['DIALECT_VERSION'].endsWith("-hib6") ? System.env['DIALECT_VERSION'] : System.env['DIALECT_VERSION']}-hib6"
         classpath "com.nuodb.hibernate:nuodb-hibernate:${System.env['DIALECT_VERSION']}"
@@ -29,7 +29,7 @@ if (nuodbHibernateJarVersion == null) {
 println "matrix.gradle: Matrix build using NuoDB Dialect V${nuodbHibernateJarVersion}"
 
 // Define our JDBC driver
-jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:24.0.0"
+jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:24.1.1"
 
 // Check NuoDB DataSource and Dialect are on the classpath and can connect to the database 
 NuoDBDependencies.isAvailable("${projectDir}/databases/nuodb/resources/hibernate.properties", "${nuodbHibernateJarVersion}")

@@ -31,7 +31,10 @@ import org.apache.logging.log4j.util.Strings;
 import org.hibernate.JDBCException;
 import org.hibernate.exception.GenericJDBCException;
 import org.hibernate.exception.SQLGrammarException;
+import org.hibernate.testing.orm.junit.DomainModel;
 import org.jboss.logging.Logger;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.Extensions;
 import org.junit.runners.model.FrameworkMethod;
 import org.opentest4j.AssertionFailedError;
 
@@ -439,26 +442,26 @@ public class TestUtils {
 	 */
 	public static boolean isTestClass(String className, String fqcn) {
 		if (className.startsWith("test"))
-			return false; // Is a method name
+			return false; // It's a method name
 
 		for (String word : POSSIBLE_TEST_CLASS_NAME_ENDINGS) {
 			if (className.endsWith(word))
 				return true;
 		}
 
-		if (className.contains("Test")) {
-			try {
-				Class<?> clazz = Class.forName(fqcn);
-				Class<?> superClass = clazz.getSuperclass();
+		try {
+			Class<?> clazz = Class.forName(fqcn);
+			Class<?> superClass = clazz.getSuperclass();
 
-				if (superClass.getSimpleName().endsWith("TestCase"))
-					return true;
+			if (superClass != null && superClass.getSimpleName().endsWith("TestCase"))
+				return true;
 
-				if (clazz.getAnnotation(org.hibernate.testing.orm.junit.SessionFactory.class) != null)
-					return true;
-			} catch (Exception e) {
-				LOGGER.info(e.getClass().getSimpleName() + " finding " + className); // give up
-			}
+			if (clazz.getAnnotation(org.hibernate.testing.orm.junit.SessionFactory.class) != null ||
+					clazz.getAnnotation(DomainModel.class) != null)
+				return true;
+		} catch (ClassNotFoundException e) {
+			if (LOGGER.isDebugEnabled())
+				LOGGER.debug(e.getClass().getSimpleName() + " finding " + className); // give up
 		}
 
 		return false;
@@ -595,25 +598,38 @@ public class TestUtils {
 
 		if (sqlException instanceof SQLFeatureNotSupportedException) {
 			int ix = cause.indexOf('^');
-			String context = sqlError;
+			String context = sql;
 
 			if (ix != -1) {
 				String l2 = cause.substring(0, ix);
 				cause = cause.substring(ix + 1).trim();
 
-				int ix2 = l2.indexOf('\n');
+				if (cause.contains("RIGHTOUTER") || cause.contains("FULLOUTER") )
+					; // Known limitation, no more info needed
+				else if (sql.contains("is distinct from") || sql.contains("is not distinct from"))
+					// Error message 'expected NOT or NULL got DISTINCT' not obvious
+					cause = "IS [NOT] DISTINCT FROM not supported";
+				else {
+					int ix2 = l2.lastIndexOf('\n');
+					int offset = 30;
 
-				if (ix2 != -1) {
-					// Caret ^ is indented this many spaces
-					int nSpaces = ix - ix2;
-					int start = nSpaces > 20 ? nSpaces - 20 : 0;
-					int end = nSpaces + 20 > l2.length() ? l2.length() : nSpaces + 20;
-					context = l2.substring(start, end);
+					// Mark location of error with >>> in SQL string
+					if (ix2 != -1) {
+						// Caret ^ is indented this many spaces
+						int nSpaces = ix - ix2;
+						int start = nSpaces > offset ? nSpaces - offset : 0;
+
+						if ((start + offset) - sql.length() < 3)
+							context = sql + " <<<";
+						else
+							context = sql.substring(0, start + offset - 1) + " >>>" + sql.substring(start + offset - 1);
+					}
+
+					cause = cause + " in '" + context + '\'';
 				}
-
-				cause = cause + " in '" + context + '\'';
 			}
 
+			//popupMessage(cause);
 		} else if (sqlException instanceof SQLSyntaxErrorException) {
 
 			if (sqlError.contains("can't find") || sqlError.contains("not found")

@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.type;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -35,6 +36,7 @@ import org.hibernate.testing.jdbc.SharedDriverManagerConnectionProviderImpl;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.hibernate.testing.junit4.CustomParameterized;
 import org.hibernate.testing.orm.junit.DialectContext;
+import org.jboss.logging.Logger;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
@@ -168,10 +170,19 @@ public abstract class AbstractJavaTimeTypeTest<T, E> extends BaseCoreFunctionalT
 	@TestForIssue(jiraKey = "HHH-13266")
 	public void nativeWriteThenRead() {
 		assumeNoJdbcTimeZone();
+		Logger logger = Logger.getLogger(getClass());
+		logger.info("Time zone = " + TimeZone.getDefault());
+		java.util.Date date1 = new java.util.Date(118,7,12);
+		logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
 
 		withDefaultTimeZone( () -> {
 			inTransaction( session -> {
 				session.doWork( connection -> {
+					showTimeZone(logger, connection);
+					java.util.Date date2 = new java.util.Date(118,7,12);
+					logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
+					logger.info("Date2 = " + date2.toGMTString() + ' ' + date2.getTime());
+
 					try (PreparedStatement statement = connection.prepareStatement(
 							"INSERT INTO " + ENTITY_NAME + " (" + ID_COLUMN_NAME + ", " + PROPERTY_COLUMN_NAME + ") "
 							+ " VALUES ( ? , ? )"
@@ -182,7 +193,12 @@ public abstract class AbstractJavaTimeTypeTest<T, E> extends BaseCoreFunctionalT
 					}
 				} );
 			} );
+
 			inTransaction( session -> {
+				session.doWork( connection -> showTimeZone(logger, connection) );
+				java.sql.Date date3 = (java.sql.Date)session.createNativeQuery("SELECT thevalue FROM theentity WHERE theid = 1").getSingleResult();
+				logger.info("Date3 = " + date3 + " " + date3.getTime());
+
 				T read = getActualPropertyValue( session.find( getEntityType(), 1 ) );
 				assertEquals(
 						"Values written without Hibernate ORM should be read correctly by Hibernate ORM",
@@ -190,6 +206,17 @@ public abstract class AbstractJavaTimeTypeTest<T, E> extends BaseCoreFunctionalT
 				);
 			} );
 		} );
+	}
+
+	private static void showTimeZone(Logger logger, Connection connection) throws SQLException {
+		logger.info("Time zone = " + TimeZone.getDefault());
+
+		ResultSet rs = connection.createStatement().executeQuery( //
+				"SELECT Value FROM System.ConnectionProperties WHERE Property = 'TimeZone'");
+		if (rs.next() ) {
+			String dbTz = rs.getString(1);
+			logger.info("    Database Time Zone = " + dbTz);
+		}
 	}
 
 	protected final void withDefaultTimeZone(Runnable runnable) {

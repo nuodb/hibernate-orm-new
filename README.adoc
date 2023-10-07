@@ -198,11 +198,20 @@ For the record, our Hibernate jar is referred to in:
 
 ## Upgrade NuoDB JDBC Driver
 
-This must be changed manually in three places. For example to set the version to `24.0.0`:
+This must be changed manually in several places.
+For example to set the version to `24.1.1`:
 
-1. `databases/nuodb/matrix.gradle`: `jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:24.0.0"`
-2. `hibernate-core/hibernate-core.gradle`: `testRuntime( "com.nuodb.jdbc:nuodb-jdbc:24.0.0" )`
-3. `settings.gradle`: alias( "nuodb" ).to( "com.nuodb.jdbc", "nuodb-jdbc" ).version( "24.0.0" )
+. `databases/nuodb/matrix.gradle`: `classpath 'com.nuodb.jdbc:nuodb-jdbc:24.1.1'`
+. `databases/nuodb/matrix.gradle`: `jdbcDependency "com.nuodb.jdbc:nuodb-jdbc:24.1.1"`
+. `hibernate-core/hibernate-core.gradle`: `testImplementation    'com.nuodb.jdbc:nuodb-jdbc:24.1.1'`
+. `hibernate-core/pom.xml`: `<nuodb-jar.version>24.1.1</nuodb-jar.version>`
+. `settings.gradle`: `alias( "nuodb" ).to( "com.nuodb.jdbc", "nuodb-jdbc" ).version( "24.1.1" )`
+
+To check the current version, run:
+
+```sh
+    grep -R nuodb-jdbc * | grep -v target | grep -v caches
+```
 
 ## Changes Made to Project
 

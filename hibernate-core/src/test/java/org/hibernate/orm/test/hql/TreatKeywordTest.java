@@ -10,10 +10,12 @@ import java.util.List;
 
 import org.hibernate.query.Query;
 import org.hibernate.Session;
-
+import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
 
 import static junit.framework.TestCase.assertEquals;
 
