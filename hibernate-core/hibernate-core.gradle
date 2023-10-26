@@ -51,8 +51,6 @@ dependencies {
 
     implementation libs.antlrRuntime
 
-    //implementation( "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}" )
- 
     compileOnly jakartaLibs.jacc
     compileOnly jakartaLibs.validation
     compileOnly jakartaLibs.cdi
@@ -78,6 +76,8 @@ dependencies {
 
     testImplementation    'com.nuodb.jdbc:nuodb-jdbc:24.1.1'
     testImplementation    "com.nuodb.hibernate:nuodb-hibernate:${nuodbHibernateJarVersion}"
+    testImplementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.9'
+    testImplementation group: 'ch.qos.logback', name: 'logback-core', version: '1.4.11'
 
     testRuntimeOnly libs.byteBuddy
     testRuntimeOnly testLibs.weld
