@@ -11,7 +11,7 @@
 
 		<!-- NuoDB JARs -->
 		<nuodb-jar.version>24.0.0</nuodb-jar.version>
-		<nuodb-hibernate-jar.version>23.0.0-RC4-hib6</nuodb-hibernate-jar.version>
+		<nuodb-hibernate-jar.version>23.0.1-RC6-hib6</nuodb-hibernate-jar.version>
 
 <!--		<ant.version>1.8.2</ant.version>-->
 		<antlr.version>4.10.1</antlr.version>

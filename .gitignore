@@ -19,6 +19,7 @@ hibernate-core/errors.txt
 hibernate-core/extra-tests.txt
 hibernate-core/skip-tests-*.txt
 hibernate-core/updated-skip-tests.txt
+hibernate-core/*-errors.txt
 
 # IntelliJ specific files/directories
 out

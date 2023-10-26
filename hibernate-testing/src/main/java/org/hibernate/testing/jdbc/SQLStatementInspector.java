@@ -32,6 +32,17 @@ public class SQLStatementInspector implements StatementInspector {
 
 	@Override
 	public String inspect(String sql) {
+		// NuoDB: Remove any leading comment
+		sql = sql.trim();
+		
+		if (sql.startsWith("/*")) {
+			int ix = sql.indexOf("*/");
+			
+			if ( ix != -1)
+				sql = sql.substring(ix+2).trim();
+		}
+		// END
+
 		sqlQueries.add( sql );
 		return sql;
 	}
