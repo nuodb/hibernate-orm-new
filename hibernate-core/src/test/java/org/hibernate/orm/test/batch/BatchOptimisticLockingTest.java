@@ -25,6 +25,8 @@ import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.testing.support.TestUtils;
 import org.junit.Test;
 
+import com.nuodb.hibernate.NuoDBDialect;
+
 import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -103,7 +105,13 @@ public class BatchOptimisticLockingTest extends
 			}
 			// NuooDB: end
 			assertEquals( OptimisticLockException.class, expected.getClass() );
-			if ( getDialect() instanceof CockroachDialect ) {
+			
+			if (getDialect() instanceof NuoDBDialect) {
+                // CockroachDB always runs in SERIALIZABLE isolation, and uses SQL state 40001
+                // to indicate serialization failure.
+                assertEquals("update conflict in table \"DBO\".\"PERSON\"; statement executed: update Person set name=?, version=? where id=? and version=?",
+                        expected.getMessage());
+            } else if ( getDialect() instanceof CockroachDialect ) {
 				// CockroachDB always runs in SERIALIZABLE isolation, and uses SQL state 40001 to indicate
 				// serialization failure.
 				assertEquals(

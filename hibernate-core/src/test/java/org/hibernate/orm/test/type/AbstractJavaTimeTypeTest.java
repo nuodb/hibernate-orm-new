@@ -26,7 +26,6 @@ import java.util.function.Predicate;
 import org.hibernate.boot.model.TypeContributions;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
-import org.hibernate.dialect.DatabaseVersion;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.service.ServiceRegistry;
@@ -196,9 +195,19 @@ public abstract class AbstractJavaTimeTypeTest<T, E> extends BaseCoreFunctionalT
 
 			inTransaction( session -> {
 				session.doWork( connection -> showTimeZone(logger, connection) );
-				java.sql.Date date3 = (java.sql.Date)session.createNativeQuery("SELECT thevalue FROM theentity WHERE theid = 1").getSingleResult();
-				logger.info("Date3 = " + date3 + " " + date3.getTime());
-
+				
+				// NuoDB Start
+				// date3 cannot be cast as a java.sql.Date if the thevalue is a Time or
+				// Timestamp column. So change it to a java.util.Date and don't run code
+				// if INFO level logging is not enabled.
+				// NOTE: This code has been removed in Hibernate 6.2.
+				if (logger.isInfoEnabled()) {
+					java.util.Date date3 = (java.util.Date) session
+						.createNativeQuery("SELECT thevalue FROM theentity WHERE theid = 1").getSingleResult();
+					logger.info("Date3 = " + date3 + " " + date3.getTime());
+				}
+				// NuoDB End
+                
 				T read = getActualPropertyValue( session.find( getEntityType(), 1 ) );
 				assertEquals(
 						"Values written without Hibernate ORM should be read correctly by Hibernate ORM",

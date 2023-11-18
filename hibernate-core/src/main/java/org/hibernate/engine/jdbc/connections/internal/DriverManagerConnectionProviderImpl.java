@@ -108,8 +108,8 @@ public class DriverManagerConnectionProviderImpl
 
 	private static ConnectionCreator buildCreator(Map<String,Object> configurationValues, ServiceRegistryImplementor serviceRegistry) {
 		final String url = (String) configurationValues.get( AvailableSettings.URL );
-		Logger.getLogger(DriverManagerConnectionProviderImpl.class) //
-			.warn("Using connection properties: " + configurationValues);
+		Logger logger = Logger.getLogger(DriverManagerConnectionProviderImpl.class);
+		logger.warn("Using connection properties: " + configurationValues);
 
 		String driverClassName = (String) configurationValues.get( AvailableSettings.DRIVER );
 		boolean success = false;
@@ -117,9 +117,14 @@ public class DriverManagerConnectionProviderImpl
 		if ( driverClassName != null ) {
 			driver = loadDriverIfPossible( driverClassName, serviceRegistry );
 			success = true;
+			logger.warn("driverClassName = " + driverClassName);  // NuoDB 2023-11-17
+			
 			if (driverClassName.contains("h2")) {
-				if (configurationValues.get("hibernate.connection.schema").equals("DBO"))
+			    // NuoDB 2023-11-17
+				Object schema = configurationValues.get("hibernate.connection.schema");
+                if (schema != null && schema.equals("DBO"))
 					configurationValues.remove("hibernate.connection.schema");
+                // NuoDB 2023-11-17 END
 			}
 		}
 		else if ( url != null ) {

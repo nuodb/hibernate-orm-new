@@ -1,5 +1,0 @@
-# Tests to Run
-#  - If this is non-empty, only these tests will be run.
-#  - Leave empty unless you wish to run and debug specific test(s).
-#org.hibernate.orm.test.version.ZonedDateTimeVersionTest
-#org.hibernate.orm.test.type.LocalDateTest

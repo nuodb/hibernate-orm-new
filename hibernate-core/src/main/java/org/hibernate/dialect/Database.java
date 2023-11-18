@@ -6,6 +6,7 @@
  */
 package org.hibernate.dialect;
 
+import java.lang.reflect.InvocationTargetException;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -189,6 +190,36 @@ public enum Database {
 		}
 	},
 
+	NUODB {
+        @Override
+        public Dialect createDialect(DialectResolutionInfo info) {
+            try {
+                Class<?> clazz = Class.forName("com.nuodb.hibernate.NuoDBDialect");
+                return (Dialect)clazz.getConstructor(DialectResolutionInfo.class).newInstance(info);
+            } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException | NoSuchMethodException | SecurityException  e) {
+                ;
+            }
+            
+            return null; // NuoDB not available 
+        }
+        @Override
+        public boolean productNameMatches(String databaseName) {
+            return "NuoDB".equals( databaseName );
+        }
+        @Override
+        public String getDriverClassName(String jdbcUrl) {
+            return "com.nuodb.hibernate.NuoHibernateDriver";
+        }
+        @Override
+        public boolean matchesUrl(String jdbcUrl) {
+            return jdbcUrl.startsWith( "jdbc:com.nuodb" );
+        }
+        @Override
+        public String getUrlPrefix() {
+            return "jdbc:com.nuodb.hib:";
+        }
+    },
+	   
 	ORACLE {
 		@Override
 		public Dialect createDialect(DialectResolutionInfo info) {
