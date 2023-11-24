@@ -1,15 +1,16 @@
 #!/bin/bash
 
-SCRIPT_DIR=$(cd `dirname $0` && pwd)
+SCRIPT_DIR="$(cd `dirname $0` && pwd)"
+VOL_DIR=$(mktemp -d)
 IMG_NAME=${NUODB_IMAGE:-"nuodb/nuodb-ce:latest"}
 
 # Since we don't have sudo on the build servers, we need to use
 # docker container to run as original user, mount the directories
 # we need to clean and remove the old volX directories.
-docker run --rm --volume "$SCRIPT_DIR:/var/opt/nuodb" "$IMG_NAME" /bin/bash -c 'rm -fr /var/opt/nuodb/vol{1,2}'
+#docker run --rm --volume "$VOL_DIR:/var/opt/nuodb" "$IMG_NAME" /bin/bash -c 'rm -fr /var/opt/nuodb/vol{1,2}'
 
-mkdir "$SCRIPT_DIR"/{vol1,vol2}
-chmod a+rw "$SCRIPT_DIR"/{vol1,vol2}
+mkdir "$VOL_DIR"/{vol1,vol2}
+chmod a+rw "$VOL_DIR"/{vol1,vol2}
 
 docker rm -f te1 sm1 ad1
 
@@ -26,8 +27,8 @@ docker run -d --name ad1 --rm \
 
 sleep 3
 docker run -d --name sm1 --hostname sm1 --rm \
-    --volume "$SCRIPT_DIR/vol1":/var/opt/nuodb/backup \
-    --volume "$SCRIPT_DIR/vol2":/var/opt/nuodb/archive \
+    --volume "$VOL_DIR/vol1":/var/opt/nuodb/backup \
+    --volume "$VOL_DIR/vol2":/var/opt/nuodb/archive \
     --net nuodb-net "${IMG_NAME}" nuodocker \
     --api-server ad1:8888 start sm \
     --db-name hibernate_orm_test --server-id ad1 \
