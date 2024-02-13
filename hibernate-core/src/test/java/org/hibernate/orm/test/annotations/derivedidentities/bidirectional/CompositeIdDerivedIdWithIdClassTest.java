@@ -15,7 +15,7 @@ import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.jpa.internal.PersistenceUnitUtilImpl;
 
 import org.hibernate.testing.Skip;
-import org.hibernate.testing.SkipForDialect;
+//import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.ImplicitListAsBagProvider;
@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 		}
 )
 @SessionFactory
-@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
+//@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 public class CompositeIdDerivedIdWithIdClassTest {
 
 	@AfterEach

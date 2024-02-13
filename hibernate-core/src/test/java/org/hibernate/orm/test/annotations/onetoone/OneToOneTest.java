@@ -21,7 +21,7 @@ import org.hibernate.mapping.Join;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Table;
 
-import org.hibernate.testing.SkipForDialect;
+//import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.testing.transaction.TransactionUtil;
@@ -159,7 +159,7 @@ public class OneToOneTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
+	//@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testCompositePk() {
 		final ComputerPk cid = new ComputerPk();
 		final SerialNumber sn = new SerialNumber();

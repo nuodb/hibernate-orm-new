@@ -205,7 +205,8 @@ task copyBundleResources (type: Copy) {
 
 processTestResources {
     dependsOn copyBundleResources
-    duplicatesStrategy = DuplicatesStrategy.WARN
+    // NuoDB: 2 Feb 2024: do we care about duplicates? Commenting out for now.
+    //duplicatesStrategy = DuplicatesStrategy.WARN
 }
 
 sourcesJar {
@@ -258,53 +259,95 @@ tasks.withType( Test.class ).each { test ->
         //println "Starting test: " + descriptor
     }
 
-    // Allow to exclude specific tests
+    // Allow to exclude specific tests - don't use this if you are using skip-tests.txt or green-list.txt
     if (project.hasProperty('excludeTests')) {
         test.filter {
             excludeTestsMatching project.property('excludeTests').toString()
         }
     }
-    else {
-        String[] testsToIgnore = SkipTests.processSkipTests(test.filter, projectDir);
-
-        test.filter {
-
-            if (testsToIgnore) {
-                println("Telling gradle to exclude ${testsToIgnore.length} tests");
-                //setExcludePatterns(testsToIgnore);
-
-                for (String fqTestName: testsToIgnore)
-                    excludeTestsMatching "${fqTestName}";
-
-                //println("EXCLUDE: " + excludePatterns.contains("org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods"));
-                //println("EXCLUDE: " + excludePatterns.contains("org.hibernate.orm.test.annotations.cid.CompositeIdTest.testGetWithDetachedEntityInCompositeIDWithManagedCopy"));
-            }
-
-            //excludeTestsMatching "org.hibernate.orm.test.annotations.cid.CompositeIdTest"
-            //excludeTestsMatching "org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods"
-            //excludeTestsMatching "org.hibernate.orm.test.type.VarbinaryArrayTest"
-            println("Gradle claims it will ignore ${excludePatterns.size()} tests")
-        }
-    }
 }
 
-class SkipTests {
-    static String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
-    static boolean PROCESS_SKIP_TESTS = true;
-    static String[] testsToIgnore;
+/**
+ * Check for skip-tests.txt or green-list.txt. This is done in the Java code, so
+ * this class is no logner used. Leaving for now, in case it is needed again.
+ */
+class TestsChecker {
+    public final static String GREEN_TESTS_FILE_NAME = "green-list.txt";
+    public final static String SKIP_TESTS_FILE_NAME = "skip-tests.txt";
 
-    public static String[] processSkipTests(var testFilter, File projectDir) {
+    public static boolean PROCESS_SKIP_TESTS = true;
+    public static boolean PROCESS_GREEN_TESTS = true;
+    public static String[] testsToRun;
+    public static String[] testsToIgnore;
+
+    public static hasGreenTestsToRun() {
+        return testsToRun != null && testsToRun.length > 0;
+    }
+
+    public static hasTestsToIgnore() {
+        return testsToIgnore != null && testsToIgnore.length > 0;
+    }
+
+    public static void checkForTests(File projectDir) {
+        processGreenTests(projectDir);
+        processSkipTests(projectDir);
+    }
+
+    private static String[] processGreenTests(File projectDir) {
+        if (!PROCESS_GREEN_TESTS)
+            return testsToIgnore;
+
+        File greenTests = new File(projectDir, GREEN_TESTS_FILE_NAME);
+        println("Processing ${greenTests.absoluteFile}");
+        PROCESS_GREEN_TESTS = false;
+        List<String> testsToRun = new ArrayList<>();
+
+        if (greenTests.exists()) {
+            List lines = java.nio.file.Files.readAllLines(greenTests.toPath());
+            println(GREEN_TESTS_FILE_NAME + ": lines = ${lines.size}")
+            int testCount = 0;
+
+            for (String line: lines) {
+                line = line.trim();
+
+                if (line.length() == 0 || line.charAt(0) == '#')
+                    continue
+                else {
+                    int ix = line.indexOf('(');
+
+                    if (ix != -1)
+                        line = line.substring(0,ix).trim();
+
+                    if (line.contains("CompositeIdTest"))
+                        println("Running [${line}]");
+
+                    // Run this test
+                    testsToRun.add(line);
+                    testCount++;
+                }
+            }
+
+            println("Running ${testCount} tests");
+        }
+
+        return this.testsToRun = testsToRun.toArray();
+    }
+
+    private static String[] processSkipTests(File projectDir) {
         if (!PROCESS_SKIP_TESTS)
             return testsToIgnore;
 
+        if (hasGreenTestsToRun())
+            return testsToIgnore = new String[0];   // Ignoring everything except green tests
+
         File skipTests = new File(projectDir, SKIP_TESTS_FILE_NAME);
-        println("Processing ${skipTests.absoluteFile}, filter is a " + testFilter.class)
+        println("Processing ${skipTests.absoluteFile}");
         PROCESS_SKIP_TESTS = false;
         List<String> testsToIgnore = new ArrayList<>();
 
         if (skipTests.exists()) {
             List lines = java.nio.file.Files.readAllLines(skipTests.toPath());
-            println("Lines = ${lines.size}")
+            println(SKIP_TESTS_FILE_NAME + ": lines = ${lines.size}")
             int testCount = 0;
 
             for (String line: lines) {

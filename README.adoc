@@ -74,20 +74,20 @@ Also (last line) set `EXTERNAL_ADDRESS=127.0.0.1`.
 * Windows (using `gradlew.bat`):
 +
 ```sh
-set DIALECT_VERSION=23.0.0-hib6
-gradlew clean hibernate-core:matrix_nuodb
+set DIALECT_VERSION=23.0.2-hib6
+gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
 ```
 
 * MacOS/Linux
 +
 ```sh
-DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
+DIALECT_VERSION=23.0.2-hib6 ./gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
 ```
 
 * Expected final output is something like:
 +
 ```sh
-6186 tests completed, 14 failed, 1709 skipped
+6186 tests completed, 0 failed, 1592 skipped
 ```
 
 * Full details of all failing and ignored tests can be found at `hibernate-core/target/matrix/nuodb/reports/index.html`.
@@ -121,17 +121,29 @@ DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
 
    * When running the matrix tests `hibernate-core/target/matrix/nuodb` is the working directory.
 
-. Run individual tests (does this actually work?). Better to use an IDE - see <<using-an-ide,below>>:
+   * Not all tests are against NuoDB and actually some are explicitly skipped due to timeout, locking anomolies, or because they generate SQL syntax NuoDB does not yet support.
+   Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`.
+
+
+. Run individual tests:
+
+.. Using Gradle (does this actually work?).
 +
 Example commands:
 +
 ```sh
-./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
-./gradlew clean :hibernate-core:matrix_nuodb --tests *.PackagedEntityManagerTest
-./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
+./gradlew --rerun-tasks clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
+./gradlew --rerun-tasks clean :hibernate-core:matrix_nuodb --tests *.PackagedEntityManagerTest
+./gradlew --rerun-tasks clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
 ```
-+
-**NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`.
+..  Better to use an IDE - see <<using-an-ide,below>>.
+
+.. Put the fully qualified class name(s) into a new file called `green-list.txt` in `hibernate-core` directory.  The framework will only run the tests in the classes listed.
+* Copy `green-list.sample.text` to get started.
+* Delete this file when you are done or it will only ever run these tests.
+
+.. Individual tests, and any related files such as entity class definitions, can be copied directly into the `HibernateDialect6` project.
+* There are some there already you can use as examples of what to do.
 
 [#using-an-ide]
 [start=11]

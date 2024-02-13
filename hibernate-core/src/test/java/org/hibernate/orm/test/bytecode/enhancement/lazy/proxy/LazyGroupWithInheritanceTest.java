@@ -20,7 +20,7 @@ import org.hibernate.engine.spi.PersistentAttributeInterceptable;
 import org.hibernate.engine.spi.PersistentAttributeInterceptor;
 import org.hibernate.stat.Statistics;
 
-import org.hibernate.testing.SkipForDialect;
+//import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -63,7 +63,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	}
 
 	@Test
-	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
+	//@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstract() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -128,7 +128,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	 * fetching to issues just a single select
 	 */
 	@Test
-	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
+	//@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstractRuntimeFetch() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();

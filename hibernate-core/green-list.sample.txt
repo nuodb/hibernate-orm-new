@@ -1,8 +1,9 @@
-# Rename this file to green-list.txt.
-# Add the name of the test to run (with fuly qualified class name)
+# Copy this file to green-list.txt.
+# Add the name of the test to run (with fully qualified class name)
 
 # Tests to Run
 #  - If this is non-empty, only these tests will be run.
 #  - Leave empty unless you wish to run and debug specific test(s).
 
+# Example:
 #org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods

@@ -1,0 +1,2 @@
+# Extra classes to skip 2024-01-29T14:53:18.656801
+org.hibernate.orm.test.sql.hand.identity.CustomInsertSQLWithIdentityColumnTest.testBadInsertionFails (expected DEFAULT or VALUES got WHERE)

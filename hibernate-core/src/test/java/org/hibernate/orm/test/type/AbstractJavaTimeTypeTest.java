@@ -53,413 +53,436 @@ import static org.junit.Assert.assertEquals;
 @RunWith(CustomParameterized.class)
 public abstract class AbstractJavaTimeTypeTest<T, E> extends BaseCoreFunctionalTestCase {
 
-	private static Dialect determineDialect() {
-		try {
-			return DialectContext.getDialect();
-		}
-		catch (Exception e) {
-			return new Dialect( ZERO_VERSION ) {};
-		}
-	}
+    private static Dialect determineDialect() {
+        try {
+            return DialectContext.getDialect();
+        } catch (Exception e) {
+            return new Dialect(ZERO_VERSION) {
+            };
+        }
+    }
 
-	protected static final String ENTITY_NAME = "theentity";
-	protected static final String ID_COLUMN_NAME = "theid";
-	protected static final String PROPERTY_COLUMN_NAME = "thevalue";
+    protected static final String ENTITY_NAME = "theentity";
+    protected static final String ID_COLUMN_NAME = "theid";
+    protected static final String PROPERTY_COLUMN_NAME = "thevalue";
 
-	protected static final ZoneId ZONE_UTC_MINUS_8 = ZoneId.of( "UTC-8" );
-	protected static final ZoneId ZONE_PARIS = ZoneId.of( "Europe/Paris" );
-	protected static final ZoneId ZONE_GMT = ZoneId.of( "GMT" );
-	protected static final ZoneId ZONE_OSLO = ZoneId.of( "Europe/Oslo" );
-	protected static final ZoneId ZONE_AMSTERDAM = ZoneId.of( "Europe/Amsterdam" );
-	protected static final ZoneId ZONE_AUCKLAND = ZoneId.of( "Pacific/Auckland" );
-	protected static final ZoneId ZONE_SANTIAGO = ZoneId.of( "America/Santiago" );
+    protected static final ZoneId ZONE_UTC_MINUS_8 = ZoneId.of("UTC-8");
+    protected static final ZoneId ZONE_PARIS = ZoneId.of("Europe/Paris");
+    protected static final ZoneId ZONE_GMT = ZoneId.of("GMT");
+    protected static final ZoneId ZONE_OSLO = ZoneId.of("Europe/Oslo");
+    protected static final ZoneId ZONE_AMSTERDAM = ZoneId.of("Europe/Amsterdam");
+    protected static final ZoneId ZONE_AUCKLAND = ZoneId.of("Pacific/Auckland");
+    protected static final ZoneId ZONE_SANTIAGO = ZoneId.of("America/Santiago");
 
-	private final EnvironmentParameters env;
+    private final EnvironmentParameters env;
 
-	public AbstractJavaTimeTypeTest(EnvironmentParameters env) {
-		this.env = env;
-	}
+    public AbstractJavaTimeTypeTest(EnvironmentParameters env) {
+        this.env = env;
+    }
 
-	@Override
-	protected final Class<?>[] getAnnotatedClasses() {
-		return new Class[] { getEntityType() };
-	}
+    @Override
+    protected final Class<?>[] getAnnotatedClasses() {
+        return new Class[] { getEntityType() };
+    }
 
-	@Override
-	protected void configure(Configuration configuration) {
-		super.configure( configuration );
-		if ( env.hibernateJdbcTimeZone != null ) {
-			configuration.setProperty( AvailableSettings.JDBC_TIME_ZONE, env.hibernateJdbcTimeZone.getId() );
-		}
-		if ( env.remappingDialectClass != null ) {
-			configuration.setProperty( AvailableSettings.DIALECT, env.remappingDialectClass.getName() );
-		}
-	}
+    @Override
+    protected void configure(Configuration configuration) {
+        super.configure(configuration);
+        if (env.hibernateJdbcTimeZone != null) {
+            configuration.setProperty(AvailableSettings.JDBC_TIME_ZONE, env.hibernateJdbcTimeZone.getId());
+        }
+        if (env.remappingDialectClass != null) {
+            configuration.setProperty(AvailableSettings.DIALECT, env.remappingDialectClass.getName());
+        }
+    }
 
-	protected abstract Class<E> getEntityType();
+    protected abstract Class<E> getEntityType();
 
-	protected abstract E createEntityForHibernateWrite(int id);
+    protected abstract E createEntityForHibernateWrite(int id);
 
-	protected abstract T getExpectedPropertyValueAfterHibernateRead();
+    protected abstract T getExpectedPropertyValueAfterHibernateRead();
 
-	protected abstract T getActualPropertyValue(E entity);
+    protected abstract T getActualPropertyValue(E entity);
 
-	protected abstract void setJdbcValueForNonHibernateWrite(PreparedStatement statement, int parameterIndex) throws SQLException;
+    protected abstract void setJdbcValueForNonHibernateWrite(PreparedStatement statement, int parameterIndex)
+            throws SQLException;
 
-	protected abstract Object getExpectedJdbcValueAfterHibernateWrite();
+    protected abstract Object getExpectedJdbcValueAfterHibernateWrite();
 
-	protected abstract Object getActualJdbcValue(ResultSet resultSet, int columnIndex) throws SQLException;
+    protected abstract Object getActualJdbcValue(ResultSet resultSet, int columnIndex) throws SQLException;
 
-	@Before
-	public void cleanup() {
-		inTransaction( session -> {
-			session.createNativeQuery( "DELETE FROM " + ENTITY_NAME ).executeUpdate();
-		} );
-	}
+    @Before
+    public void cleanup() {
+        inTransaction(session -> {
+            session.createNativeQuery("DELETE FROM " + ENTITY_NAME).executeUpdate();
+        });
+    }
 
-	@Test
-	@TestForIssue(jiraKey = "HHH-13266")
-	public void writeThenRead() {
-		withDefaultTimeZone( () -> {
-			inTransaction( session -> {
-				session.persist( createEntityForHibernateWrite( 1 ) );
-			} );
-			inTransaction( session -> {
-				T read = getActualPropertyValue( session.find( getEntityType(), 1 ) );
-				assertEquals(
-						"Writing then reading a value should return the original value",
-						getExpectedPropertyValueAfterHibernateRead(), read
-				);
-			} );
-		} );
-	}
+    @Test
+    @TestForIssue(jiraKey = "HHH-13266")
+    public void writeThenRead() {
+        withDefaultTimeZone(() -> {
+            inTransaction(session -> {
+                session.persist(createEntityForHibernateWrite(1));
+            });
+            inTransaction(session -> {
+                T read = getActualPropertyValue(session.find(getEntityType(), 1));
+                assertEquals("Writing then reading a value should return the original value",
+                        getExpectedPropertyValueAfterHibernateRead(), read);
+            });
+        });
+    }
 
-	@Test
-	@TestForIssue(jiraKey = "HHH-13266")
-	public void writeThenNativeRead() {
-		assumeNoJdbcTimeZone();
+    @Test
+    @TestForIssue(jiraKey = "HHH-13266")
+    public void writeThenNativeRead() {
+        assumeNoJdbcTimeZone();
 
-		withDefaultTimeZone( () -> {
-			inTransaction( session -> {
-				session.persist( createEntityForHibernateWrite( 1 ) );
-			} );
-			inTransaction( session -> {
-				session.doWork( connection -> {
-					try (PreparedStatement statement = connection.prepareStatement(
-							"SELECT " + PROPERTY_COLUMN_NAME + " FROM " + ENTITY_NAME + " WHERE " + ID_COLUMN_NAME + " = ?"
-					)) {
-						statement.setInt( 1, 1 );
-						statement.execute();
-						try (ResultSet resultSet = statement.getResultSet()) {
-							resultSet.next();
-							Object nativeRead = getActualJdbcValue( resultSet, 1 );
-							assertEquals(
-									"Values written by Hibernate ORM should match the original value (same day, hour, ...)",
-									getExpectedJdbcValueAfterHibernateWrite(),
-									nativeRead
-							);
-						}
-					}
-				} );
-			} );
-		} );
-	}
+        withDefaultTimeZone(() -> {
+            inTransaction(session -> {
+                session.persist(createEntityForHibernateWrite(1));
+            });
+            inTransaction(session -> {
+                session.doWork(connection -> {
+                    try (PreparedStatement statement = connection.prepareStatement("SELECT " + PROPERTY_COLUMN_NAME
+                            + " FROM " + ENTITY_NAME + " WHERE " + ID_COLUMN_NAME + " = ?")) {
+                        statement.setInt(1, 1);
+                        statement.execute();
+                        try (ResultSet resultSet = statement.getResultSet()) {
+                            resultSet.next();
+                            Object nativeRead = getActualJdbcValue(resultSet, 1);
+                            Object expected = getExpectedJdbcValueAfterHibernateWrite();
+                            
+                            // Potentially fix java.sql.Date instances
+                            nativeRead = zeroTimeComponents("actual", nativeRead);
+                            expected = zeroTimeComponents("expected", expected);
+                            
+                            assertEquals(
+                                    "Values written by Hibernate ORM should match the original value (same day, hour, ...)",
+                                    expected, nativeRead);
+                        }
+                    }
+                });
+            });
+        });
+    }
 
-	@Test
-	@TestForIssue(jiraKey = "HHH-13266")
-	public void nativeWriteThenRead() {
-		assumeNoJdbcTimeZone();
-		Logger logger = Logger.getLogger(getClass());
-		logger.info("Time zone = " + TimeZone.getDefault());
-		java.util.Date date1 = new java.util.Date(118,7,12);
-		logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
+    /**
+     * When the entity times are read from the database by SQL they are returned as
+     * java.sql.Date instances. The time components (hours, minutes and seconds)
+     * should all be zero
+     * 
+     * @param context Is this the actual or expected date value?
+     * @param date    The date value.
+     *
+     * @return The date value, with time components forced to zero if necessary.
+     */
+    private Object zeroTimeComponents(String context, Object date) {
 
-		withDefaultTimeZone( () -> {
-			inTransaction( session -> {
-				session.doWork( connection -> {
-					showTimeZone(logger, connection);
-					java.util.Date date2 = new java.util.Date(118,7,12);
-					logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
-					logger.info("Date2 = " + date2.toGMTString() + ' ' + date2.getTime());
+        if (!(date instanceof java.sql.Date))
+            return date;
 
-					try (PreparedStatement statement = connection.prepareStatement(
-							"INSERT INTO " + ENTITY_NAME + " (" + ID_COLUMN_NAME + ", " + PROPERTY_COLUMN_NAME + ") "
-							+ " VALUES ( ? , ? )"
-					)) {
-						statement.setInt( 1, 1 );
-						setJdbcValueForNonHibernateWrite( statement, 2 );
-						statement.execute();
-					}
-				} );
-			} );
+        java.sql.Date sqlDate = (java.sql.Date) date;
+        long millis = sqlDate.getTime();
 
-			inTransaction( session -> {
-				session.doWork( connection -> showTimeZone(logger, connection) );
-				
-				// NuoDB Start
-				// date3 cannot be cast as a java.sql.Date if the thevalue is a Time or
-				// Timestamp column. So change it to a java.util.Date and don't run code
-				// if INFO level logging is not enabled.
-				// NOTE: This code has been removed in Hibernate 6.2.
-				if (logger.isInfoEnabled()) {
-					java.util.Date date3 = (java.util.Date) session
-						.createNativeQuery("SELECT thevalue FROM theentity WHERE theid = 1").getSingleResult();
-					logger.info("Date3 = " + date3 + " " + date3.getTime());
-				}
-				// NuoDB End
-                
-				T read = getActualPropertyValue( session.find( getEntityType(), 1 ) );
-				assertEquals(
-						"Values written without Hibernate ORM should be read correctly by Hibernate ORM",
-						getExpectedPropertyValueAfterHibernateRead(), read
-				);
-			} );
-		} );
-	}
+        java.util.Date utilDate = new java.util.Date(millis);
 
-	private static void showTimeZone(Logger logger, Connection connection) throws SQLException {
-		logger.info("Time zone = " + TimeZone.getDefault());
+        if (utilDate.getHours() == 0 && utilDate.getMinutes() == 0 && utilDate.getSeconds() == 0) {
+            log.warn("Time components of " + context + " java.sql.Date correct: " + date + " " + date.getClass() //
+                    + " " + millis + " " + new java.util.Date(millis));
 
-		ResultSet rs = connection.createStatement().executeQuery( //
-				"SELECT Value FROM System.ConnectionProperties WHERE Property = 'TimeZone'");
-		if (rs.next() ) {
-			String dbTz = rs.getString(1);
-			logger.info("    Database Time Zone = " + dbTz);
-		}
-	}
+            return date;
+        }
+        
+        log.warn(">> Before: " + context + "   = " + date + " " + date.getClass() //
+                + " " + millis + " " + new java.util.Date(millis));
 
-	protected final void withDefaultTimeZone(Runnable runnable) {
-		TimeZone timeZoneBefore = TimeZone.getDefault();
-		TimeZone.setDefault( toTimeZone( env.defaultJvmTimeZone ) );
-		// Clear the connection pool to avoid issues with drivers that initialize the session TZ to the system TZ
-		SharedDriverManagerConnectionProviderImpl.getInstance().reset();
-		/*
-		 * Run the code in a new thread, because some libraries (looking at you, h2 JDBC driver)
-		 * cache data dependent on the default timezone in thread local variables,
-		 * and we want this data to be reinitialized with the new default time zone.
-		 */
-		try {
-			ExecutorService executor = Executors.newSingleThreadExecutor();
-			Future<?> future = executor.submit( runnable );
-			executor.shutdown();
-			future.get();
-		}
-		catch (InterruptedException e) {
-			throw new IllegalStateException( "Interrupted while testing", e );
-		}
-		catch (ExecutionException e) {
-			Throwable cause = e.getCause();
-			if ( cause instanceof RuntimeException ) {
-				throw (RuntimeException) cause;
-			}
-			else if ( cause instanceof Error ) {
-				throw (Error) cause;
-			}
-			else {
-				throw new IllegalStateException( "Unexpected exception while testing", cause );
-			}
-		}
-		finally {
-			TimeZone.setDefault( timeZoneBefore );
-			// Clear the connection pool to avoid issues with drivers that initialize the session TZ to the system TZ
-			SharedDriverManagerConnectionProviderImpl.getInstance().reset();
-		}
-	}
+        // Force to zero
+        utilDate.setHours(0);
+        utilDate.setMinutes(0);
+        utilDate.setSeconds(0);
 
-	private static TimeZone toTimeZone(ZoneId zoneId) {
-		String idString = zoneId.getId();
-		if ( idString.startsWith( "UTC+" ) || idString.startsWith( "UTC-" ) ) {
-			// Apparently TimeZone doesn't understand UTC+XXX nor UTC-XXX
-			// Using GMT+XXX or GMT-XXX as a fallback
-			idString = "GMT" + idString.substring( "UTC".length() );
-		}
+        java.sql.Date newDate = new java.sql.Date(utilDate.getTime());
+        millis = newDate.getTime();
 
-		TimeZone result = TimeZone.getTimeZone( idString );
-		if ( !idString.equals( result.getID() ) ) {
-			// If the timezone is not understood, getTimeZone returns GMT and the condition above is true
-			throw new IllegalStateException( "Attempting to test an unsupported timezone: " + zoneId );
-		}
+        log.warn(">> After " + context + "   = " + newDate + " " + date.getClass() //
+                + " " + millis + " " + new java.util.Date(millis));
 
-		return result;
-	}
+        return newDate;
+    }
 
-	protected final Class<? extends AbstractRemappingH2Dialect> getRemappingDialectClass() {
-		return env.remappingDialectClass;
-	}
+    @Test
+    @TestForIssue(jiraKey = "HHH-13266")
+    public void nativeWriteThenRead() {
+        assumeNoJdbcTimeZone();
+        Logger logger = Logger.getLogger(getClass());
+        logger.info("Time zone = " + TimeZone.getDefault());
+        java.util.Date date1 = new java.util.Date(118, 7, 12);
+        logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
 
-	protected void assumeNoJdbcTimeZone() {
-		Assume.assumeTrue(
-				"Tests with native read/writes are only relevant when not using " + AvailableSettings.JDBC_TIME_ZONE
-						+ ", because the expectations do not take that time zone into account."
-						+ " When this property is set, we only test that a write by Hibernate followed by "
-						+ " a read by Hibernate returns the same value.",
-				env.hibernateJdbcTimeZone == null
-		);
-	}
+        withDefaultTimeZone(() -> {
+            inTransaction(session -> {
+                session.doWork(connection -> {
+                    showTimeZone(logger, connection);
+                    java.util.Date date2 = new java.util.Date(118, 7, 12);
+                    logger.info("Date1 = " + date1.toGMTString() + ' ' + date1.getTime());
+                    logger.info("Date2 = " + date2.toGMTString() + ' ' + date2.getTime());
 
-	protected static abstract class AbstractParametersBuilder<S extends AbstractParametersBuilder<S>> {
+                    try (PreparedStatement statement = connection.prepareStatement("INSERT INTO " + ENTITY_NAME + " ("
+                            + ID_COLUMN_NAME + ", " + PROPERTY_COLUMN_NAME + ") " + " VALUES ( ? , ? )")) {
+                        statement.setInt(1, 1);
+                        setJdbcValueForNonHibernateWrite(statement, 2);
+                        statement.execute();
+                    }
+                });
+            });
 
-		private final Dialect dialect;
+            inTransaction(session -> {
+                session.doWork(connection -> showTimeZone(logger, connection));
 
-		private final List<Object[]> result = new ArrayList<>();
+                // NuoDB Start
+                // date3 cannot be cast as a java.sql.Date if the thevalue is a Time or
+                // Timestamp column. So change it to a java.util.Date and don't run code
+                // if INFO level logging is not enabled.
+                // NOTE: This code has been removed in Hibernate 6.2.
+                if (logger.isInfoEnabled()) {
+                    java.util.Date date3 = (java.util.Date) session
+                            .createNativeQuery("SELECT thevalue FROM theentity WHERE theid = 1").getSingleResult();
+                    logger.info("Date3 = " + date3 + " " + date3.getTime());
+                }
+                // NuoDB End
 
-		private final List<Class<? extends AbstractRemappingH2Dialect>> remappingDialectClasses = new ArrayList<>();
+                T read = getActualPropertyValue(session.find(getEntityType(), 1));
+                assertEquals("Values written without Hibernate ORM should be read correctly by Hibernate ORM",
+                        getExpectedPropertyValueAfterHibernateRead(), read);
+            });
+        });
+    }
 
-		private ZoneId forcedJdbcTimeZone = null;
+    private static void showTimeZone(Logger logger, Connection connection) throws SQLException {
+        logger.info("Time zone = " + TimeZone.getDefault());
 
-		protected AbstractParametersBuilder() {
-			dialect = determineDialect();
-			remappingDialectClasses.add( null ); // Always test without remapping
-		}
+        ResultSet rs = connection.createStatement().executeQuery( //
+                "SELECT Value FROM System.ConnectionProperties WHERE Property = 'TimeZone'");
+        if (rs.next()) {
+            String dbTz = rs.getString(1);
+            logger.info("    Database Time Zone = " + dbTz);
+        }
+    }
 
-		public S skippedForDialects(List<Class<?>> dialectClasses, Consumer<S> skippedIfDialectMatchesClasses) {
-			boolean skip = false;
-			for ( Class<?> dialectClass : dialectClasses ) {
-				if ( dialectClass.isInstance( dialect ) ) {
-					skip = true;
-				}
-			}
-			if ( !skip ) {
-				skippedIfDialectMatchesClasses.accept( thisAsS() );
-			}
-			return thisAsS();
-		}
+    protected final void withDefaultTimeZone(Runnable runnable) {
+        TimeZone timeZoneBefore = TimeZone.getDefault();
+        TimeZone.setDefault(toTimeZone(env.defaultJvmTimeZone));
+        // Clear the connection pool to avoid issues with drivers that initialize the
+        // session TZ to the system TZ
+        SharedDriverManagerConnectionProviderImpl.getInstance().reset();
+        /*
+         * Run the code in a new thread, because some libraries (looking at you, h2 JDBC
+         * driver) cache data dependent on the default timezone in thread local
+         * variables, and we want this data to be reinitialized with the new default
+         * time zone.
+         */
+        try {
+            ExecutorService executor = Executors.newSingleThreadExecutor();
+            Future<?> future = executor.submit(runnable);
+            executor.shutdown();
+            future.get();
+        } catch (InterruptedException e) {
+            throw new IllegalStateException("Interrupted while testing", e);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            } else if (cause instanceof Error) {
+                throw (Error) cause;
+            } else {
+                throw new IllegalStateException("Unexpected exception while testing", cause);
+            }
+        } finally {
+            TimeZone.setDefault(timeZoneBefore);
+            // Clear the connection pool to avoid issues with drivers that initialize the
+            // session TZ to the system TZ
+            SharedDriverManagerConnectionProviderImpl.getInstance().reset();
+        }
+    }
 
-		public S skippedForDialects(Predicate<Dialect> skipPredicate, Consumer<S> skippedIfDialectMatchesClasses) {
-			if ( !skipPredicate.test( dialect ) ) {
-				skippedIfDialectMatchesClasses.accept( thisAsS() );
-			}
-			return thisAsS();
-		}
+    private static TimeZone toTimeZone(ZoneId zoneId) {
+        String idString = zoneId.getId();
+        if (idString.startsWith("UTC+") || idString.startsWith("UTC-")) {
+            // Apparently TimeZone doesn't understand UTC+XXX nor UTC-XXX
+            // Using GMT+XXX or GMT-XXX as a fallback
+            idString = "GMT" + idString.substring("UTC".length());
+        }
 
-		public S withForcedJdbcTimezone(String zoneIdString, Consumer<S> contributor) {
-			ZoneId zoneId = ZoneId.of( zoneIdString );
-			this.forcedJdbcTimeZone = zoneId;
-			try {
-				contributor.accept( thisAsS() );
-			}
-			finally {
-				this.forcedJdbcTimeZone = null;
-			}
-			return thisAsS();
-		}
+        TimeZone result = TimeZone.getTimeZone(idString);
+        if (!idString.equals(result.getID())) {
+            // If the timezone is not understood, getTimeZone returns GMT and the condition
+            // above is true
+            throw new IllegalStateException("Attempting to test an unsupported timezone: " + zoneId);
+        }
 
-		@SafeVarargs
-		public final S alsoTestRemappingsWithH2(Class<? extends AbstractRemappingH2Dialect> ... dialectClasses) {
-			if ( dialect instanceof H2Dialect && !( (H2Dialect) dialect ).hasOddDstBehavior() ) {
-				// Only test remappings with H2
-				Collections.addAll( remappingDialectClasses, dialectClasses );
-			}
-			return thisAsS();
-		}
+        return result;
+    }
 
-		protected final boolean isNanosecondPrecisionSupported() {
-			// This used to return true for H2Dialect, but as of 1.4.197 h2 does not use ns precision by default anymore.
-			// Bringing back ns precision would require timestamp(9) in the dialect class.
-			return false;
-		}
+    protected final Class<? extends AbstractRemappingH2Dialect> getRemappingDialectClass() {
+        return env.remappingDialectClass;
+    }
 
-		protected final S add(ZoneId defaultJvmTimeZone, Object ... subClassParameters) {
-			for ( Class<? extends AbstractRemappingH2Dialect> remappingDialectClass : remappingDialectClasses ) {
-				List<Object> parameters = new ArrayList<>();
-				parameters.add(
-						new EnvironmentParameters(
-								defaultJvmTimeZone,
-								forcedJdbcTimeZone,
-								remappingDialectClass
-						)
-				);
-				Collections.addAll( parameters, subClassParameters );
-				result.add( parameters.toArray() );
-			}
-			if ( forcedJdbcTimeZone == null ) {
-				for ( ZoneId hibernateJdbcTimeZone : getHibernateJdbcTimeZonesToTest() ) {
-					List<Object> parameters = new ArrayList<>();
-					parameters.add(
-							new EnvironmentParameters(
-									defaultJvmTimeZone,
-									hibernateJdbcTimeZone,
-									null
-							)
-					);
-					Collections.addAll( parameters, subClassParameters );
-					result.add( parameters.toArray() );
-				}
-			}
-			return thisAsS();
-		}
+    protected void assumeNoJdbcTimeZone() {
+        Assume.assumeTrue(
+                "Tests with native read/writes are only relevant when not using " + AvailableSettings.JDBC_TIME_ZONE
+                        + ", because the expectations do not take that time zone into account."
+                        + " When this property is set, we only test that a write by Hibernate followed by "
+                        + " a read by Hibernate returns the same value.",
+                env.hibernateJdbcTimeZone == null);
+    }
 
-		protected Iterable<? extends ZoneId> getHibernateJdbcTimeZonesToTest() {
-			return Arrays.asList( ZONE_GMT, ZONE_OSLO );
-		}
+    protected static abstract class AbstractParametersBuilder<S extends AbstractParametersBuilder<S>> {
 
-		private S thisAsS() {
-			return (S) this;
-		}
+        private final Dialect dialect;
 
-		public List<Object[]> build() {
-			return result;
-		}
+        private final List<Object[]> result = new ArrayList<>();
 
-	}
+        private final List<Class<? extends AbstractRemappingH2Dialect>> remappingDialectClasses = new ArrayList<>();
 
-	protected final static class EnvironmentParameters {
+        private ZoneId forcedJdbcTimeZone = null;
 
-		/*
-		 * The default timezone affects conversions done using java.util,
-		 * which is why we take it into account even with timezone-independent types such as Instant.
-		 */
-		private final ZoneId defaultJvmTimeZone;
+        protected AbstractParametersBuilder() {
+            dialect = determineDialect();
+            remappingDialectClasses.add(null); // Always test without remapping
+        }
 
-		/**
-		 * The Hibernate setting, {@value AvailableSettings#JDBC_TIME_ZONE},
-		 * may affect a lot of time-related types,
-		 * which is why we take it into account even with timezone-independent types such as Instant.
-		 */
-		private final ZoneId hibernateJdbcTimeZone;
+        public S skippedForDialects(List<Class<?>> dialectClasses, Consumer<S> skippedIfDialectMatchesClasses) {
+            boolean skip = false;
+            for (Class<?> dialectClass : dialectClasses) {
+                if (dialectClass.isInstance(dialect)) {
+                    skip = true;
+                }
+            }
+            if (!skip) {
+                skippedIfDialectMatchesClasses.accept(thisAsS());
+            }
+            return thisAsS();
+        }
 
-		private final Class<? extends AbstractRemappingH2Dialect> remappingDialectClass;
+        public S skippedForDialects(Predicate<Dialect> skipPredicate, Consumer<S> skippedIfDialectMatchesClasses) {
+            if (!skipPredicate.test(dialect)) {
+                skippedIfDialectMatchesClasses.accept(thisAsS());
+            }
+            return thisAsS();
+        }
 
-		private EnvironmentParameters(ZoneId defaultJvmTimeZone, ZoneId hibernateJdbcTimeZone,
-				Class<? extends AbstractRemappingH2Dialect> remappingDialectClass) {
-			this.defaultJvmTimeZone = defaultJvmTimeZone;
-			this.hibernateJdbcTimeZone = hibernateJdbcTimeZone;
-			this.remappingDialectClass = remappingDialectClass;
-		}
+        public S withForcedJdbcTimezone(String zoneIdString, Consumer<S> contributor) {
+            ZoneId zoneId = ZoneId.of(zoneIdString);
+            this.forcedJdbcTimeZone = zoneId;
+            try {
+                contributor.accept(thisAsS());
+            } finally {
+                this.forcedJdbcTimeZone = null;
+            }
+            return thisAsS();
+        }
 
-		@Override
-		public String toString() {
-			return String.format(
-					"[JVM TZ: %s, JDBC TZ: %s, remapping dialect: %s]",
-					defaultJvmTimeZone,
-					hibernateJdbcTimeZone,
-					remappingDialectClass == null ? null : remappingDialectClass.getSimpleName()
-			);
-		}
-	}
+        @SafeVarargs
+        public final S alsoTestRemappingsWithH2(Class<? extends AbstractRemappingH2Dialect>... dialectClasses) {
+            if (dialect instanceof H2Dialect && !((H2Dialect) dialect).hasOddDstBehavior()) {
+                // Only test remappings with H2
+                Collections.addAll(remappingDialectClasses, dialectClasses);
+            }
+            return thisAsS();
+        }
 
-	protected static class AbstractRemappingH2Dialect extends H2Dialect {
-		private final int overriddenSqlTypeCode;
-		private final int overridingSqlTypeCode;
+        protected final boolean isNanosecondPrecisionSupported() {
+            // This used to return true for H2Dialect, but as of 1.4.197 h2 does not use ns
+            // precision by default anymore.
+            // Bringing back ns precision would require timestamp(9) in the dialect class.
+            return false;
+        }
 
-		public AbstractRemappingH2Dialect(int overriddenSqlTypeCode, int overridingSqlTypeCode) {
-			super( getDialect().getVersion() );
-			this.overriddenSqlTypeCode = overriddenSqlTypeCode;
-			this.overridingSqlTypeCode = overridingSqlTypeCode;
-		}
+        protected final S add(ZoneId defaultJvmTimeZone, Object... subClassParameters) {
+            for (Class<? extends AbstractRemappingH2Dialect> remappingDialectClass : remappingDialectClasses) {
+                List<Object> parameters = new ArrayList<>();
+                parameters
+                        .add(new EnvironmentParameters(defaultJvmTimeZone, forcedJdbcTimeZone, remappingDialectClass));
+                Collections.addAll(parameters, subClassParameters);
+                result.add(parameters.toArray());
+            }
+            if (forcedJdbcTimeZone == null) {
+                for (ZoneId hibernateJdbcTimeZone : getHibernateJdbcTimeZonesToTest()) {
+                    List<Object> parameters = new ArrayList<>();
+                    parameters.add(new EnvironmentParameters(defaultJvmTimeZone, hibernateJdbcTimeZone, null));
+                    Collections.addAll(parameters, subClassParameters);
+                    result.add(parameters.toArray());
+                }
+            }
+            return thisAsS();
+        }
 
-		@Override
-		public void contributeTypes(TypeContributions typeContributions, ServiceRegistry serviceRegistry) {
-			super.contributeTypes( typeContributions, serviceRegistry );
+        protected Iterable<? extends ZoneId> getHibernateJdbcTimeZonesToTest() {
+            return Arrays.asList(ZONE_GMT, ZONE_OSLO);
+        }
 
-			typeContributions.getTypeConfiguration().getJdbcTypeRegistry().addDescriptor(
-					overriddenSqlTypeCode,
-					typeContributions.getTypeConfiguration().getJdbcTypeRegistry().getDescriptor(
-							overridingSqlTypeCode
-					)
-			);
-		}
+        private S thisAsS() {
+            return (S) this;
+        }
 
-	}
+        public List<Object[]> build() {
+            return result;
+        }
+
+    }
+
+    protected final static class EnvironmentParameters {
+
+        /*
+         * The default timezone affects conversions done using java.util, which is why
+         * we take it into account even with timezone-independent types such as Instant.
+         */
+        private final ZoneId defaultJvmTimeZone;
+
+        /**
+         * The Hibernate setting, {@value AvailableSettings#JDBC_TIME_ZONE}, may affect
+         * a lot of time-related types, which is why we take it into account even with
+         * timezone-independent types such as Instant.
+         */
+        private final ZoneId hibernateJdbcTimeZone;
+
+        private final Class<? extends AbstractRemappingH2Dialect> remappingDialectClass;
+
+        private EnvironmentParameters(ZoneId defaultJvmTimeZone, ZoneId hibernateJdbcTimeZone,
+                Class<? extends AbstractRemappingH2Dialect> remappingDialectClass) {
+            this.defaultJvmTimeZone = defaultJvmTimeZone;
+            this.hibernateJdbcTimeZone = hibernateJdbcTimeZone;
+            this.remappingDialectClass = remappingDialectClass;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("[JVM TZ: %s, JDBC TZ: %s, remapping dialect: %s]", defaultJvmTimeZone,
+                    hibernateJdbcTimeZone,
+                    remappingDialectClass == null ? null : remappingDialectClass.getSimpleName());
+        }
+    }
+
+    protected static class AbstractRemappingH2Dialect extends H2Dialect {
+        private final int overriddenSqlTypeCode;
+        private final int overridingSqlTypeCode;
+
+        public AbstractRemappingH2Dialect(int overriddenSqlTypeCode, int overridingSqlTypeCode) {
+            super(getDialect().getVersion());
+            this.overriddenSqlTypeCode = overriddenSqlTypeCode;
+            this.overridingSqlTypeCode = overridingSqlTypeCode;
+        }
+
+        @Override
+        public void contributeTypes(TypeContributions typeContributions, ServiceRegistry serviceRegistry) {
+            super.contributeTypes(typeContributions, serviceRegistry);
+
+            typeContributions.getTypeConfiguration().getJdbcTypeRegistry().addDescriptor(overriddenSqlTypeCode,
+                    typeContributions.getTypeConfiguration().getJdbcTypeRegistry()
+                            .getDescriptor(overridingSqlTypeCode));
+        }
+
+    }
 
 }

@@ -1,0 +1,57 @@
+# 2023-11-17
+
+# ---------------------------------------------------------------------
+# Failing tests that need fixing
+# ---------------------------------------------------------------------
+#org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.bootstrap.jpa.PersistenceUnitInfoTests (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.bootstrap.jpa.PersistenceUnitOverridesTests.testIntegrationOverridesOfPersistenceXmlDataSource (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.bootstrap.jpa.PersistenceUnitOverridesTests.testPassingIntegrationJpaDataSourceOverrideForJtaDataSourceElement (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.bootstrap.jpa.PersistenceUnitOverridesTests.testPassingIntegrationJtaDataSourceOverrideForJpaJdbcSettings (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.multitenancy.ConfigurationValidationTest.testReleaseMode (Works when invoked manually but not as part of matrix tests)
+org.hibernate.orm.test.type.LocalDateTest (Fixed in 5.1, works when invoked manually but not as part of matrix tests)
+
+
+# ---------------------------------------------------------------------
+# Tests to skip because they generate SQL syntax not supported by NuoDB
+# ---------------------------------------------------------------------
+#org.hibernate.orm.test.bootstrap.binding.annotations.embedded.EmbeddedTest.testQueryWithEmbeddedParameterAllNull (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.bootstrap.binding.annotations.embedded.EmbeddedTest.testQueryWithEmbeddedParameterOneNull (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.query.hql.DistinctFromTest.testNotDistinctFromNullParam (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.query.hql.DistinctFromTest.testNotDistinctFromStringParam (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.VarbinaryArrayTest (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.BasicListTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.BasicSortedSetTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.BooleanArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.DateArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.DoubleArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.EnumArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.EnumSetConverterTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.EnumSetTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.FloatArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.IntegerArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.LongArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.ShortArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.TimeArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+org.hibernate.orm.test.type.TimestampArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
+
+org.hibernate.orm.test.hql.size.filter.WhereAnnotatedOneToManySizeTest.orderBy_sizeOf (Subqueries in ORDER BY clause)
+
+org.hibernate.orm.test.jpa.criteria.fetchscroll.CriteriaToScrollableResultsFetchTest.testWithScroll  (Result set is forward-only)
+
+#org.hibernate.orm.test.jpa.criteria.subquery.UncorrelatedSubqueryTest.testEqualAll (unexpected ALL)
+org.hibernate.orm.test.query.hql.SubqueryOperatorsTest.testEvery (unexpected ALL)
+
+#org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithFullJoin (join type "FULLOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithFullJoinWithIdDereference (join type "FULLOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithFullNormalJoin (join type "FULLOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithFullNormalJoinWithIdDereference (join type "FULLOUTER" is not yet implemented)
+
+#org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightJoin (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightJoinWithIdDereference (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightJoinWithInnerImplicitJoins (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightJoinWithNonOptionalAssociationProjections (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightNormalJoin (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightNormalJoinWithIdDereference (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightNormalJoinWithNonOptionalAssociationProjections (join type "RIGHTOUTER" is not yet implemented)
+org.hibernate.orm.test.query.hql.EntityJoinTest.testRightOuterEntityJoins (join type "RIGHTOUTER" is not yet implemented)

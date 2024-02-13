@@ -573,17 +573,21 @@ public class TestUtils {
         boolean skipTest;
         String reasonToSkip = "";
 
-        if ("false".equals(skip))
+        if ("false".equalsIgnoreCase(skip))
             skipTest = false;
-        else if ("true".equals(skip)) {
+        else if ("true".equalsIgnoreCase(skip)) {
             skipTest = true;
         } else {
             skipTest = true;
-            reasonToSkip = skip.length() == 0 ? " (Reason not given)" : skip;
+            reasonToSkip = skip.length() == 0 ? " (Reason not given)" : " (Skip-check returned '" + skip + "')";
         }
 
-        LOGGER.warn("Skip " + testClass.getSimpleName() + '.' + frameworkMethod.getName() + " when using NuoDB? "
-                + skipTest + reasonToSkip);
+        if (skipTest)
+            LOGGER.warn("Skip " + testClass.getSimpleName() + '.' + frameworkMethod.getName() //
+                    + " when using NuoDB" + reasonToSkip);
+        else
+            LOGGER.warn("Run " + testClass.getSimpleName() + '.' + frameworkMethod.getName() + " when using NuoDB ");
+
         return skipTest;
     }
 

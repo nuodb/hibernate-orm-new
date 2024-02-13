@@ -101,7 +101,8 @@ public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase 
 	public void orderBy_sizeOf() {
 		inSession( session -> {
 			QueryImplementor<Object[]> query = session.createQuery(
-					"select r, size(r.cities) from Region r order by size(r.cities) desc" );
+				//"select r, size(r.cities) as num from Region r order by size(r.cities) desc" );
+		        "select r, size(r.cities) as num from Region r order by num desc" ); // NuoDB
 			List<Object[]> result = query.getResultList();
 			assertThat( result ).extracting( f -> f[0] ).extracting( "name" ).containsExactly( "Lombardy", "Lazio" );
 			assertThat( result ).extracting( f -> f[1] ).containsExactly( 2, 1 );

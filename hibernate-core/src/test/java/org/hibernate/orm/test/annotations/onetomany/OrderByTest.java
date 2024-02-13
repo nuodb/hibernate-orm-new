@@ -52,7 +52,7 @@ import org.junit.Test;
  */
 public class OrderByTest extends BaseCoreFunctionalTestCase {
 	@Test
-	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
+	//@SkipForDialect(NuoDBDialect.class) // ORDER BY ... NULLS LAST not supported
 	public void testOrderByOnIdClassProperties() throws Exception {
 		Session s = openSession( );
 		s.getTransaction().begin();
@@ -420,7 +420,7 @@ public class OrderByTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-9002" )
-	@SkipForDialect(NuoDBDialect.class) // Parentheses in generated SQL
+	//@SkipForDialect(NuoDBDialect.class) // ORDER BY ... NULLS LAST not supported
 	public void testOrderByOneToManyWithJoinTable() {
 		A a = new A();
 		a.setName( "a" );
