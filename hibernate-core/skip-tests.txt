@@ -15,6 +15,8 @@ org.hibernate.orm.test.type.LocalDateTest (Fixed in 5.1, works when invoked manu
 # ---------------------------------------------------------------------
 # Tests to skip because they generate SQL syntax not supported by NuoDB
 # ---------------------------------------------------------------------
+org.hibernate.orm.test.boot.database.qualfiedTableNaming.DefaultCatalogAndSchemaTest (NuoDB does not use Catalogs)
+
 org.hibernate.orm.test.bootstrap.binding.annotations.embedded.EmbeddedTest.testQueryWithEmbeddedParameterAllNull (IS [NOT] DISTINCT FROM not supported)
 org.hibernate.orm.test.bootstrap.binding.annotations.embedded.EmbeddedTest.testQueryWithEmbeddedParameterOneNull (IS [NOT] DISTINCT FROM not supported)
 org.hibernate.orm.test.query.hql.DistinctFromTest.testNotDistinctFromNullParam (IS [NOT] DISTINCT FROM not supported)
