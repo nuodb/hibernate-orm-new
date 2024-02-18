@@ -6,11 +6,15 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.lazy.proxy;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.Hibernate;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
@@ -19,8 +23,6 @@ import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.spi.PersistentAttributeInterceptable;
 import org.hibernate.engine.spi.PersistentAttributeInterceptor;
 import org.hibernate.stat.Statistics;
-
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -29,11 +31,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
 
 /**
  * @author Steve Ebersole
@@ -44,6 +41,7 @@ import static org.junit.Assert.assertEquals;
 @EnhancementOptions( lazyLoading = true )
 public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTestCase {
 	@Test
+	@SuppressWarnings("unused")
 	public void loadEntityWithAssociationToAbstract() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -63,7 +61,6 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	}
 
 	@Test
-	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstract() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -128,7 +125,6 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	 * fetching to issues just a single select
 	 */
 	@Test
-	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstractRuntimeFetch() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -197,6 +193,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 
 
 	@Before
+	@SuppressWarnings("deprecation")
 	public void prepareTestData() {
 		inTransaction(
 				session -> {
@@ -251,6 +248,7 @@ public class LazyGroupWithInheritanceTest extends BaseNonConfigCoreFunctionalTes
 	}
 
 	@After
+	@SuppressWarnings("deprecation")
 	public void cleanUpTestData() {
 		inTransaction(
 				session -> {

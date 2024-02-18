@@ -6,37 +6,34 @@
  */
 package org.hibernate.orm.test.annotations.onetoone;
 
-import java.util.Iterator;
-
-import com.nuodb.hibernate.NuoDBDialect;
-import jakarta.persistence.criteria.CriteriaBuilder;
-import jakarta.persistence.criteria.CriteriaQuery;
-import jakarta.persistence.criteria.Root;
-
-import org.hibernate.query.Query;
-import org.hibernate.Session;
-import org.hibernate.Transaction;
-import org.hibernate.mapping.Column;
-import org.hibernate.mapping.Join;
-import org.hibernate.mapping.PersistentClass;
-import org.hibernate.mapping.Table;
-
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
-import org.hibernate.testing.transaction.TransactionUtil;
-import org.hibernate.orm.test.annotations.Customer;
-import org.hibernate.orm.test.annotations.Discount;
-import org.hibernate.orm.test.annotations.Passport;
-import org.hibernate.orm.test.annotations.Ticket;
-import org.junit.Test;
-
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Iterator;
+
+import org.hibernate.Session;
+import org.hibernate.Transaction;
+import org.hibernate.mapping.Column;
+import org.hibernate.mapping.Join;
+import org.hibernate.mapping.PersistentClass;
+import org.hibernate.mapping.Table;
+import org.hibernate.orm.test.annotations.Customer;
+import org.hibernate.orm.test.annotations.Discount;
+import org.hibernate.orm.test.annotations.Passport;
+import org.hibernate.orm.test.annotations.Ticket;
+import org.hibernate.query.Query;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
+import org.hibernate.testing.transaction.TransactionUtil;
+import org.junit.Test;
+
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Root;
 
 /**
  * @author Emmanuel Bernard
@@ -159,7 +156,6 @@ public class OneToOneTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testCompositePk() {
 		final ComputerPk cid = new ComputerPk();
 		final SerialNumber sn = new SerialNumber();

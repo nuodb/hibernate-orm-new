@@ -6,7 +6,6 @@
  */
 package org.hibernate.orm.test.jpa.ql;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import jakarta.persistence.DiscriminatorColumn;
 import jakarta.persistence.DiscriminatorType;
 import jakarta.persistence.DiscriminatorValue;
@@ -107,8 +106,6 @@ public class TreatKeywordTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-8637" )
-	@SkipForDialect(value=NuoDBDialect.class, comment="Parentheses in SQL using JOIN")
-	// NuoDB 26-Jun-2023: Once join issue is resolved, will still fail due to an assert failure
 	public void testFilteringJoinedSubclasses() {
 		Session s = openSession();
 		s.beginTransaction();

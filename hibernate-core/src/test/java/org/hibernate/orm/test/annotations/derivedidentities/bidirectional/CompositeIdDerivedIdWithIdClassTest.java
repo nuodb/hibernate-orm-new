@@ -6,16 +6,18 @@
  */
 package org.hibernate.orm.test.annotations.derivedidentities.bidirectional;
 
+import static org.hibernate.cfg.AvailableSettings.DEFAULT_LIST_SEMANTICS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.jpa.internal.PersistenceUnitUtilImpl;
-
-import org.hibernate.testing.Skip;
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.ImplicitListAsBagProvider;
@@ -35,12 +37,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 
-import static org.hibernate.cfg.AvailableSettings.DEFAULT_LIST_SEMANTICS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /**
  * @author Andrea Boriero
  */
@@ -57,10 +53,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 		}
 )
 @SessionFactory
-@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 public class CompositeIdDerivedIdWithIdClassTest {
 
 	@AfterEach
+	@SuppressWarnings("deprecation")
 	public void cleanup(SessionFactoryScope scope) {
 		scope.inTransaction(
 				session -> {
@@ -72,6 +68,7 @@ public class CompositeIdDerivedIdWithIdClassTest {
 
 	@Test
 	@TestForIssue(jiraKey = "HHH-11328")
+	@SuppressWarnings("unused")
 	public void testMergeTransientIdManyToOne(SessionFactoryScope scope) {
 System.err.println();
 System.err.println(">> >> >> CLASSPATH=\n" + System.getProperty("java.class.path").toString().replace(':', '\n'));
@@ -221,6 +218,7 @@ System.err.println();
 	}
 
 	@Entity(name = "Cart")
+	@SuppressWarnings("serial")
 	public static class ShoppingCart implements Serializable {
 		@Id
 		@Column(name = "id", nullable = false)
@@ -264,6 +262,7 @@ System.err.println();
 
 	@Entity(name = "LineItem")
 	@IdClass(LineItem.Pk.class)
+	@SuppressWarnings("serial")
 	public static class LineItem implements Serializable {
 
 		@Id

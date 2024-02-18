@@ -23,9 +23,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import com.nuodb.hibernate.NuoDBDialect;
-
 @TestForIssue(jiraKey = "HHH-14585")
+@SuppressWarnings("deprecation")
 public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase {
 
 	@Override
@@ -97,7 +96,7 @@ public class WhereAnnotatedOneToManySizeTest extends BaseCoreFunctionalTestCase 
 	@SkipForDialect(value = AbstractHANADialect.class, comment = "HANA db does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = TiDBDialect.class, comment = "TiDB db does not support correlated subqueries in the ORDER BY clause")
 	@SkipForDialect(value = SybaseDialect.class, comment = "Sybase db does not support subqueries in the ORDER BY clause")
-	@SkipForDialect(value = NuoDBDialect.class, comment = "NuoDB does not support subqueries in the ORDER BY clause")
+	@SuppressWarnings("unchecked")
 	public void orderBy_sizeOf() {
 		inSession( session -> {
 			QueryImplementor<Object[]> query = session.createQuery(

@@ -12,9 +12,21 @@ org.hibernate.orm.test.multitenancy.ConfigurationValidationTest.testReleaseMode 
 org.hibernate.orm.test.type.LocalDateTest (Fixed in 5.1, works when invoked manually but not as part of matrix tests)
 
 
+#org.hibernate.orm.test.bootstrap.jpa.PersistenceUnitOverridesTests
+
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.tinyintType  (No support for the tinyint datatype so we use smallint)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.floatType  (Stores all floating point numbers as double, never returns a float)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.realType  (Stores all floating point numbers as double, never returns a float)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.numericType  (Value is too big for the maximum allowed precision of NuoDB)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.decimalType  (Value is too big for the maximum allowed precision of NuoDB)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.binaryTypes  (NuoDB maps BINARY and VARBINARY to BLOB)
+org.hibernate.orm.test.jpa.query.NativeQueryResultTypeAutoDiscoveryTest.longBinaryType  (NuoDB maps LONGVARCHAR to BLOB)
+
+
 # ---------------------------------------------------------------------
 # Tests to skip because they generate SQL syntax not supported by NuoDB
 # ---------------------------------------------------------------------
+
 org.hibernate.orm.test.boot.database.qualfiedTableNaming.DefaultCatalogAndSchemaTest (NuoDB does not use Catalogs)
 
 org.hibernate.orm.test.bootstrap.binding.annotations.embedded.EmbeddedTest.testQueryWithEmbeddedParameterAllNull (IS [NOT] DISTINCT FROM not supported)
@@ -38,6 +50,18 @@ org.hibernate.orm.test.type.TimeArrayTest.testQuery (IS [NOT] DISTINCT FROM not 
 org.hibernate.orm.test.type.TimestampArrayTest.testQuery (IS [NOT] DISTINCT FROM not supported)
 
 org.hibernate.orm.test.hql.size.filter.WhereAnnotatedOneToManySizeTest.orderBy_sizeOf (Subqueries in ORDER BY clause)
+org.hibernate.orm.test.hql.size.filter.WhereAnnotatedOneToManySizeTest.orderBy_sizeOf (Subqueries in the ORDER BY clause)
+
+org.hibernate.orm.test.annotations.onetomany.OrderByTest.testOrderByOnIdClassProperties (multi-column value only allowed in comparison operators)
+org.hibernate.orm.test.annotations.onetomany.OneToManyTest.testJoinColumns (multi-column value only allowed in comparison operators)
+org.hibernate.orm.test.annotations.onetoone.OneToOneTest.testCompositePk (multi-column value only allowed in comparison operators)
+org.hibernate.orm.test.annotations.derivedidentities.bidirectional.CompositeIdDerivedIdWithIdClassTest (multi-column value only allowed in comparison operators)
+
+
+org.hibernate.orm.test.id.enhanced.SequenceNamingStrategyTest (NuoDB supports sequences, but not pooled sequences, as Hibernate uses them)
+org.hibernate.orm.test.id.sequence.SequenceExportTest (NuoDB supports sequences, but not pooled sequences, as Hibernate uses them)
+org.hibernate.orm.test.schemaupdate.idbag.IdBagSequenceTest (NuoDB supports sequences, but not pooled sequences, as Hibernate uses them)
+
 
 org.hibernate.orm.test.jpa.criteria.fetchscroll.CriteriaToScrollableResultsFetchTest.testWithScroll  (Result set is forward-only)
 
@@ -58,6 +82,17 @@ org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightNormalJoinWithId
 org.hibernate.orm.test.join.OuterJoinTest.testJoinOrderWithRightNormalJoinWithNonOptionalAssociationProjections (join type "RIGHTOUTER" is not yet implemented)
 org.hibernate.orm.test.query.hql.EntityJoinTest.testRightOuterEntityJoins (join type "RIGHTOUTER" is not yet implemented)
 
+org.hibernate.orm.test.bytecode.enhancement.lazy.proxy.FetchGraphTest.testFetchingScroll (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.bytecode.enhancement.lazy.proxy.FetchGraphTest.testFetchingScroll2 (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.bytecode.enhancement.lazy.proxy.LazyGroupWithInheritanceAllowProxyTest.queryEntityWithAssociationToAbstractRuntimeFetch (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.bytecode.enhancement.lazy.proxy.LazyGroupWithInheritanceTest.queryEntityWithAssociationToAbstract (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.bytecode.enhancement.lazy.proxy.LazyGroupWithInheritanceTest.queryEntityWithAssociationToAbstractRuntimeFetch (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.annotations.onetomany.OneToManyTest.testOrderByOnSuperclassProperty (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.annotations.onetomany.OrderByTest.testOrderByOneToManyWithJoinTable (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.where.hbm.WhereTest.testHqlWithFetch (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.jpa.ql.TreatKeywordTest.testFilteringJoinedSubclasses (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.jpa.graphs.EntityGraphTest.inheritanceTest (Parentheses in SQL using JOIN)
+org.hibernate.orm.test.jpa.graphs.EntityGraphTest.attributeNodeInheritanceTest (Parentheses in SQL using JOIN)
 org.hibernate.orm.test.annotations.indexcoll.eager.EagerIndexedCollectionTest.testEntityKeyElementTarget (Parentheses in SQL using JOIN)
 org.hibernate.orm.test.annotations.indexcoll.eager.EagerIndexedCollectionTest.testEnumKeyType (Parentheses in SQL using JOIN)
 org.hibernate.orm.test.annotations.indexcoll.eager.EagerIndexedCollectionTest.testRealMap (Parentheses in SQL using JOIN)

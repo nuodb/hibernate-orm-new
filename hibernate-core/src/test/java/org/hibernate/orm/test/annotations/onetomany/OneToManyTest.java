@@ -6,6 +6,17 @@
  */
 package org.hibernate.orm.test.annotations.onetomany;
 
+import static org.hibernate.cfg.AvailableSettings.DEFAULT_LIST_SEMANTICS;
+import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
+import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -16,15 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
-import com.nuodb.hibernate.NuoDBDialect;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.PersistenceException;
 
 import org.hibernate.AnnotationException;
 import org.hibernate.Hibernate;
@@ -40,30 +42,25 @@ import org.hibernate.mapping.Column;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Table;
 import org.hibernate.metamodel.CollectionClassification;
-
-import org.hibernate.testing.DialectChecks;
-import org.hibernate.testing.RequiresDialectFeature;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.hibernate.orm.test.annotations.Customer;
 import org.hibernate.orm.test.annotations.Discount;
 import org.hibernate.orm.test.annotations.Passport;
 import org.hibernate.orm.test.annotations.Ticket;
 import org.hibernate.orm.test.annotations.TicketComparator;
+import org.hibernate.testing.DialectChecks;
+import org.hibernate.testing.RequiresDialectFeature;
+import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.junit4.BaseNonConfigCoreFunctionalTestCase;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static org.hibernate.cfg.AvailableSettings.DEFAULT_LIST_SEMANTICS;
-import static org.hibernate.testing.junit4.ExtraAssertions.assertTyping;
-import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PersistenceException;
 
 /**
  * Test various case of a one to many relationship.
@@ -471,7 +468,6 @@ public class OneToManyTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testJoinColumns() throws Exception {
 		Parent parent = new Parent();
 		ParentPk pk = new ParentPk();
@@ -508,7 +504,6 @@ public class OneToManyTest extends BaseNonConfigCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-4394" )
-	@SkipForDialect(NuoDBDialect.class) // Parentheses in generated SQL
 	public void testOrderByOnSuperclassProperty() {
 		OrganisationUser user = new OrganisationUser();
 		user.setFirstName( "Emmanuel" );

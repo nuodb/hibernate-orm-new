@@ -21,7 +21,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
 import org.hibernate.cfg.AvailableSettings;
@@ -37,9 +36,7 @@ import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.collection.QueryableCollection;
 import org.hibernate.query.Query;
 import org.hibernate.sql.SimpleSelect;
-
 import org.hibernate.testing.RequiresDialect;
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Assert;
@@ -52,7 +49,6 @@ import org.junit.Test;
  */
 public class OrderByTest extends BaseCoreFunctionalTestCase {
 	@Test
-	@SkipForDialect(NuoDBDialect.class) // multi-column value only allowed in comparison operators
 	public void testOrderByOnIdClassProperties() throws Exception {
 		Session s = openSession( );
 		s.getTransaction().begin();
@@ -420,7 +416,6 @@ public class OrderByTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@TestForIssue( jiraKey = "HHH-9002" )
-	@SkipForDialect(NuoDBDialect.class) // Parentheses in generated SQL
 	public void testOrderByOneToManyWithJoinTable() {
 		A a = new A();
 		a.setName( "a" );

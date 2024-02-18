@@ -6,12 +6,20 @@
  */
 package org.hibernate.orm.test.jpa.graphs;
 
-import com.nuodb.hibernate.NuoDBDialect;
-import jakarta.persistence.MapKey;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import org.hibernate.Hibernate;
+import org.hibernate.orm.test.jpa.BaseEntityManagerFunctionalTestCase;
+import org.hibernate.testing.TestForIssue;
+import org.junit.Test;
+
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
@@ -19,6 +27,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MapKey;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Subgraph;
 import jakarta.persistence.Table;
@@ -27,17 +36,6 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Root;
-
-import org.hibernate.Hibernate;
-import org.hibernate.orm.test.jpa.BaseEntityManagerFunctionalTestCase;
-
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.testing.TestForIssue;
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 /**
  * @author Christian Bauer
@@ -173,7 +171,6 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 	 */
 	@Test
 	@TestForIssue(jiraKey = "HHH-8640")
-	@SkipForDialect(value=NuoDBDialect.class, comment="Parentheses in SQL using JOIN")
 	public void inheritanceTest() {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
@@ -221,7 +218,6 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 
     @Test
     @TestForIssue(jiraKey = "HHH-9080")
-	@SkipForDialect(value=NuoDBDialect.class, comment="Parentheses in SQL using JOIN")
 	public void attributeNodeInheritanceTest() {
         EntityManager em = getOrCreateEntityManager();
         em.getTransaction().begin();

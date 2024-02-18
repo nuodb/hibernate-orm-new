@@ -6,14 +6,9 @@
  */
 package org.hibernate.orm.test.id.enhanced;
 
-import java.util.function.Consumer;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import com.nuodb.hibernate.NuoDBDialect;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.SequenceGenerator;
+import java.util.function.Consumer;
 
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.model.naming.Identifier;
@@ -24,25 +19,26 @@ import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.id.enhanced.LegacyNamingStrategy;
-import org.hibernate.id.enhanced.SingleNamingStrategy;
 import org.hibernate.id.enhanced.SequenceStructure;
 import org.hibernate.id.enhanced.SequenceStyleGenerator;
+import org.hibernate.id.enhanced.SingleNamingStrategy;
 import org.hibernate.id.enhanced.StandardNamingStrategy;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.service.ServiceRegistry;
-
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.orm.junit.BaseUnitTest;
 import org.hibernate.testing.orm.junit.DialectFeatureChecks;
 import org.hibernate.testing.orm.junit.RequiresDialectFeature;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.SequenceGenerator;
 
 
 @BaseUnitTest
 @RequiresDialectFeature(feature = DialectFeatureChecks.SupportsSequences.class)
-@SkipForDialect(value= NuoDBDialect.class, comment="NuoDB supports sequences, but not pooled sequences (as Hibernate uses them)")
 public class SequenceNamingStrategyTest {
 
 	@Test

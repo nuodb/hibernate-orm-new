@@ -6,11 +6,15 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.lazy.proxy;
 
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementAsProxyLazinessInterceptor;
@@ -18,8 +22,6 @@ import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.spi.PersistentAttributeInterceptable;
 import org.hibernate.engine.spi.PersistentAttributeInterceptor;
 import org.hibernate.stat.Statistics;
-
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancementOptions;
@@ -28,11 +30,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.notNullValue;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
 
 /**
  * @author Steve Ebersole
@@ -132,7 +129,6 @@ public class LazyGroupWithInheritanceAllowProxyTest extends BaseNonConfigCoreFun
 	 * fetching to issues just a single select
 	 */
 	@Test
-	@SkipForDialect(value= NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void queryEntityWithAssociationToAbstractRuntimeFetch() {
 		final Statistics stats = sessionFactory().getStatistics();
 		stats.clear();
@@ -200,6 +196,7 @@ public class LazyGroupWithInheritanceAllowProxyTest extends BaseNonConfigCoreFun
 	}
 
 
+	@SuppressWarnings("deprecation")
 	@Before
 	public void prepareTestData() {
 		inTransaction(
@@ -254,6 +251,7 @@ public class LazyGroupWithInheritanceAllowProxyTest extends BaseNonConfigCoreFun
 		);
 	}
 
+	@SuppressWarnings("deprecation")
 	@After
 	public void cleanUpTestData() {
 		inTransaction(

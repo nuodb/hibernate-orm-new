@@ -6,17 +6,16 @@
  */
 package org.hibernate.orm.test.id.sequence;
 
-import com.nuodb.hibernate.NuoDBDialect;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.model.relational.Namespace;
 import org.hibernate.boot.model.relational.Sequence;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.spi.MetadataImplementor;
-
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.junit.After;
@@ -29,13 +28,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * @author Steve Ebersole
  */
 @RequiresDialectFeature(value= DialectChecks.SupportsSequences.class, jiraKey = "HHH-10320" )
-@SkipForDialect(value=NuoDBDialect.class, comment="NuoDB supports sequences, but not pooled sequences (as Hibernate uses them)")
 public class SequenceExportTest extends BaseUnitTestCase {
 	private StandardServiceRegistry ssr;
 

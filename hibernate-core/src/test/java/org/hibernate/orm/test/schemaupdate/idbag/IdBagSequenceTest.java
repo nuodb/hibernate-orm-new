@@ -6,36 +6,31 @@
  */
 package org.hibernate.orm.test.schemaupdate.idbag;
 
+import static org.hamcrest.core.Is.is;
+import static org.junit.Assert.assertThat;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.util.EnumSet;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.Environment;
-import org.hibernate.testing.SkipForDialect;
-import org.hibernate.tool.hbm2ddl.SchemaUpdate;
-import org.hibernate.tool.schema.TargetType;
-
 import org.hibernate.testing.DialectChecks;
 import org.hibernate.testing.RequiresDialectFeature;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.hibernate.tool.hbm2ddl.SchemaUpdate;
+import org.hibernate.tool.schema.TargetType;
 import org.junit.Test;
-
-import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThat;
 
 /**
  * @author Andrea Boriero
  */
 @TestForIssue(jiraKey = "HHH-10373")
 @RequiresDialectFeature(DialectChecks.SupportsSequences.class)
-@SkipForDialect(value= NuoDBDialect.class, comment="NuoDB supports sequences but not pooled sequences," +
-		" so sequence generators are implemented using a table.")
 public class IdBagSequenceTest extends BaseUnitTestCase {
 
 	@Test

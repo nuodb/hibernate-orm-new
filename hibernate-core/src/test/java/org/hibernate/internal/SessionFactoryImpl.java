@@ -235,7 +235,7 @@ public class SessionFactoryImpl implements SessionFactoryImplementor {
 		// NuoDB Start: 20-Jun-2023
 		if (showProperties)
 			LOG.info("Properties = " + this.properties.toString().replaceAll(",", System.lineSeparator()));
-		// NuoDB SEndtart: 20-Jun-2023
+		// NuoDB End: 20-Jun-2023
 		if ( !properties.containsKey( AvailableSettings.JPA_VALIDATION_FACTORY )
 				&& !properties.containsKey( AvailableSettings.JAKARTA_VALIDATION_FACTORY ) ) {
 			if ( getSessionFactoryOptions().getValidatorFactoryReference() != null ) {

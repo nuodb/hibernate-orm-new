@@ -15,13 +15,10 @@ import java.util.List;
 
 import org.hibernate.Hibernate;
 import org.hibernate.query.NativeQuery;
-import org.hibernate.testing.SkipForDialect;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import com.nuodb.hibernate.NuoDBDialect;
 
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -87,7 +84,6 @@ public class WhereTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SkipForDialect(value=NuoDBDialect.class, comment="JOIN FETCH generates join with parentheses")
 	public void testHqlWithFetch() {
 		inTransaction(
 				s -> {
