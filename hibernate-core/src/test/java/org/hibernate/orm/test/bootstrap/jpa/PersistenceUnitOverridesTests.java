@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Properties;
 import javax.sql.DataSource;
 
-import com.nuodb.hibernate.NuoDBDialect;
 import org.hibernate.boot.model.relational.SqlStringGenerationContext;
 import org.hibernate.cache.spi.access.AccessType;
 import org.hibernate.cfg.AvailableSettings;
