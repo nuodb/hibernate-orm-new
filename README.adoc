@@ -81,13 +81,13 @@ gradlew clean hibernate-core:matrix_nuodb
 * MacOS/Linux
 +
 ```sh
-DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
+DIALECT_VERSION=23.0.0-hib6 ./gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
 ```
 
 * Expected final output is something like:
 +
 ```sh
-6186 tests completed, 14 failed, 1709 skipped
+5864 tests completed, 0 failed, 1394 skipped
 ```
 
 * Full details of all failing and ignored tests can be found at `hibernate-core/target/matrix/nuodb/reports/index.html`.
@@ -110,6 +110,9 @@ DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
    * Any test whose fully qualified class name is listed in `hibernate-core/skip-tests.txt` will be ignored.
      The tests listed fail due to known limitations in NuoDB SQL (see comments in the file).
 
+   * Alternatively you can add `@SkipForDialect(value = NuoDBDialect.class)` to a test class or any test-method,
+     _but_ using the `skip-tests.txt` file avoids changing the code and provides a single place to refer to.
+
    * If you run the tests without the `clean` option you may get a weird internal error in the compiler.
 
    * Not all tests clean up after themselves.
@@ -121,17 +124,27 @@ DIALECT_VERSION=23.0.0-hib6 ./gradlew clean hibernate-core:matrix_nuodb
 
    * When running the matrix tests `hibernate-core/target/matrix/nuodb` is the working directory.
 
-. Run individual tests (does this actually work?). Better to use an IDE - see <<using-an-ide,below>>:
+. To run individual tests you could use an IDE (see <<using-an-ide,below>>).
+Alternatively:
+* In `hibernate-core/` directory copy "green-list.sample.txt" to "green-list.txt".
+** This file will be ignored by git and not checked in.
+* Edit the file and add a line for each test you want to run.
+** Use the fully qualified name of the test class (that is, with its package prefix).
+** To run a specific test add the test method name on the end.
+** Lines starting with a '#'' are treated as comments
+
+* Example file:
 +
-Example commands:
-+
-```sh
-./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
-./gradlew clean :hibernate-core:matrix_nuodb --tests *.PackagedEntityManagerTest
-./gradlew clean :hibernate-core:matrix_nuodb --tests org.hibernate.jpa.test.packaging.*
+```text
+# Run all the tests in this class
+org.hibernate.jpa.test.packaging.PackagedEntityManagerTest
+
+# Just run the testConfigurationMethods test
+org.hibernate.orm.test.annotations.SecuredBindingTest.testConfigurationMethods
 ```
+* When you are done, delete this file or comment out all the tests in it.
 +
-**NOTE:** Not all tests are against NuoDB and actually some are explicitly skipped due to timeout and locks. Those tests have the special annotation `@SkipForDialect(value = NuoDBDialect.class)`.
+WARNING: You _must_ use the `--rerun-tasks` option on your next run, otherwise Gradle won't run any tests at all.
 
 [#using-an-ide]
 [start=11]
