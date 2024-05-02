@@ -78,7 +78,7 @@ public class NuoDBDependencies {
         var jarVersion = versionInfo.version;
 
         if (!jarVersion.equals(expectedJarVersion))
-            throw new RuntimeException("Jar version '${jarVersion}'' does not match dependency version '${expectedJarVersion}'");
+            throw new RuntimeException("Jar version '${jarVersion}' does not match dependency version '${expectedJarVersion}'");
 
         return true;
     }
