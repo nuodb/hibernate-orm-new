@@ -62,6 +62,7 @@ org.hibernate.orm.test.id.enhanced.SequenceNamingStrategyTest (NuoDB supports se
 org.hibernate.orm.test.id.sequence.SequenceExportTest (NuoDB supports sequences, but not pooled sequences, as Hibernate uses them)
 org.hibernate.orm.test.schemaupdate.idbag.IdBagSequenceTest (NuoDB supports sequences, but not pooled sequences, as Hibernate uses them)
 
+org.hibernate.orm.test.jpa.ql.TreatKeywordTest.testFilteringJoinedSubclasses (JIRA DB-38187 CASE result not matched by IN clause)
 
 org.hibernate.orm.test.jpa.criteria.fetchscroll.CriteriaToScrollableResultsFetchTest.testWithScroll  (Result set is forward-only)
 
