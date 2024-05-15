@@ -1,5 +1,7 @@
 image::https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png[]
 
+:jarversion: 23.0.4-hib6
+
 # Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png[height=50]
 
 This is a fork of Hibernate ORM (http://github.com/hibernate/hibernate-orm) branch 6.1 to allow testing of NuoDB's Hibernate 6 dialect.
@@ -32,28 +34,30 @@ For example, to use 11.0.18, run `jenv local 11.0.18`.
 * Otherwise you must tell gradle where this dependency can be found. For example
 suppose you use `m2` instead of `.m2`:
 +
-```sh
-export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6               (Linux/MacOS)
+[source%autofit,sh,subs="verbatim,attributes"]
+----
+export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/{jarversion}               (Linux/MacOS)
 
-set ADDITIONAL_REPO=c:\Users\yourname\m2\repository\com\nuodb\hibernate\nuodb-hibernate\NN.x.x-hib6  (Windows)
-```
+set ADDITIONAL_REPO=c:\Users\<yourname>\m2\repository\com\nuodb\hibernate\nuodb-hibernate\{jarversion}  (Windows)
+----
 
 . Set the Hibernate dialect - this must match the Hibernate 6 dialect you installed earlier.
 
 * **Note:** the value you set _should_ have `-hib6` in the end, but that's optional:
 +
-```bash
-export DIALECT_VERSION=NN.x.x-hib6      (Linux/MacOS)
-set DIALECT_VERSION=NN.x.x-hib6         (Windows)
-```
+[source%autofit,sh,subs="verbatim,attributes"]
+----
+export DIALECT_VERSION={jarversion}      (Linux/MacOS)
+set DIALECT_VERSION={jarversion}         (Windows)
+----
 
 * Alternatively, MacOS and Linux users may prepend it to any command:
-** `DIALECT_VERSION=NN.x.x-hib6 ./gradlew ...`
+** `DIALECT_VERSION={jarversion} ./gradlew ...`
 
 . You need a database called `hibernate_orm_test` running locally on your machine with username and password also `hibernate_orm_test`.
 If you do not have NuoDB installed locally, here are some options using Docker:
 
-* Optionally, on MacOS, download the lighter weight OrbStack instead of Docker Desktop.
+* Optionally, on MacOS, download the lighter weight OrbStack instead of Docker Desktop (it requires a license for commercial use).
 ** Once OrbStack is running, the `docker` command works as normal.
 
 * To use `docker compose`:
@@ -73,16 +77,18 @@ Also (last line) set `EXTERNAL_ADDRESS=127.0.0.1`.
 
 * Windows (using `gradlew.bat`):
 +
-```sh
-set DIALECT_VERSION=23.0.0-hib6
-gradlew clean hibernate-core:matrix_nuodb
-```
+[source%autofit,sh,subs="verbatim,attributes"]
+----
+set DIALECT_VERSION={jarversion}
+gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
+----
 
 * MacOS/Linux
 +
-```sh
-DIALECT_VERSION=23.0.0-hib6 ./gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
-```
+[source%autofit,sh,subs="verbatim,attributes"]
+----
+DIALECT_VERSION={jarversion} ./gradlew --rerun-tasks clean hibernate-core:matrix_nuodb
+----
 
 * Expected final output is something like:
 +
@@ -167,7 +173,7 @@ When running tests with from the IDE, `hibernate-core` is the working directory 
 [start=12]
 . Pull Jar from Sonatype
 
-* Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/NN.x.x-hib6/nuodb-hibernate-NN.x.x-hib6.jar.
+* Once our jar is put up at Sonatype, its URL is something like https://oss.sonatype.org/content/repositories/comnuodb-YYYY/com/nuodb/hibernate/nuodb-hibernate/{jarversion}/nuodb-hibernate-{jarversion}.jar.
 ** Note the build number - YYYY (a 4 digit number such as 1050). To use this dependency run as follows:
 +
 ```sh
@@ -189,7 +195,7 @@ Modify properties in `databases/nuodb/resources/hibernate.properties`.
 
 If the Hibernate dialect has a new version number:
 
-* Simply update the environment variable: `SET DIALECT_VERSION=NN.x.x`
+* Simply update the environment variable: `SET DIALECT_VERSION=<new-version>`
 
 The JAR version is required in several places and will pick up the version from the environment variable (therefore no other changes are necessary).
 
