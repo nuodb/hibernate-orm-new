@@ -1,6 +1,7 @@
 image::https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.png[]
 
 :jarversion: 23.0.4-hib6
+:bslash: \
 
 # Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png[height=50]
 
@@ -36,9 +37,11 @@ suppose you use `m2` instead of `.m2`:
 +
 [source%autofit,sh,subs="verbatim,attributes"]
 ----
-export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/{jarversion}               (Linux/MacOS)
+# Linux/MacOS
+export ADDITIONAL_REPO=~/m2/repository/com/nuodb/hibernate/nuodb-hibernate/{jarversion}
 
-set ADDITIONAL_REPO=c:\Users\<yourname>\m2\repository\com\nuodb\hibernate\nuodb-hibernate\{jarversion}  (Windows)
+# Windows
+set ADDITIONAL_REPO=c:\Users\<yourname>\.m2\repository\com\nuodb\hibernate\nuodb-hibernate{bslash}{jarversion}
 ----
 
 . Set the Hibernate dialect - this must match the Hibernate 6 dialect you installed earlier.
@@ -53,6 +56,8 @@ set DIALECT_VERSION={jarversion}         (Windows)
 
 * Alternatively, MacOS and Linux users may prepend it to any command:
 ** `DIALECT_VERSION={jarversion} ./gradlew ...`
+
+. You _must_ be running at _least_ NuoDB V5.1.2 because tests that used to fail now pass due to enhancements in NuoDB SQL.
 
 . You need a database called `hibernate_orm_test` running locally on your machine with username and password also `hibernate_orm_test`.
 If you do not have NuoDB installed locally, here are some options using Docker:
