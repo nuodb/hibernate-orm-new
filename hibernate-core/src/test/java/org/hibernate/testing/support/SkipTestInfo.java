@@ -82,6 +82,8 @@ public class SkipTestInfo {
 
     public static final String GREEN_LIST_FILE_NAME = "green-list.txt";
 
+    public static final char FILE_SEP = System.getProperty("file.separator").charAt(0);
+
     @SuppressWarnings("unchecked")
     public static final List<String> ALL_METHODS = Collections.EMPTY_LIST;
 
@@ -132,8 +134,8 @@ public class SkipTestInfo {
 	        }
 	
 	        // Expecting FQCN, not a path to the class.
-	        if (line.indexOf('/') != -1)
-	            sourceFileError(context, source, lineNum, "Line contains /");
+	        if (line.indexOf(FILE_SEP) != -1)
+	            sourceFileError(context, source, lineNum, "Line contains " + FILE_SEP);
 	
 	        String originalLine = line;
 	
@@ -451,8 +453,8 @@ public class SkipTestInfo {
         // When running matrix tests, current dir is hibernate-core/target/matrix/nuodb
         File current = new File(".").getAbsoluteFile();
         LOGGER.trace("Current = " + current + " looking for hibernate-core in path");
-
-        if (current.getPath().contains("/hibernate-core/")) {
+        
+        if (current.getPath().contains(FILE_SEP + "hibernate-core" + FILE_SEP)) {
             while (!current.getName().equals("hibernate-core")) {
                 current = current.getParentFile();
                 LOGGER.trace("current = " + current);
