@@ -3,7 +3,7 @@ image::https://static.jboss.org/hibernate/images/hibernate_logo_whitebkg_200px.p
 :jarversion: 23.0.4-hib6
 :bslash: \
 
-# Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png[height=50]
+# Hibernate 6.1 and NuoDB &nbsp; &nbsp; image:https://d33wubrfki0l68.cloudfront.net/571989f106f60bced5326825bd63918a55bdf0aa/dd52a/_/img/nuodb-bird-only-green.png[width=100]
 
 This is a fork of Hibernate ORM (http://github.com/hibernate/hibernate-orm) branch 6.1 to allow testing of NuoDB's Hibernate 6 dialect.
 The tests of interest are the matrix tests (which allow testing against multiple databases).
