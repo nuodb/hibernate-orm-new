@@ -18,8 +18,6 @@ import org.hibernate.internal.util.StringHelper;
 import org.hibernate.internal.util.collections.Stack;
 import org.hibernate.internal.util.collections.StandardStack;
 
-import org.jboss.logging.Logger;
-
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 
@@ -141,7 +139,7 @@ public class GraphParser extends GraphLanguageParserBaseVisitor {
 		final GraphImplementor<?> currentGraph = graphStack.getCurrent();
 		assert currentGraph != null;
 
-		final AttributeNodeImplementor attributeNode = currentGraph.addAttributeNode( attributeName );
+		final AttributeNodeImplementor attributeNode = currentGraph.findOrCreateAttributeNode( attributeName );
 		assert attributeNode != null;
 
 		return attributeNode;

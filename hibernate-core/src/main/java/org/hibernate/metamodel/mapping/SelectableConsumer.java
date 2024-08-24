@@ -6,7 +6,9 @@
  */
 package org.hibernate.metamodel.mapping;
 
+import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.IntFunction;
 
 /**
  * Consumer used to visit selectable (column/formula) mappings
@@ -138,6 +140,13 @@ public interface SelectableConsumer {
 		}
 
 		@Override
+		public Integer getTemporalPrecision() {
+			// we could probably use the details from `base`, but
+			// this method should really never be called on this object
+			return null;
+		}
+
+		@Override
 		public String getCustomReadExpression() {
 			return null;
 		}
@@ -157,7 +166,7 @@ public interface SelectableConsumer {
 	 * Very limited functionality in terms of the visited SelectableMappings
 	 * will not have any defined JdbcMapping, etc
 	 */
-	default void accept(String tableName, String[] columnNames) {
+	default void accept(String tableName, String[] columnNames, IntFunction<JdbcMapping> jdbcMappings) {
 		class SelectableMappingIterator implements SelectableMapping {
 
 			private int index;
@@ -203,6 +212,11 @@ public interface SelectableConsumer {
 			}
 
 			@Override
+			public Integer getTemporalPrecision() {
+				return null;
+			}
+
+			@Override
 			public boolean isFormula() {
 				return false;
 			}
@@ -229,7 +243,7 @@ public interface SelectableConsumer {
 
 			@Override
 			public JdbcMapping getJdbcMapping() {
-				return null;
+				return jdbcMappings.apply( index );
 			}
 		}
 		for (

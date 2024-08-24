@@ -32,11 +32,8 @@ public class PreUpdateEventListenerVetoTest extends BaseSessionFactoryFunctional
 
 	@Override
 	protected void sessionFactoryBuilt(SessionFactoryImplementor factory) {
-		EventListenerRegistry registry = factory.getServiceRegistry().getService( EventListenerRegistry.class );
-		registry.appendListeners(
-				EventType.PRE_UPDATE,
-				event -> true
-		);
+        factory.getServiceRegistry().requireService( EventListenerRegistry.class )
+				.appendListeners( EventType.PRE_UPDATE, event -> true );
 	}
 
 	@BeforeEach
@@ -45,7 +42,7 @@ public class PreUpdateEventListenerVetoTest extends BaseSessionFactoryFunctional
 			ExampleEntity entity = new ExampleEntity();
 			entity.id = EXAMPLE_ID_VALUE;
 			entity.name = "old_name";
-			session.save( entity );
+			session.persist( entity );
 		} );
 	}
 
@@ -56,7 +53,7 @@ public class PreUpdateEventListenerVetoTest extends BaseSessionFactoryFunctional
 			ExampleEntity entity = session.byId( ExampleEntity.class ).load( EXAMPLE_ID_VALUE );
 
 			entity.name = "new_name";
-			session.update( entity );
+			entity = session.merge( entity );
 
 			final Long versionBeforeFlush = entity.version;
 

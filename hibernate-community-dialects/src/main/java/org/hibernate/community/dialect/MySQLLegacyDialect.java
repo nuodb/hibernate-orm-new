@@ -17,16 +17,7 @@ import org.hibernate.PessimisticLockException;
 import org.hibernate.boot.model.FunctionContributions;
 import org.hibernate.boot.model.TypeContributions;
 import org.hibernate.cfg.Environment;
-import org.hibernate.dialect.DatabaseVersion;
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.InnoDBStorageEngine;
-import org.hibernate.dialect.MyISAMStorageEngine;
-import org.hibernate.dialect.MySQLCastingJsonJdbcType;
-import org.hibernate.dialect.MySQLServerConfiguration;
-import org.hibernate.dialect.MySQLStorageEngine;
-import org.hibernate.dialect.Replacer;
-import org.hibernate.dialect.RowLockStrategy;
-import org.hibernate.dialect.SelectItemReferenceStrategy;
+import org.hibernate.dialect.*;
 import org.hibernate.dialect.function.CommonFunctionFactory;
 import org.hibernate.dialect.hint.IndexQueryHintHandler;
 import org.hibernate.dialect.identity.IdentityColumnSupport;
@@ -50,11 +41,13 @@ import org.hibernate.exception.spi.SQLExceptionConversionDelegate;
 import org.hibernate.exception.spi.TemplatedViolatedConstraintNameExtractor;
 import org.hibernate.exception.spi.ViolatedConstraintNameExtractor;
 import org.hibernate.internal.util.JdbcExceptionHelper;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.mapping.CheckConstraint;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.metamodel.spi.RuntimeModelCreationContext;
 import org.hibernate.query.sqm.CastType;
 import org.hibernate.query.sqm.IntervalType;
-import org.hibernate.query.sqm.NullOrdering;
+import org.hibernate.dialect.NullOrdering;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.function.SqmFunctionRegistry;
 import org.hibernate.query.sqm.mutation.internal.temptable.AfterUseAction;
@@ -81,6 +74,8 @@ import org.hibernate.type.descriptor.jdbc.NullJdbcType;
 import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
 import org.hibernate.type.descriptor.sql.internal.CapacityDependentDdlType;
 import org.hibernate.type.descriptor.sql.internal.DdlTypeImpl;
+import org.hibernate.type.descriptor.sql.internal.NativeEnumDdlTypeImpl;
+import org.hibernate.type.descriptor.sql.internal.NativeOrdinalEnumDdlTypeImpl;
 import org.hibernate.type.descriptor.sql.spi.DdlTypeRegistry;
 
 import jakarta.persistence.TemporalType;
@@ -121,6 +116,8 @@ import static org.hibernate.type.SqlTypes.VARCHAR;
  */
 public class MySQLLegacyDialect extends Dialect {
 
+	private static final DatabaseVersion DEFAULT_VERSION = DatabaseVersion.make( 5, 0 );
+
 	private final MySQLStorageEngine storageEngine = createStorageEngine();
 	private final SizeStrategy sizeStrategy = new SizeStrategyImpl() {
 		@Override
@@ -147,7 +144,7 @@ public class MySQLLegacyDialect extends Dialect {
 	private final boolean noBackslashEscapesEnabled;
 
 	public MySQLLegacyDialect() {
-		this( DatabaseVersion.make( 5, 0 ) );
+		this( DEFAULT_VERSION );
 	}
 
 	public MySQLLegacyDialect(DatabaseVersion version) {
@@ -170,7 +167,7 @@ public class MySQLLegacyDialect extends Dialect {
 	}
 
 	public MySQLLegacyDialect(DialectResolutionInfo info) {
-		this( createVersion( info ), MySQLServerConfiguration.fromDatabaseMetadata( info.getDatabaseMetadata() ) );
+		this( createVersion( info ), MySQLServerConfiguration.fromDialectResolutionInfo( info ) );
 		registerKeywords( info );
 	}
 
@@ -188,7 +185,7 @@ public class MySQLLegacyDialect extends Dialect {
 				// Ignore
 			}
 		}
-		return info.makeCopy();
+		return info.makeCopyOrDefault( DEFAULT_VERSION );
 	}
 
 	@Override
@@ -308,51 +305,63 @@ public class MySQLLegacyDialect extends Dialect {
 		final int maxLobLen = 65_535;
 		final int maxMediumLobLen = 16_777_215;
 
-		final CapacityDependentDdlType.Builder varcharBuilder = CapacityDependentDdlType.builder(
-						VARCHAR,
-						columnType( CLOB ),
-						"char",
-						this
-				)
-				.withTypeCapacity( getMaxVarcharLength(), "varchar($l)" )
-				.withTypeCapacity( maxMediumLobLen, "mediumtext" );
+		final CapacityDependentDdlType.Builder varcharBuilder =
+				CapacityDependentDdlType.builder(
+								VARCHAR,
+								CapacityDependentDdlType.LobKind.BIGGEST_LOB,
+								columnType( CLOB ),
+								columnType( CHAR ),
+								castType( CHAR ),
+								this
+						)
+						.withTypeCapacity( getMaxVarcharLength(), "varchar($l)" )
+						.withTypeCapacity( maxMediumLobLen, "mediumtext" );
 		if ( getMaxVarcharLength() < maxLobLen ) {
 			varcharBuilder.withTypeCapacity( maxLobLen, "text" );
 		}
 		ddlTypeRegistry.addDescriptor( varcharBuilder.build() );
 
-		final CapacityDependentDdlType.Builder nvarcharBuilder = CapacityDependentDdlType.builder(
-						NVARCHAR,
-						columnType( NCLOB ),
-						"char",
-						this
-				)
-				.withTypeCapacity( getMaxVarcharLength(), "varchar($l)" )
-				.withTypeCapacity( maxMediumLobLen, "mediumtext" );
+		final CapacityDependentDdlType.Builder nvarcharBuilder =
+				CapacityDependentDdlType.builder(
+								NVARCHAR,
+								CapacityDependentDdlType.LobKind.BIGGEST_LOB,
+								columnType( NCLOB ),
+								columnType( NCHAR ),
+								castType( NCHAR ),
+								this
+						)
+						.withTypeCapacity( getMaxVarcharLength(), "varchar($l)" )
+						.withTypeCapacity( maxMediumLobLen, "mediumtext" );
 		if ( getMaxVarcharLength() < maxLobLen ) {
 			nvarcharBuilder.withTypeCapacity( maxLobLen, "text" );
 		}
 		ddlTypeRegistry.addDescriptor( nvarcharBuilder.build() );
 
-		final CapacityDependentDdlType.Builder varbinaryBuilder = CapacityDependentDdlType.builder(
-						VARBINARY,
-						columnType( BLOB ),
-						"binary",
-						this
-				)
-				.withTypeCapacity( getMaxVarbinaryLength(), "varbinary($l)" )
-				.withTypeCapacity( maxMediumLobLen, "mediumblob" );
+		final CapacityDependentDdlType.Builder varbinaryBuilder =
+				CapacityDependentDdlType.builder(
+								VARBINARY,
+								CapacityDependentDdlType.LobKind.BIGGEST_LOB,
+								columnType( BLOB ),
+								columnType( BINARY ),
+								castType( BINARY ),
+								this
+						)
+						.withTypeCapacity( getMaxVarbinaryLength(), "varbinary($l)" )
+						.withTypeCapacity( maxMediumLobLen, "mediumblob" );
 		if ( getMaxVarbinaryLength() < maxLobLen ) {
 			varbinaryBuilder.withTypeCapacity( maxLobLen, "blob" );
 		}
 		ddlTypeRegistry.addDescriptor( varbinaryBuilder.build() );
 
-		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32VARBINARY, columnType( BLOB ), "binary", this ) );
-		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32VARCHAR, columnType( CLOB ), "char", this ) );
-		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32NVARCHAR, columnType( CLOB ), "char", this ) );
+		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32VARBINARY,
+				columnType( BLOB ), castType( BINARY ), this ) );
+		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32VARCHAR,
+				columnType( CLOB ), castType( CHAR ), this ) );
+		ddlTypeRegistry.addDescriptor( new DdlTypeImpl( LONG32NVARCHAR,
+				columnType( CLOB ), castType( NCHAR ), this ) );
 
 		ddlTypeRegistry.addDescriptor(
-				CapacityDependentDdlType.builder( BLOB, columnType( BLOB ), "binary", this )
+				CapacityDependentDdlType.builder( BLOB, columnType( BLOB ), castType( BINARY ), this )
 						.withTypeCapacity( maxTinyLobLen, "tinyblob" )
 						.withTypeCapacity( maxMediumLobLen, "mediumblob" )
 						.withTypeCapacity( maxLobLen, "blob" )
@@ -360,7 +369,7 @@ public class MySQLLegacyDialect extends Dialect {
 		);
 
 		ddlTypeRegistry.addDescriptor(
-				CapacityDependentDdlType.builder( CLOB, columnType( CLOB ), "char", this )
+				CapacityDependentDdlType.builder( CLOB, columnType( CLOB ), castType( CHAR ), this )
 						.withTypeCapacity( maxTinyLobLen, "tinytext" )
 						.withTypeCapacity( maxMediumLobLen, "mediumtext" )
 						.withTypeCapacity( maxLobLen, "text" )
@@ -368,12 +377,15 @@ public class MySQLLegacyDialect extends Dialect {
 		);
 
 		ddlTypeRegistry.addDescriptor(
-				CapacityDependentDdlType.builder( NCLOB, columnType( NCLOB ), "char", this )
+				CapacityDependentDdlType.builder( NCLOB, columnType( NCLOB ), castType( NCHAR ), this )
 						.withTypeCapacity( maxTinyLobLen, "tinytext" )
 						.withTypeCapacity( maxMediumLobLen, "mediumtext" )
 						.withTypeCapacity( maxLobLen, "text" )
 						.build()
 		);
+
+		ddlTypeRegistry.addDescriptor( new NativeEnumDdlTypeImpl( this ) );
+		ddlTypeRegistry.addDescriptor( new NativeOrdinalEnumDdlTypeImpl( this ) );
 	}
 
 	@Deprecated
@@ -503,6 +515,23 @@ public class MySQLLegacyDialect extends Dialect {
 				scale,
 				jdbcTypeRegistry
 		);
+	}
+
+	@Override
+	public int resolveSqlTypeLength(
+			String columnTypeName,
+			int jdbcTypeCode,
+			int precision,
+			int scale,
+			int displaySize) {
+		// It seems MariaDB/MySQL return the precision in bytes depending on the charset,
+		// so to detect whether we have a single character here, we check the display size
+		if ( jdbcTypeCode == Types.CHAR && precision <= 4 ) {
+			return displaySize;
+		}
+		else {
+			return precision;
+		}
 	}
 
 	@Override
@@ -927,6 +956,11 @@ public class MySQLLegacyDialect extends Dialect {
 	}
 
 	@Override
+	public boolean supportsCommentOn() {
+		return true;
+	}
+
+	@Override
 	public String getTableComment(String comment) {
 		return " comment='" + comment + "'";
 	}
@@ -1244,7 +1278,7 @@ public class MySQLLegacyDialect extends Dialect {
 			case LockOptions.WAIT_FOREVER:
 				return lockString;
 			default:
-				return supportsWait() ? lockString + " wait " + timeout : lockString;
+				return supportsWait() ? lockString + " wait " + getTimeoutInSeconds( timeout ) : lockString;
 		}
 	}
 
@@ -1368,6 +1402,11 @@ public class MySQLLegacyDialect extends Dialect {
 	}
 
 	@Override
+	public FunctionalDependencyAnalysisSupport getFunctionalDependencyAnalysisSupport() {
+		return FunctionalDependencyAnalysisSupportImpl.TABLE_GROUP;
+	}
+
+	@Override
 	public boolean canDisableConstraints() {
 		return true;
 	}
@@ -1382,4 +1421,21 @@ public class MySQLLegacyDialect extends Dialect {
 		return "set foreign_key_checks = 1";
 	}
 
+	@Override
+	public DmlTargetColumnQualifierSupport getDmlTargetColumnQualifierSupport() {
+		return DmlTargetColumnQualifierSupport.TABLE_ALIAS;
+	}
+
+	@Override
+	public boolean supportsFromClauseInUpdate() {
+		return true;
+	}
+
+	@Override
+	public String appendCheckConstraintOptions(CheckConstraint checkConstraint, String sqlCheckConstraint) {
+		if ( StringHelper.isNotEmpty( checkConstraint.getOptions() ) ) {
+			return sqlCheckConstraint + " " + checkConstraint.getOptions();
+		}
+		return sqlCheckConstraint;
+	}
 }

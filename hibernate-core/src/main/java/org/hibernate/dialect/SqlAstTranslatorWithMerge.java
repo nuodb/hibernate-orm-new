@@ -35,7 +35,7 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 
 	/**
 	 * Create the MutationOperation for performing a MERGE.
-	 *
+	 * <p>
 	 * The OptionalTableUpdate is {@linkplain #renderMergeStatement translated}
 	 * and wrapped as a MutationOperation
 	 */
@@ -50,6 +50,11 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 		);
 	}
 
+//	@Override
+//	public void visitOptionalTableUpdate(OptionalTableUpdate tableUpdate) {
+//		renderMergeStatement(tableUpdate);
+//	}
+//
 	/**
 	 * Renders the OptionalTableUpdate as a MERGE query.
 	 *
@@ -86,13 +91,15 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 		renderMergeInsert( optionalTableUpdate );
 		appendSql( " " );
 
-		// when matched
-		//      and s.col_1 is null
-		//	    and s.col_2 is null
-		//		and ...
-		//   then delete
-		renderMergeDelete( optionalTableUpdate );
-		appendSql( " " );
+		if ( optionalTableUpdate.getMutatingTable().isOptional() ) {
+			// when matched
+			//      and s.col_1 is null
+			//	    and s.col_2 is null
+			//		and ...
+			//   then delete
+			renderMergeDelete( optionalTableUpdate );
+			appendSql( " " );
+		}
 
 		// when matched
 		//   then update ...
@@ -205,8 +212,9 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 
 	protected void renderMergeDelete(OptionalTableUpdate optionalTableUpdate) {
 		final List<ColumnValueBinding> valueBindings = optionalTableUpdate.getValueBindings();
+		final List<ColumnValueBinding> optimisticLockBindings = optionalTableUpdate.getOptimisticLockBindings();
 
-		appendSql( " when matched " );
+		renderWhenMatched( optimisticLockBindings );
 		for ( int i = 0; i < valueBindings.size(); i++ ) {
 			final ColumnValueBinding binding = valueBindings.get( i );
 			appendSql( " and " );
@@ -218,8 +226,10 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 
 	protected void renderMergeUpdate(OptionalTableUpdate optionalTableUpdate) {
 		final List<ColumnValueBinding> valueBindings = optionalTableUpdate.getValueBindings();
+		final List<ColumnValueBinding> optimisticLockBindings = optionalTableUpdate.getOptimisticLockBindings();
 
-		appendSql( " when matched then update set " );
+		renderWhenMatched( optimisticLockBindings );
+		appendSql( " then update set " );
 		for ( int i = 0; i < valueBindings.size(); i++ ) {
 			final ColumnValueBinding binding = valueBindings.get( i );
 			if ( i > 0 ) {
@@ -228,6 +238,17 @@ public abstract class SqlAstTranslatorWithMerge<T extends JdbcOperation> extends
 			binding.getColumnReference().appendColumnForWrite( this, null );
 			appendSql( "=" );
 			binding.getColumnReference().appendColumnForWrite( this, "s" );
+		}
+	}
+
+	private void renderWhenMatched(List<ColumnValueBinding> optimisticLockBindings) {
+		appendSql( " when matched" );
+		for (int i = 0; i < optimisticLockBindings.size(); i++) {
+			final ColumnValueBinding binding = optimisticLockBindings.get( i );
+			appendSql(" and ");
+			binding.getColumnReference().appendColumnForWrite( this, "t" );
+			appendSql("<=");
+			binding.getValueExpression().accept( this );
 		}
 	}
 }

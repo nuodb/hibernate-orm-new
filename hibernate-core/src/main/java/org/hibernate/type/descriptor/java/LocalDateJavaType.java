@@ -20,6 +20,7 @@ import java.util.GregorianCalendar;
 
 import jakarta.persistence.TemporalType;
 
+import org.hibernate.type.SqlTypes;
 import org.hibernate.type.descriptor.WrapperOptions;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.descriptor.jdbc.JdbcTypeIndicators;
@@ -47,6 +48,9 @@ public class LocalDateJavaType extends AbstractTemporalJavaType<LocalDate> {
 
 	@Override
 	public JdbcType getRecommendedJdbcType(JdbcTypeIndicators context) {
+		if ( context.isPreferJavaTimeJdbcTypesEnabled() ) {
+			return context.getJdbcType( SqlTypes.LOCAL_DATE );
+		}
 		return context.getJdbcType( Types.DATE );
 	}
 
@@ -54,6 +58,11 @@ public class LocalDateJavaType extends AbstractTemporalJavaType<LocalDate> {
 	protected <X> TemporalJavaType<X> forDatePrecision(TypeConfiguration typeConfiguration) {
 		//noinspection unchecked
 		return (TemporalJavaType<X>) this;
+	}
+
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
 	}
 
 	@Override
@@ -159,7 +168,7 @@ public class LocalDateJavaType extends AbstractTemporalJavaType<LocalDate> {
 
 	@Override
 	public boolean isWider(JavaType<?> javaType) {
-		switch ( javaType.getJavaType().getTypeName() ) {
+		switch ( javaType.getTypeName() ) {
 			case "java.sql.Date":
 				return true;
 			default:

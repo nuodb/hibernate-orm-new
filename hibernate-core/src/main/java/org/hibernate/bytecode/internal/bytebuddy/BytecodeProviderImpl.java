@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.hibernate.HibernateException;
+import org.hibernate.bytecode.enhance.internal.bytebuddy.EnhancerClassLocator;
 import org.hibernate.bytecode.enhance.internal.bytebuddy.EnhancerImpl;
 import org.hibernate.bytecode.enhance.spi.EnhancementContext;
 import org.hibernate.bytecode.enhance.spi.Enhancer;
@@ -67,11 +68,12 @@ import net.bytebuddy.jar.asm.Opcodes;
 import net.bytebuddy.jar.asm.Type;
 import net.bytebuddy.matcher.ElementMatcher;
 import net.bytebuddy.matcher.ElementMatchers;
+import net.bytebuddy.pool.TypePool;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class BytecodeProviderImpl implements BytecodeProvider {
-
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( BytecodeProviderImpl.class );
+
 	private static final String INSTANTIATOR_PROXY_NAMING_SUFFIX = "HibernateInstantiator";
 	private static final String OPTIMIZER_PROXY_NAMING_SUFFIX = "HibernateAccessOptimizer";
 	private static final ElementMatcher.Junction<NamedElement> newInstanceMethodName = ElementMatchers.named(
@@ -324,23 +326,14 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 								getterType = ( (Method) getter ).getReturnType();
 							}
 
-							builder = builder.define(
-											new MethodDescription.InDefinedShape.Latent(
-													builder.toTypeDescription(),
-													new MethodDescription.Token(
-															"get_" + getter.getName(),
-															Opcodes.ACC_PROTECTED | Opcodes.ACC_STATIC,
-															TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-																	getterType
-															),
-															Collections.singletonList(
-																	TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-																			clazz
-																	)
-															)
-													)
-											)
+							builder = builder.defineMethod(
+											"get_" + getter.getName(),
+											TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
+													getterType
+											),
+											Opcodes.ACC_PROTECTED | Opcodes.ACC_STATIC
 									)
+									.withParameter( foreignPackageClassInfo.clazz )
 									.intercept(
 											new Implementation.Simple(
 													new GetFieldOnArgument(
@@ -358,24 +351,13 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 								setterType = ( (Method) setter ).getParameterTypes()[0];
 							}
 
-							builder = builder.define(
-											new MethodDescription.InDefinedShape.Latent(
-													builder.toTypeDescription(),
-													new MethodDescription.Token(
-															"set_" + setter.getName(),
-															Opcodes.ACC_PROTECTED | Opcodes.ACC_STATIC,
-															TypeDescription.Generic.VOID,
-															Arrays.asList(
-																	TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-																			clazz
-																	),
-																	TypeDescription.Generic.OfNonGenericType.ForLoadedType.of(
-																			setterType
-																	)
-															)
-													)
-											)
+							builder = builder.defineMethod(
+											"set_" + setter.getName(),
+											TypeDescription.Generic.VOID,
+											Opcodes.ACC_PROTECTED | Opcodes.ACC_STATIC
 									)
+									.withParameter( foreignPackageClassInfo.clazz )
+									.withParameter( setterType )
 									.intercept(
 											new Implementation.Simple(
 													new SetFieldOnArgument(
@@ -557,7 +539,10 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 				);
 			}
 			methodVisitor.visitInsn( Opcodes.RETURN );
-			return new Size( 2, instrumentedMethod.getStackSize() );
+			return new Size(
+					is64BitType( type ) ? 3 : 2,
+					instrumentedMethod.getStackSize()
+			);
 		}
 
 		private int getLoadOpCode(Class<?> type) {
@@ -573,6 +558,10 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 				return Opcodes.ILOAD;
 			}
 			return Opcodes.ALOAD;
+		}
+
+		private boolean is64BitType(Class<?> type) {
+			return type == long.class || type == double.class;
 		}
 	}
 
@@ -781,7 +770,10 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 								Opcodes.INVOKESTATIC,
 								Type.getInternalName( foreignPackageMember.getForeignPackageAccessor() ),
 								"get_" + getterMember.getName(),
-								Type.getMethodDescriptor( Type.getType( type ), Type.getType( clazz ) ),
+								Type.getMethodDescriptor(
+										Type.getType( type ),
+										Type.getType( underlyingMember.getDeclaringClass() )
+								),
 								false
 						);
 					}
@@ -976,7 +968,11 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 							Opcodes.INVOKESTATIC,
 							Type.getInternalName( foreignPackageMember.getForeignPackageAccessor() ),
 							"set_" + setterMember.getName(),
-							Type.getMethodDescriptor( Type.getType( void.class ), Type.getType( clazz ), Type.getType( type ) ),
+							Type.getMethodDescriptor(
+									Type.getType( void.class ),
+									Type.getType( foreignPackageMember.getMember().getDeclaringClass() ),
+									Type.getType( type )
+							),
 							false
 					);
 				}
@@ -1316,6 +1312,18 @@ public class BytecodeProviderImpl implements BytecodeProvider {
 	@Override
 	public @Nullable Enhancer getEnhancer(EnhancementContext enhancementContext) {
 		return new EnhancerImpl( enhancementContext, byteBuddyState );
+	}
+
+	/**
+	 * Similar to {@link #getEnhancer(EnhancementContext)} but intended for advanced users who wish
+	 * to customize how ByteBuddy is locating the class files and caching the types.
+	 * Possibly used in Quarkus in a future version.
+	 * @param enhancementContext
+	 * @param classLocator
+	 * @return
+	 */
+	public @Nullable Enhancer getEnhancer(EnhancementContext enhancementContext, EnhancerClassLocator classLocator) {
+		return new EnhancerImpl( enhancementContext, byteBuddyState, classLocator );
 	}
 
 	@Override

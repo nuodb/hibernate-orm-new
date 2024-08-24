@@ -6,6 +6,7 @@
  */
 package org.hibernate.query.sqm.tree.domain;
 
+import org.hibernate.metamodel.model.domain.DomainType;
 import org.hibernate.metamodel.model.domain.EmbeddableDomainType;
 import org.hibernate.metamodel.model.domain.EntityDomainType;
 import org.hibernate.query.PathException;
@@ -14,6 +15,8 @@ import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SemanticQueryWalker;
 import org.hibernate.query.sqm.SqmExpressible;
 import org.hibernate.query.sqm.SqmPathSource;
+import org.hibernate.query.sqm.TreatException;
+import org.hibernate.query.sqm.produce.function.FunctionArgumentException;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.spi.NavigablePath;
 import org.hibernate.type.descriptor.java.JavaType;
@@ -53,18 +56,30 @@ public class SqmEmbeddedValuedSimplePath<T>
 			return existing;
 		}
 
+		final SqmPath<?> lhsCopy = getLhs().copy( context );
 		final SqmEmbeddedValuedSimplePath<T> path = context.registerCopy(
 				this,
 				new SqmEmbeddedValuedSimplePath<>(
-						getNavigablePath(),
-						getReferencedPathSource(),
-						getLhs().copy( context ),
+						getNavigablePathCopy( lhsCopy ),
+						getModel(),
+						lhsCopy,
 						getExplicitAlias(),
 						nodeBuilder()
 				)
 		);
 		copyTo( path, context );
 		return path;
+	}
+
+	@Override
+	public SqmExpressible<T> getExpressible() {
+		return this;
+	}
+
+	@Override
+	public DomainType<T> getSqmType() {
+		//noinspection unchecked
+		return (DomainType<T>) getResolvedModel().getSqmType();
 	}
 
 	@Override
@@ -85,17 +100,17 @@ public class SqmEmbeddedValuedSimplePath<T>
 
 	@Override
 	public <S extends T> SqmTreatedPath<T, S> treatAs(Class<S> treatJavaType) throws PathException {
-		throw new PathException( "Embeddable paths cannot be TREAT-ed" );
+		return getTreatedPath( nodeBuilder().getDomainModel().embeddable( treatJavaType ) );
 	}
 
 	@Override
 	public <S extends T> SqmTreatedPath<T, S> treatAs(EntityDomainType<S> treatTarget) throws PathException {
-		throw new PathException( "Embeddable paths cannot be TREAT-ed" );
+		throw new TreatException( "Embeddable paths cannot be TREAT-ed to an entity type" );
 	}
 
 	@Override
 	public JavaType<T> getExpressibleJavaType() {
-		return getJavaTypeDescriptor();
+		return super.getExpressible().getExpressibleJavaType();
 	}
 
 	@Override
@@ -106,5 +121,10 @@ public class SqmEmbeddedValuedSimplePath<T>
 	@Override
 	public Class<T> getBindableJavaType() {
 		return getJavaType();
+	}
+
+	@Override
+	public JavaType<?> getRelationalJavaType() {
+		return super.getExpressible().getRelationalJavaType();
 	}
 }

@@ -36,7 +36,7 @@ public class JpaCriteriaParameter<T>
 
 	public JpaCriteriaParameter(
 			String name,
-			BindableType<T> type,
+			BindableType<? super T> type,
 			boolean allowsMultiValuedBinding,
 			NodeBuilder nodeBuilder) {
 		super( toSqmType( type, nodeBuilder ), nodeBuilder );
@@ -79,6 +79,12 @@ public class JpaCriteriaParameter<T>
 	}
 
 	@Override
+	public Integer getTupleLength() {
+		// TODO: we should be able to do much better than this!
+		return null;
+	}
+
+	@Override
 	public boolean allowsMultiValuedBinding() {
 		return allowsMultiValuedBinding;
 	}
@@ -116,12 +122,13 @@ public class JpaCriteriaParameter<T>
 
 	@Override
 	public BindableType<T> getHibernateType() {
-		return this.getNodeType();
+		return getNodeType();
 	}
 
 	@Override
 	public Class<T> getParameterType() {
-		return this.getNodeType().getExpressibleJavaType().getJavaTypeClass();
+		final SqmExpressible<T> nodeType = getNodeType();
+		return nodeType == null ? null : nodeType.getExpressibleJavaType().getJavaTypeClass();
 	}
 
 	@Override

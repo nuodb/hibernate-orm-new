@@ -15,12 +15,10 @@ import org.hibernate.metamodel.mapping.JdbcMappingContainer;
 import org.hibernate.metamodel.mapping.MappingModelExpressible;
 import org.hibernate.query.ReturnableType;
 import org.hibernate.query.spi.QueryEngine;
-import org.hibernate.query.sqm.BinaryArithmeticOperator;
-import org.hibernate.query.sqm.ComparisonOperator;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.function.AbstractSqmFunctionDescriptor;
 import org.hibernate.query.sqm.function.AbstractSqmSelfRenderingFunctionDescriptor;
-import org.hibernate.query.sqm.function.FunctionRenderingSupport;
+import org.hibernate.query.sqm.function.FunctionRenderer;
 import org.hibernate.query.sqm.function.MultipatternSqmFunctionDescriptor;
 import org.hibernate.query.sqm.function.SelfRenderingFunctionSqlAstExpression;
 import org.hibernate.query.sqm.function.SelfRenderingSqmFunction;
@@ -28,9 +26,6 @@ import org.hibernate.query.sqm.function.SqmFunctionDescriptor;
 import org.hibernate.query.sqm.produce.function.ArgumentTypesValidator;
 import org.hibernate.query.sqm.produce.function.ArgumentsValidator;
 import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
-import org.hibernate.query.sqm.produce.function.StandardArgumentsValidators;
-import org.hibernate.query.sqm.produce.function.StandardFunctionArgumentTypeResolvers;
-import org.hibernate.query.sqm.produce.function.StandardFunctionReturnTypeResolvers;
 import org.hibernate.query.sqm.sql.SqmToSqlAstConverter;
 import org.hibernate.query.sqm.tree.SqmTypedNode;
 import org.hibernate.sql.ast.SqlAstTranslator;
@@ -39,7 +34,6 @@ import org.hibernate.sql.ast.spi.StringBuilderSqlAppender;
 import org.hibernate.sql.ast.tree.SqlAstNode;
 import org.hibernate.sql.ast.tree.expression.BinaryArithmeticExpression;
 import org.hibernate.sql.ast.tree.expression.CaseSearchedExpression;
-import org.hibernate.sql.ast.tree.expression.CastTarget;
 import org.hibernate.sql.ast.tree.expression.DurationUnit;
 import org.hibernate.sql.ast.tree.expression.Expression;
 import org.hibernate.sql.ast.tree.expression.Format;
@@ -53,15 +47,23 @@ import org.hibernate.type.SqlTypes;
 import org.hibernate.type.StandardBasicTypes;
 import org.hibernate.type.spi.TypeConfiguration;
 
+import static org.hibernate.query.sqm.BinaryArithmeticOperator.DIVIDE_PORTABLE;
+import static org.hibernate.query.sqm.BinaryArithmeticOperator.MODULO;
+import static org.hibernate.query.sqm.ComparisonOperator.GREATER_THAN_OR_EQUAL;
+import static org.hibernate.query.sqm.ComparisonOperator.LESS_THAN;
+import static org.hibernate.query.sqm.ComparisonOperator.LESS_THAN_OR_EQUAL;
 import static org.hibernate.query.sqm.produce.function.FunctionParameterType.STRING;
 import static org.hibernate.query.sqm.produce.function.FunctionParameterType.TEMPORAL;
+import static org.hibernate.query.sqm.produce.function.StandardArgumentsValidators.exactly;
+import static org.hibernate.query.sqm.produce.function.StandardFunctionArgumentTypeResolvers.invariant;
+import static org.hibernate.query.sqm.produce.function.StandardFunctionReturnTypeResolvers.invariant;
 
 /**
  * A format function with support for composite temporal expressions.
  *
  * @author Christian Beikov
  */
-public class FormatFunction extends AbstractSqmFunctionDescriptor implements FunctionRenderingSupport {
+public class FormatFunction extends AbstractSqmFunctionDescriptor implements FunctionRenderer {
 
 	private final String nativeFunctionName;
 	private final boolean reversedArguments;
@@ -88,10 +90,9 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			TypeConfiguration typeConfiguration) {
 		super(
 				"format",
-				new ArgumentTypesValidator( StandardArgumentsValidators.exactly( 2 ), TEMPORAL, STRING ),
-				StandardFunctionReturnTypeResolvers.invariant( typeConfiguration.getBasicTypeRegistry().resolve(
-						StandardBasicTypes.STRING ) ),
-				StandardFunctionArgumentTypeResolvers.invariant( typeConfiguration, TEMPORAL, STRING )
+				new ArgumentTypesValidator( exactly( 2 ), TEMPORAL, STRING ),
+				invariant( typeConfiguration.getBasicTypeRegistry().resolve( StandardBasicTypes.STRING ) ),
+				invariant( typeConfiguration, TEMPORAL, STRING )
 		);
 		this.nativeFunctionName = nativeFunctionName;
 		this.reversedArguments = reversedArguments;
@@ -103,6 +104,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 	public void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		sqlAppender.appendSql( nativeFunctionName );
 		sqlAppender.append( '(' );
@@ -148,8 +150,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 	protected <T> SelfRenderingSqmFunction<T> generateSqmFunctionExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return new FormatSqmFunction<>(
 				this,
 				this,
@@ -174,7 +175,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 
 		public FormatSqmFunction(
 				SqmFunctionDescriptor descriptor,
-				FunctionRenderingSupport renderingSupport,
+				FunctionRenderer renderer,
 				List<? extends SqmTypedNode<?>> arguments,
 				ReturnableType<T> impliedResultType,
 				ArgumentsValidator argumentsValidator,
@@ -183,7 +184,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 				QueryEngine queryEngine) {
 			super(
 					descriptor,
-					renderingSupport,
+					renderer,
 					arguments,
 					impliedResultType,
 					argumentsValidator,
@@ -197,15 +198,13 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 
 		@Override
 		public Expression convertToSqlAst(SqmToSqlAstConverter walker) {
-			final ReturnableType<?> resultType = resolveResultType(
-					walker.getCreationContext().getMappingMetamodel().getTypeConfiguration()
-			);
+			final List<SqlAstNode> arguments = resolveSqlAstArguments( getArguments(), walker );
+			final ReturnableType<?> resultType = resolveResultType( walker );
 			final MappingModelExpressible<?> mappingModelExpressible = resultType == null ? null : getMappingModelExpressible(
 					walker,
-					resultType
+					resultType,
+					arguments
 			);
-
-			final List<SqlAstNode> arguments = resolveSqlAstArguments( getArguments(), walker );
 			final SqlAstNode expression = arguments.get( 0 );
 			if ( expression instanceof SqlTupleContainer ) {
 				// SqlTupleContainer means this is a composite temporal type i.e. uses `@TimeZoneStorage(COLUMN)`
@@ -234,8 +233,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 							"substring",
 							3
 					);
-					final AbstractSqmSelfRenderingFunctionDescriptor floorFunction = getFunction( walker, "floor" );
-					final AbstractSqmSelfRenderingFunctionDescriptor castFunction = getFunction( walker, "cast" );
 					final BasicType<String> stringType = typeConfiguration.getBasicTypeRegistry()
 							.resolve( StandardBasicTypes.STRING );
 					final Dialect dialect = walker.getCreationContext()
@@ -296,7 +293,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 												formatExpression,
 												new SelfRenderingFunctionSqlAstExpression(
 														getFunctionName(),
-														getRenderingSupport(),
+														getFunctionRenderer(),
 														List.of(
 																arguments.get( 0 ),
 																new QueryLiteral<>( formatPart, stringType )
@@ -318,8 +315,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 												createSmallOffset(
 														concatFunction,
 														substringFunction,
-														floorFunction,
-														castFunction,
 														stringType,
 														integerType,
 														offsetExpression
@@ -339,8 +334,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 											createMediumOffset(
 													concatFunction,
 													substringFunction,
-													floorFunction,
-													castFunction,
 													stringType,
 													integerType,
 													offsetExpression
@@ -356,8 +349,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 										formatExpression,
 										createFullOffset(
 												concatFunction,
-												floorFunction,
-												castFunction,
 												stringType,
 												integerType,
 												offsetExpression
@@ -422,7 +413,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 								formatExpression,
 								new SelfRenderingFunctionSqlAstExpression(
 										getFunctionName(),
-										getRenderingSupport(),
+										getFunctionRenderer(),
 										List.of( arguments.get( 0 ), new Format( chunks[i] ) ),
 										resultType,
 										mappingModelExpressible
@@ -443,7 +434,7 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			}
 			return new SelfRenderingFunctionSqlAstExpression(
 					getFunctionName(),
-					getRenderingSupport(),
+					getFunctionRenderer(),
 					arguments,
 					resultType,
 					mappingModelExpressible
@@ -465,8 +456,9 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 					.getSqmFunctionRegistry()
 					.findFunctionDescriptor( name );
 			if ( functionDescriptor instanceof MultipatternSqmFunctionDescriptor ) {
-				return (AbstractSqmSelfRenderingFunctionDescriptor) ( (MultipatternSqmFunctionDescriptor) functionDescriptor )
-						.getFunction( argumentCount );
+				return (AbstractSqmSelfRenderingFunctionDescriptor)
+						( (MultipatternSqmFunctionDescriptor) functionDescriptor )
+								.getFunction( argumentCount );
 			}
 			return (AbstractSqmSelfRenderingFunctionDescriptor) functionDescriptor;
 		}
@@ -493,8 +485,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 
 		private Expression createFullOffset(
 				AbstractSqmSelfRenderingFunctionDescriptor concatFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor floorFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor castFunction,
 				BasicType<String> stringType,
 				BasicType<Integer> integerType,
 				Expression offsetExpression) {
@@ -503,63 +493,18 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			}
 			else {
 				// ZoneOffset as seconds
-				final CaseSearchedExpression caseSearchedExpression = new CaseSearchedExpression( stringType );
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												-36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN,
-										new QueryLiteral<>(
-												0,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-0", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.GREATER_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "+", stringType )
-						)
-				);
-				caseSearchedExpression.otherwise( new QueryLiteral<>( "+0", stringType ) );
-				final Expression hours = getHours( floorFunction, castFunction, integerType, offsetExpression );
-				final Expression minutes = getMinutes( floorFunction, castFunction, integerType, offsetExpression );
+				final CaseSearchedExpression caseSearchedExpression =
+						zoneOffsetSeconds( stringType, integerType, offsetExpression );
+				final Expression hours = getHours( integerType, offsetExpression );
+				final Expression minutes = getMinutes( integerType, offsetExpression );
 
 				final CaseSearchedExpression minuteStart = new CaseSearchedExpression( stringType );
 				minuteStart.getWhenFragments().add(
 						new CaseSearchedExpression.WhenFragment(
 								new BetweenPredicate(
 										minutes,
-										new QueryLiteral<>(
-												-9,
-												integerType
-										),
-										new QueryLiteral<>(
-												9,
-												integerType
-										),
+										new QueryLiteral<>( -9, integerType ),
+										new QueryLiteral<>( 9, integerType ),
 										false,
 										null
 								),
@@ -584,8 +529,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 		private Expression createMediumOffset(
 				AbstractSqmSelfRenderingFunctionDescriptor concatFunction,
 				AbstractSqmSelfRenderingFunctionDescriptor substringFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor floorFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor castFunction,
 				BasicType<String> stringType,
 				BasicType<Integer> integerType,
 				Expression offsetExpression) {
@@ -596,8 +539,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 						createSmallOffset(
 								concatFunction,
 								substringFunction,
-								floorFunction,
-								castFunction,
 								stringType,
 								integerType,
 								offsetExpression
@@ -617,64 +558,19 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			}
 			else {
 				// ZoneOffset as seconds
-				final CaseSearchedExpression caseSearchedExpression = new CaseSearchedExpression( stringType );
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												-36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN,
-										new QueryLiteral<>(
-												0,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-0", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.GREATER_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "+", stringType )
-						)
-				);
-				caseSearchedExpression.otherwise( new QueryLiteral<>( "+0", stringType ) );
+				final CaseSearchedExpression caseSearchedExpression =
+						zoneOffsetSeconds( stringType, integerType, offsetExpression );
 
-				final Expression hours = getHours( floorFunction, castFunction, integerType, offsetExpression );
-				final Expression minutes = getMinutes( floorFunction, castFunction, integerType, offsetExpression );
+				final Expression hours = getHours( integerType, offsetExpression );
+				final Expression minutes = getMinutes( integerType, offsetExpression );
 
 				final CaseSearchedExpression minuteStart = new CaseSearchedExpression( stringType );
 				minuteStart.getWhenFragments().add(
 						new CaseSearchedExpression.WhenFragment(
 								new BetweenPredicate(
 										minutes,
-										new QueryLiteral<>(
-												-9,
-												integerType
-										),
-										new QueryLiteral<>(
-												9,
-												integerType
-										),
+										new QueryLiteral<>( -9, integerType ),
+										new QueryLiteral<>( 9, integerType ),
 										false,
 										null
 								),
@@ -699,8 +595,6 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 		private Expression createSmallOffset(
 				AbstractSqmSelfRenderingFunctionDescriptor concatFunction,
 				AbstractSqmSelfRenderingFunctionDescriptor substringFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor floorFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor castFunction,
 				BasicType<String> stringType,
 				BasicType<Integer> integerType,
 				Expression offsetExpression) {
@@ -719,48 +613,9 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			}
 			else {
 				// ZoneOffset as seconds
-				final CaseSearchedExpression caseSearchedExpression = new CaseSearchedExpression( stringType );
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												-36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.LESS_THAN,
-										new QueryLiteral<>(
-												0,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "-0", stringType )
-						)
-				);
-				caseSearchedExpression.getWhenFragments().add(
-						new CaseSearchedExpression.WhenFragment(
-								new ComparisonPredicate(
-										offsetExpression,
-										ComparisonOperator.GREATER_THAN_OR_EQUAL,
-										new QueryLiteral<>(
-												36000,
-												integerType
-										)
-								),
-								new QueryLiteral<>( "+", stringType )
-						)
-				);
-				caseSearchedExpression.otherwise( new QueryLiteral<>( "+0", stringType ) );
-				final Expression hours = getHours( floorFunction, castFunction, integerType, offsetExpression );
+				final CaseSearchedExpression caseSearchedExpression =
+						zoneOffsetSeconds( stringType, integerType, offsetExpression );
+				final Expression hours = getHours( integerType, offsetExpression );
 				return concat( concatFunction, stringType, caseSearchedExpression, hours );
 			}
 		}
@@ -818,7 +673,8 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 			}
 			else if ( expression2 instanceof SelfRenderingFunctionSqlAstExpression
 					&& "concat".equals( ( (SelfRenderingFunctionSqlAstExpression) expression2 ).getFunctionName() ) ) {
-				List<SqlAstNode> list = (List<SqlAstNode>) ( (SelfRenderingFunctionSqlAstExpression) expression2 ).getArguments();
+				final List<SqlAstNode> list = (List<SqlAstNode>)
+						( (SelfRenderingFunctionSqlAstExpression) expression2 ).getArguments();
 				final SqlAstNode firstOperand = list.get( 0 );
 				if ( expression instanceof QueryLiteral<?> && firstOperand instanceof QueryLiteral<?> ) {
 					list.set(
@@ -857,68 +713,84 @@ public class FormatFunction extends AbstractSqmFunctionDescriptor implements Fun
 		}
 
 		private Expression getHours(
-				AbstractSqmSelfRenderingFunctionDescriptor floorFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor castFunction,
 				BasicType<Integer> integerType,
 				Expression offsetExpression) {
-			return new SelfRenderingFunctionSqlAstExpression(
+			return /*new SelfRenderingFunctionSqlAstExpression(
 					"cast",
 					castFunction,
-					List.of(
-							new SelfRenderingFunctionSqlAstExpression(
-									"floor",
-									floorFunction,
-									List.of(
-											new BinaryArithmeticExpression(
-													offsetExpression,
-													BinaryArithmeticOperator.DIVIDE,
-													new QueryLiteral<>( 3600, integerType ),
-													integerType
-											)
-									),
-									integerType,
+					List.of(*/
+							new BinaryArithmeticExpression(
+									offsetExpression,
+									DIVIDE_PORTABLE,
+									new QueryLiteral<>( 3600, integerType ),
 									integerType
-							),
+							)/*,
 							new CastTarget( integerType )
 					),
 					integerType,
 					integerType
-			);
+			)*/;
 		}
 
 		private Expression getMinutes(
-				AbstractSqmSelfRenderingFunctionDescriptor floorFunction,
-				AbstractSqmSelfRenderingFunctionDescriptor castFunction,
 				BasicType<Integer> integerType,
 				Expression offsetExpression){
-			return new SelfRenderingFunctionSqlAstExpression(
+			return /*new SelfRenderingFunctionSqlAstExpression(
 					"cast",
 					castFunction,
-					List.of(
-							new SelfRenderingFunctionSqlAstExpression(
-									"floor",
-									floorFunction,
-									List.of(
-											new BinaryArithmeticExpression(
-													new BinaryArithmeticExpression(
-															offsetExpression,
-															BinaryArithmeticOperator.MODULO,
-															new QueryLiteral<>( 3600, integerType ),
-															integerType
-													),
-													BinaryArithmeticOperator.DIVIDE,
-													new QueryLiteral<>( 60, integerType ),
-													integerType
-											)
+					List.of(*/
+							new BinaryArithmeticExpression(
+									new BinaryArithmeticExpression(
+											offsetExpression,
+											MODULO,
+											new QueryLiteral<>( 3600, integerType ),
+											integerType
 									),
-									integerType,
+									DIVIDE_PORTABLE,
+									new QueryLiteral<>( 60, integerType ),
 									integerType
-							),
+							)/*,
 							new CastTarget( integerType )
 					),
 					integerType,
 					integerType
-			);
+			)*/;
 		}
+	}
+
+	private static CaseSearchedExpression zoneOffsetSeconds(BasicType<String> stringType, BasicType<Integer> integerType, Expression offsetExpression) {
+		final CaseSearchedExpression caseSearchedExpression = new CaseSearchedExpression(stringType);
+		caseSearchedExpression.getWhenFragments().add(
+				new CaseSearchedExpression.WhenFragment(
+						new ComparisonPredicate(
+								offsetExpression,
+								LESS_THAN_OR_EQUAL,
+								new QueryLiteral<>( -36000, integerType)
+						),
+						new QueryLiteral<>( "-", stringType)
+				)
+		);
+		caseSearchedExpression.getWhenFragments().add(
+				new CaseSearchedExpression.WhenFragment(
+						new ComparisonPredicate(
+								offsetExpression,
+								LESS_THAN,
+								new QueryLiteral<>( 0, integerType)
+						),
+						new QueryLiteral<>( "-0", stringType)
+				)
+		);
+		caseSearchedExpression.getWhenFragments().add(
+				new CaseSearchedExpression.WhenFragment(
+						new ComparisonPredicate(
+								offsetExpression,
+								GREATER_THAN_OR_EQUAL,
+								new QueryLiteral<>( 36000, integerType)
+						),
+						new QueryLiteral<>( "+", stringType)
+				)
+		);
+		caseSearchedExpression.otherwise( new QueryLiteral<>( "+0", stringType) );
+		return caseSearchedExpression;
 	}
 }

@@ -28,12 +28,16 @@ import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.type.BasicType;
 
 import org.hibernate.testing.junit4.BaseUnitTestCase;
+import org.hibernate.testing.util.ServiceRegistryUtil;
+
 import org.hibernate.type.SqlTypes;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import static jakarta.persistence.EnumType.STRING;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.isOneOf;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -46,7 +50,7 @@ public class EnumeratedWithMappedSuperclassTest extends BaseUnitTestCase {
 
 	@Before
 	public void before() {
-		ssr = new StandardServiceRegistryBuilder()
+		ssr = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, PostgreSQLDialect.class.getName() )
 				.applySetting( AvailableSettings.JAKARTA_HBM2DDL_DB_MAJOR_VERSION, "8" )
 				.applySetting( AvailableSettings.JAKARTA_HBM2DDL_DB_MINOR_VERSION, "1" )
@@ -73,7 +77,10 @@ public class EnumeratedWithMappedSuperclassTest extends BaseUnitTestCase {
 		final Property natureProperty = addressLevelBinding.getProperty( "nature" );
 		//noinspection unchecked
 		BasicType<Nature> natureMapping = (BasicType<Nature>) natureProperty.getType();
-		assertEquals( SqlTypes.VARCHAR, natureMapping.getJdbcType().getJdbcTypeCode() );
+		assertThat(
+				natureMapping.getJdbcType().getJdbcTypeCode(),
+				isOneOf( SqlTypes.VARCHAR, SqlTypes.ENUM, SqlTypes.NAMED_ENUM )
+		);
 
 		try ( SessionFactoryImplementor sf = (SessionFactoryImplementor) metadata.buildSessionFactory() ) {
 			EntityPersister p = sf.getRuntimeMetamodels()
@@ -81,7 +88,10 @@ public class EnumeratedWithMappedSuperclassTest extends BaseUnitTestCase {
 					.getEntityDescriptor( AddressLevel.class.getName() );
 			//noinspection unchecked
 			BasicType<Nature> runtimeType = (BasicType<Nature>) p.getPropertyType( "nature" );
-			assertEquals( SqlTypes.VARCHAR, runtimeType.getJdbcType().getJdbcTypeCode() );
+			assertThat(
+					runtimeType.getJdbcType().getJdbcTypeCode(),
+					isOneOf( SqlTypes.VARCHAR, SqlTypes.ENUM, SqlTypes.NAMED_ENUM )
+			);
 		}
 	}
 

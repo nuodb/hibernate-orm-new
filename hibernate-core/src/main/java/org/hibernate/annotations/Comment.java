@@ -6,11 +6,14 @@
  */
 package org.hibernate.annotations;
 
+import org.hibernate.Remove;
 import org.hibernate.binder.internal.CommentBinder;
 
 import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+
+import jakarta.persistence.Table;
 
 import static java.lang.annotation.ElementType.FIELD;
 import static java.lang.annotation.ElementType.METHOD;
@@ -47,12 +50,16 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
  *
  * @author Yanming Zhou
  * @author Gavin King
+ *
+ * @deprecated Prefer {@linkplain Table#comment()}
  */
 @TypeBinderType(binder = CommentBinder.class)
 @AttributeBinderType(binder = CommentBinder.class)
 @Target({METHOD, FIELD, TYPE})
 @Retention(RUNTIME)
 @Repeatable(Comments.class)
+@Deprecated
+@Remove
 public @interface Comment {
 	/**
 	 * The text of the comment.

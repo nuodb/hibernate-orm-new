@@ -402,7 +402,10 @@ public class EntityEntryContext {
 	}
 
 	private static void downgradeLockOnManagedEntity(final ManagedEntity node) {
-		node.$$_hibernate_getEntityEntry().setLockMode( LockMode.NONE );
+		final EntityEntry entityEntry = node.$$_hibernate_getEntityEntry();
+		if ( entityEntry != null ) {
+			entityEntry.setLockMode( LockMode.NONE );
+		}
 	}
 
 	/**
@@ -522,7 +525,7 @@ public class EntityEntryContext {
 		final String entityEntryClassName = new String( entityEntryClassNameArr );
 		final Class<?> entityEntryClass =
 				rtn.getSession().getFactory().getServiceRegistry()
-						.getService( ClassLoaderService.class )
+						.requireService( ClassLoaderService.class )
 						.classForName( entityEntryClassName );
 
 		try {
@@ -550,9 +553,11 @@ public class EntityEntryContext {
 		private EntityEntry entityEntry;
 		private ManagedEntity previous;
 		private ManagedEntity next;
+		private boolean useTracker;
 
 		public ManagedEntityImpl(Object entityInstance) {
 			this.entityInstance = entityInstance;
+			useTracker = false;
 		}
 
 		@Override
@@ -578,6 +583,16 @@ public class EntityEntryContext {
 		@Override
 		public void $$_hibernate_setNextManagedEntity(ManagedEntity next) {
 			this.next = next;
+		}
+
+		@Override
+		public void $$_hibernate_setUseTracker(boolean useTracker) {
+			this.useTracker = useTracker;
+		}
+
+		@Override
+		public boolean $$_hibernate_useTracker() {
+			return useTracker;
 		}
 
 		@Override
@@ -658,6 +673,16 @@ public class EntityEntryContext {
 			// next reference cannot be stored in an immutable ManagedEntity;
 			// next reference is maintained by this ManagedEntityHolder.
 			this.next = next;
+		}
+
+		@Override
+		public void $$_hibernate_setUseTracker(boolean useTracker) {
+			managedEntity.$$_hibernate_setUseTracker( useTracker );
+		}
+
+		@Override
+		public boolean $$_hibernate_useTracker() {
+			return managedEntity.$$_hibernate_useTracker();
 		}
 
 		/*

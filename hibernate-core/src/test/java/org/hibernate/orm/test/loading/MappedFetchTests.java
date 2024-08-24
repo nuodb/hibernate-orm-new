@@ -73,7 +73,7 @@ public class MappedFetchTests {
 				rootEntityDescriptor.getIdentifierMapping(),
 				null,
 				1,
-				LoadQueryInfluencers.NONE,
+				new LoadQueryInfluencers( sessionFactory ),
 				LockOptions.NONE,
 				jdbcParameter -> {
 				},
@@ -149,12 +149,12 @@ public class MappedFetchTests {
 					final RootEntity root1 = new RootEntity( 1, "first" );
 					root1.addNickName( "1st" );
 					root1.addNickName( "primo" );
-					session.save( root1 );
+					session.persist( root1 );
 
 					final RootEntity root2 = new RootEntity( 2, "second" );
 					root2.addNickName( "2nd" );
 					root2.addNickName( "first loser" );
-					session.save( root2 );
+					session.persist( root2 );
 				}
 		);
 	}

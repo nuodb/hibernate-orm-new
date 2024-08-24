@@ -6,9 +6,11 @@
  */
 package org.hibernate;
 
-import java.io.Closeable;
 import java.io.Serializable;
+import java.util.List;
 
+import jakarta.persistence.EntityGraph;
+import org.hibernate.graph.RootGraph;
 import org.hibernate.jdbc.ReturningWork;
 import org.hibernate.jdbc.Work;
 import org.hibernate.procedure.ProcedureCall;
@@ -20,13 +22,21 @@ import org.hibernate.query.criteria.HibernateCriteriaBuilder;
  *
  * @author Steve Ebersole
  */
-public interface SharedSessionContract extends QueryProducer, Closeable, Serializable {
+public interface SharedSessionContract extends QueryProducer, AutoCloseable, Serializable {
 	/**
 	 * Obtain the tenant identifier associated with this session.
 	 *
 	 * @return The tenant identifier associated with this session, or {@code null}
 	 */
 	String getTenantIdentifier();
+
+	/**
+	 * Obtain the tenant identifier associated with this session.
+	 *
+	 * @return The tenant identifier associated with this session, or {@code null}
+	 * @since 6.4
+	 */
+	Object getTenantIdentifierValue();
 
 	/**
 	 * End the session by releasing the JDBC connection and cleaning up.
@@ -240,4 +250,102 @@ public interface SharedSessionContract extends QueryProducer, Closeable, Seriali
 		throw new UnsupportedOperationException();
 	}
 
+	/**
+	 * Create a new mutable {@link EntityGraph} with only a root node.
+	 *
+	 * @param rootType the root entity class of the graph
+	 *
+	 * @since 6.3
+	 */
+	<T> RootGraph<T> createEntityGraph(Class<T> rootType);
+
+	/**
+	 * Create a new mutable copy of the named {@link EntityGraph},
+	 * or return {@code null} if there is no graph with the given
+	 * name.
+	 *
+	 * @param graphName the name of the graph
+	 *
+	 * @see jakarta.persistence.EntityManagerFactory#addNamedEntityGraph(String, EntityGraph)
+	 *
+	 * @since 6.3
+	 */
+	RootGraph<?> createEntityGraph(String graphName);
+
+	/**
+	 * Create a new mutable copy of the named {@link EntityGraph},
+	 * or return {@code null} if there is no graph with the given
+	 * name.
+	 *
+	 * @param rootType the root entity class of the graph
+	 * @param graphName the name of the graph
+	 *
+	 * @see jakarta.persistence.EntityManagerFactory#addNamedEntityGraph(String, EntityGraph)
+	 *
+	 * @throws IllegalArgumentException if the graph with the given
+	 *         name does not have the given entity type as its root
+	 *
+	 * @since 6.3
+	 */
+	<T> RootGraph<T> createEntityGraph(Class<T> rootType, String graphName);
+
+	/**
+	 * Retrieve the named {@link EntityGraph} as an immutable graph,
+	 * or return {@code null} if there is no graph with the given
+	 * name.
+	 *
+	 * @see jakarta.persistence.EntityManagerFactory#addNamedEntityGraph(String, EntityGraph)
+	 *
+	 * @param graphName the name of the graph
+	 *
+	 * @since 6.3
+	 */
+	RootGraph<?> getEntityGraph(String graphName);
+
+	/**
+	 * Retrieve all named {@link EntityGraph}s with the given type.
+	 *
+	 * @see jakarta.persistence.EntityManagerFactory#addNamedEntityGraph(String, EntityGraph)
+	 *
+	 * @since 6.3
+	 */
+	<T> List<EntityGraph<? super T>> getEntityGraphs(Class<T> entityClass);
+
+	/**
+	 * Enable the named {@linkplain Filter filter} for this current session.
+	 * <p>
+	 * The returned {@link Filter} object must be used to bind arguments
+	 * to parameters of the filter, and every parameter must be set before
+	 * any other operation of this session is called.
+	 *
+	 * @param filterName the name of the filter to be enabled.
+	 *
+	 * @return the {@link Filter} instance representing the enabled filter.
+	 *
+	 * @throws UnknownFilterException if there is no such filter
+	 *
+	 * @see org.hibernate.annotations.FilterDef
+	 */
+	Filter enableFilter(String filterName);
+
+	/**
+	 * Retrieve a currently enabled {@linkplain Filter filter} by name.
+	 *
+	 * @param filterName the name of the filter to be retrieved.
+	 *
+	 * @return the {@link Filter} instance representing the enabled filter.
+	 */
+	Filter getEnabledFilter(String filterName);
+
+	/**
+	 * Disable the named {@linkplain Filter filter} for the current session.
+	 *
+	 * @param filterName the name of the filter to be disabled.
+	 */
+	void disableFilter(String filterName);
+
+	/**
+	 * The factory which created this session.
+	 */
+	SessionFactory getFactory();
 }

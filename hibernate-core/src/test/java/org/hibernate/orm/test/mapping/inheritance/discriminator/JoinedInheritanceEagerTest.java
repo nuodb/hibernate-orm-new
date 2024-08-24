@@ -95,10 +95,10 @@ public class JoinedInheritanceEagerTest {
 					EntityD entityD = session.get( EntityD.class, 2L );
 					EntityC entityC = session.get( EntityC.class, 1L );
 
-					session.delete( entityD );
-					session.delete( entityC );
-					session.delete( entityA );
-					session.delete( entityB );
+					session.remove( entityD );
+					session.remove( entityC );
+					session.remove( entityA );
+					session.remove( entityB );
 				}
 		);
 	}
@@ -115,7 +115,7 @@ public class JoinedInheritanceEagerTest {
 						fail( "Expected a resolution exception for property 'attributes'!" );
 					}
 					catch (IllegalArgumentException ex) {
-						Assert.assertTrue( ex.getCause().getCause().getMessage().contains( "Could not resolve attribute 'attributes' "));
+						Assert.assertTrue( ex.getCause().getMessage().contains( "Could not resolve attribute 'attributes' "));
 					}
 					finally {
 						session.getTransaction().commit();

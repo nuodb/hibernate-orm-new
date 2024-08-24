@@ -22,6 +22,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,15 +44,15 @@ public class EntityWithEagerManyToOneTest {
 	public void setUp(SessionFactoryScope scope) {
 		scope.inTransaction( session -> {
 			ConcreteEntity entity = new ConcreteEntity();
-			session.save( entity );
+			session.persist( entity );
 
 			LazyAbstractEntityReference reference = new LazyAbstractEntityReference( entity );
-			session.save( reference );
+			session.persist( reference );
 
 			this.abstractEntityReferenceId = reference.getId();
 
 			LazyConcreteEntityReference concreteReference = new LazyConcreteEntityReference( entity );
-			session.save( concreteReference );
+			session.persist( concreteReference );
 
 			this.concreteEntityReferenceId = concreteReference.getId();
 		} );
@@ -135,6 +136,7 @@ public class EntityWithEagerManyToOneTest {
 	}
 
 	@Entity(name = "LazyAbstractEntityReference")
+	@Table(name = "lazy_abstract_ent_ref")
 	@Cacheable
 	public static class LazyAbstractEntityReference {
 
@@ -170,6 +172,7 @@ public class EntityWithEagerManyToOneTest {
 	}
 
 	@Entity(name = "LazyConcreteEntityReference")
+	@Table(name = "lazy_concrete_ent_ref")
 	@Cacheable
 	public static class LazyConcreteEntityReference {
 

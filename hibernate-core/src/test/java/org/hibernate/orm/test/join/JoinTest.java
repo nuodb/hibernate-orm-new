@@ -17,11 +17,13 @@ import jakarta.persistence.criteria.Root;
 
 import org.hibernate.Hibernate;
 import org.hibernate.Session;
+import org.hibernate.community.dialect.AltibaseDialect;
 import org.hibernate.jdbc.AbstractWork;
 
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.SessionFactory;
 import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.hibernate.testing.orm.junit.SkipForDialect;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -39,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class JoinTest {
 
 	@Test
+	@SkipForDialect( dialectClass = AltibaseDialect.class, reason = "In line view in left join is not possible in Altibase")
 	public void testSequentialSelects(SessionFactoryScope scope) {
 		scope.inTransaction(
 				s -> {
@@ -63,9 +66,9 @@ public class JoinTest {
 					yomomma.setName( "mum" );
 					yomomma.setSex( 'F' );
 
-					s.save( yomomma );
-					s.save( mark );
-					s.save( joe );
+					s.persist( yomomma );
+					s.persist( mark );
+					s.persist( joe );
 
 //					assertEquals( s.createQuery("from java.io.Serializable").list().size(), 0 );
 
@@ -99,9 +102,9 @@ public class JoinTest {
 
 					mark.setZip( "30306" );
 					assertEquals( 1, s.createQuery( "from Person p where p.zip = '30306'" ).list().size() );
-					s.delete( mark );
-					s.delete( joe );
-					s.delete( yomomma );
+					s.remove( mark );
+					s.remove( joe );
+					s.remove( yomomma );
 					assertTrue( s.createQuery( "from Person" ).list().isEmpty() );
 				}
 		);
@@ -115,7 +118,7 @@ public class JoinTest {
 					jesus.setName( "Jesus Olvera y Martinez" );
 					jesus.setSex( 'M' );
 
-					s.save( jesus );
+					s.persist( jesus );
 
 //					assertEquals( 0, s.createQuery("from java.io.Serializable").list().size() );
 
@@ -133,7 +136,7 @@ public class JoinTest {
 					s.clear();
 
 					// Cleanup the test data
-					s.delete( jesus );
+					s.remove( jesus );
 
 					assertTrue( s.createQuery( "from Person" ).list().isEmpty() );
 
@@ -246,8 +249,8 @@ public class JoinTest {
 							.uniqueResult();
 					assertEquals( 1d, expiryViaSql.doubleValue(), 0.01d );
 
-					s.delete( p );
-					s.delete( u );
+					s.remove( p );
+					s.remove( u );
 					assertTrue( s.createQuery( "from Person" ).list().isEmpty() );
 
 				}

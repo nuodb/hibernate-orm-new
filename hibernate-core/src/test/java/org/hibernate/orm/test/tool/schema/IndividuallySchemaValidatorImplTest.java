@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Properties;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrimaryKeyJoinColumn;
 import jakarta.persistence.Table;
 
 import org.hibernate.boot.MetadataSources;
@@ -46,6 +45,8 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.boot.JdbcConnectionAccessImpl;
 import org.hibernate.testing.junit4.BaseUnitTestCase;
 import org.hibernate.testing.logger.LoggerInspectionRule;
+import org.hibernate.testing.util.ServiceRegistryUtil;
+
 import org.hibernate.orm.test.util.DdlTransactionIsolatorTestingImpl;
 import org.junit.After;
 import org.junit.Assert;
@@ -78,7 +79,7 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 
 	@Before
 	public void setUp() throws IOException {
-		ssr = new StandardServiceRegistryBuilder().build();
+		ssr = ServiceRegistryUtil.serviceRegistry();
 
 		tool = (HibernateSchemaManagementTool) ssr.getService( SchemaManagementTool.class );
 
@@ -159,7 +160,7 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 
 		Map<String, Object> settings = new HashMap<>(  );
 
-		ServiceRegistryImplementor serviceRegistry = (ServiceRegistryImplementor) new StandardServiceRegistryBuilder()
+		ServiceRegistryImplementor serviceRegistry = (ServiceRegistryImplementor) ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySettings( settings )
 				.build();
 
@@ -216,7 +217,7 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 
 		Map<String, Object> settings = new HashMap<>(  );
 
-		ServiceRegistryImplementor serviceRegistry = (ServiceRegistryImplementor) new StandardServiceRegistryBuilder()
+		ServiceRegistryImplementor serviceRegistry = (ServiceRegistryImplementor) ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySettings( settings )
 				.build();
 
@@ -255,7 +256,7 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 				if ( metadata.getDatabase().getDialect().getVersion().isSameOrAfter( 2 ) ) {
 					// Reports "character varying" since 2.0
 					assertEquals(
-							"Schema-validation: wrong column type encountered in column [name] in table [SomeSchema.ColumnEntity]; found [character (Types#VARCHAR)], but expecting [integer (Types#INTEGER)]",
+							"Schema-validation: wrong column type encountered in column [name] in table [SomeSchema.ColumnEntity]; found [character varying (Types#VARCHAR)], but expecting [integer (Types#INTEGER)]",
 							e.getMessage()
 					);
 				}
@@ -292,7 +293,6 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 	}
 
 	@Entity
-	@PrimaryKeyJoinColumn
 	@Table(name = "UnqualifiedMissingEntity")
 	public static class UnqualifiedMissingEntity {
 
@@ -309,7 +309,6 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 	}
 
 	@Entity
-	@PrimaryKeyJoinColumn
 	@Table(name = "MissingEntity", catalog = "SomeCatalog", schema = "SomeSchema")
 	public static class MissingEntity {
 
@@ -326,7 +325,6 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 	}
 
 	@Entity
-	@PrimaryKeyJoinColumn
 	@Table(name = "ColumnEntity", schema = "SomeSchema")
 	public static class NoNameColumn {
 
@@ -343,7 +341,6 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 	}
 
 	@Entity
-	@PrimaryKeyJoinColumn
 	@Table(name = "ColumnEntity", schema = "SomeSchema")
 	public static class NameColumn {
 
@@ -370,7 +367,6 @@ public class IndividuallySchemaValidatorImplTest extends BaseUnitTestCase {
 	}
 
 	@Entity
-	@PrimaryKeyJoinColumn
 	@Table(name = "ColumnEntity", schema = "SomeSchema")
 	public static class IntegerNameColumn {
 

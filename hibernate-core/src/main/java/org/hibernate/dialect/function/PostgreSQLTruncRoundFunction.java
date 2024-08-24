@@ -11,8 +11,7 @@ import java.util.List;
 import org.hibernate.query.ReturnableType;
 import org.hibernate.query.spi.QueryEngine;
 import org.hibernate.query.sqm.function.AbstractSqmFunctionDescriptor;
-import org.hibernate.query.sqm.function.AbstractSqmSelfRenderingFunctionDescriptor;
-import org.hibernate.query.sqm.function.FunctionRenderingSupport;
+import org.hibernate.query.sqm.function.FunctionRenderer;
 import org.hibernate.query.sqm.function.SelfRenderingSqmFunction;
 import org.hibernate.query.sqm.produce.function.ArgumentTypesValidator;
 import org.hibernate.query.sqm.produce.function.StandardArgumentsValidators;
@@ -24,7 +23,6 @@ import org.hibernate.sql.ast.spi.SqlAppender;
 import org.hibernate.sql.ast.tree.SqlAstNode;
 import org.hibernate.sql.ast.tree.expression.Expression;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
-import org.hibernate.type.spi.TypeConfiguration;
 
 import static org.hibernate.query.sqm.produce.function.FunctionParameterType.INTEGER;
 import static org.hibernate.query.sqm.produce.function.FunctionParameterType.NUMERIC;
@@ -48,7 +46,7 @@ import static org.hibernate.query.sqm.produce.function.FunctionParameterType.NUM
  * @author Marco Belladelli
  * @see <a href="https://www.postgresql.org/docs/current/functions-math.html">PostgreSQL documentation</a>
  */
-public class PostgreSQLTruncRoundFunction extends AbstractSqmFunctionDescriptor implements FunctionRenderingSupport {
+public class PostgreSQLTruncRoundFunction extends AbstractSqmFunctionDescriptor implements FunctionRenderer {
 	private final boolean supportsTwoArguments;
 
 	public PostgreSQLTruncRoundFunction(String name, boolean supportsTwoArguments) {
@@ -62,7 +60,11 @@ public class PostgreSQLTruncRoundFunction extends AbstractSqmFunctionDescriptor 
 	}
 
 	@Override
-	public void render(SqlAppender sqlAppender, List<? extends SqlAstNode> arguments, SqlAstTranslator<?> walker) {
+	public void render(
+			SqlAppender sqlAppender,
+			List<? extends SqlAstNode> arguments,
+			ReturnableType<?> returnType,
+			SqlAstTranslator<?> walker) {
 		final int numberOfArguments = arguments.size();
 		final Expression firstArg = (Expression) arguments.get( 0 );
 		final JdbcType jdbcType = firstArg.getExpressionType().getSingleJdbcMapping().getJdbcType();
@@ -108,8 +110,7 @@ public class PostgreSQLTruncRoundFunction extends AbstractSqmFunctionDescriptor 
 	protected <T> SelfRenderingSqmFunction<T> generateSqmFunctionExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return new SelfRenderingSqmFunction<>(
 				this,
 				this,

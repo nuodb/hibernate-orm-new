@@ -6,7 +6,6 @@
  */
 package org.hibernate.mapping;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -91,12 +90,7 @@ public class OneToMany implements Value {
 	}
 
 	@Override
-	public void createUniqueKey() {
-	}
-
-	@Deprecated
-	public Iterator<Selectable> getColumnIterator() {
-		return associatedClass.getKey().getColumnIterator();
+	public void createUniqueKey(MetadataBuildingContext context) {
 	}
 
 	@Override

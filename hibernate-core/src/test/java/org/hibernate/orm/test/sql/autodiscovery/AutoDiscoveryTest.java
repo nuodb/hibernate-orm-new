@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.sql.autodiscovery;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,10 +17,13 @@ import java.util.List;
 import org.hibernate.Session;
 import org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.community.dialect.AltibaseDialect;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.jdbc.Work;
 
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SkipForDialect;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -50,8 +54,8 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 	public void testAutoDiscoveryWithDuplicateColumnLabels() {
 		Session session = openSession();
 		session.beginTransaction();
-		session.save( new User( "steve" ) );
-		session.save( new User( "stliu" ) );
+		session.persist( new User( "steve" ) );
+		session.persist( new User( "stliu" ) );
 		session.getTransaction().commit();
 		session.close();
 
@@ -91,9 +95,9 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 		User u = new User( "steve" );
 		Group g = new Group( "developer" );
 		Membership m = new Membership( u, g );
-		session.save( u );
-		session.save( g );
-		session.save( m );
+		session.persist( u );
+		session.persist( g );
+		session.persist( m );
 		session.getTransaction().commit();
 		session.close();
 
@@ -103,9 +107,9 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 		Object[] row = (Object[]) result.get( 0 );
 		Assert.assertEquals( "steve", row[0] );
 		Assert.assertEquals( "developer", row[1] );
-		session.delete( m );
-		session.delete( u );
-		session.delete( g );
+		session.remove( m );
+		session.remove( u );
+		session.remove( g );
 		session.getTransaction().commit();
 		session.close();
 	}
@@ -120,7 +124,7 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 					@Override
 					public void execute(Connection connection) throws SQLException {
 						PreparedStatement ps = sessionImplementor.getJdbcCoordinator().getStatementPreparer().prepareStatement( QUERY_STRING );
-						ResultSet rs = sessionImplementor.getJdbcCoordinator().getResultSetReturn().extract( ps );
+						ResultSet rs = sessionImplementor.getJdbcCoordinator().getResultSetReturn().extract( ps, QUERY_STRING );
 						try {
 							ResultSetMetaData metadata = rs.getMetaData();
 							String column1Alias = getDialect().getColumnAliasExtractor().extractColumnAlias( metadata, 1 );
@@ -134,6 +138,26 @@ public class AutoDiscoveryTest extends BaseCoreFunctionalTestCase {
 					}
 				}
 		);
+		session.getTransaction().commit();
+		session.close();
+	}
+
+	@Test
+	@JiraKey( "HHH-16697" )
+	@SkipForDialect( dialectClass = AltibaseDialect.class, reason = "Altibase sum(39.74) returns Float" )
+	public void testAggregateQueryAutoDiscovery() {
+		Session session = openSession();
+		session.beginTransaction();
+		User u = new User( "steve" );
+		session.persist( u );
+		session.getTransaction().commit();
+		session.close();
+
+		session = openSession();
+		session.beginTransaction();
+		List<Object> result = session.createNativeQuery( "select sum(39.74) from t_user u" ).list();
+		Assert.assertEquals( new BigDecimal( "39.74" ), result.get( 0 ) );
+		session.remove( u );
 		session.getTransaction().commit();
 		session.close();
 	}

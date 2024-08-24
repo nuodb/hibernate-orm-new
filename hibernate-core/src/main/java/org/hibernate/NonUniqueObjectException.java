@@ -6,12 +6,12 @@
  */
 package org.hibernate;
 
-import org.hibernate.pretty.MessageHelper;
+import static org.hibernate.pretty.MessageHelper.infoString;
 
 /**
  * This exception is thrown when an operation would break session-scoped identity.
  * This occurs if the user tries to associate two different instances of the same
- * Java class with a particular identifier, in the scope of a single Session.
+ * Java class with a particular identifier, in the scope of a single {@link Session}.
  *
  * @author Gavin King
  */
@@ -57,6 +57,6 @@ public class NonUniqueObjectException extends HibernateException {
 
 	@Override
 	public String getMessage() {
-		return super.getMessage() + " : " + MessageHelper.infoString( entityName, identifier );
+		return super.getMessage() + ": " + infoString( entityName, identifier );
 	}
 }

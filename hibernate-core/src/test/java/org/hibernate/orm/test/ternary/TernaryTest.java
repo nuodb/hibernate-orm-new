@@ -39,7 +39,7 @@ public class TernaryTest extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration configuration) {
 		super.configure( configuration );
-		configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, "false" );
+		configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, false );
 	}
 
 	@Test
@@ -111,10 +111,10 @@ public class TernaryTest extends BaseCoreFunctionalTestCase {
 		while ( itr.hasNext() ) {
 			Employee emp = ( Employee ) itr.next();
 			emp.setManagerBySite( new HashMap() );
-			s.delete( emp );
+			s.remove( emp );
 		}
 		for ( Object entity : s.createQuery( "from Site" ).list() ) {
-			s.delete( entity );
+			s.remove( entity );
 		}
 		t.commit();
 		s.close();

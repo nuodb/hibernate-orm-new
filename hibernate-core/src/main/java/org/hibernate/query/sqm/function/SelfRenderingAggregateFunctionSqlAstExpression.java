@@ -30,7 +30,7 @@ public class SelfRenderingAggregateFunctionSqlAstExpression extends SelfRenderin
 
 	public SelfRenderingAggregateFunctionSqlAstExpression(
 			String functionName,
-			FunctionRenderingSupport renderer,
+			FunctionRenderer renderer,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			ReturnableType<?> type,
@@ -49,6 +49,6 @@ public class SelfRenderingAggregateFunctionSqlAstExpression extends SelfRenderin
 			SqlAppender sqlAppender,
 			SqlAstTranslator<?> walker,
 			SessionFactoryImplementor sessionFactory) {
-		getRenderer().render( sqlAppender, getArguments(), filter, walker );
+		getFunctionRenderer().render( sqlAppender, getArguments(), filter, getType(), walker );
 	}
 }

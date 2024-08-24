@@ -42,7 +42,7 @@ public class ScrollableResultsConsumer<R> implements ResultsConsumer<ScrollableR
 			JdbcValuesSourceProcessingStateStandardImpl jdbcValuesSourceProcessingState,
 			RowProcessingStateStandardImpl rowProcessingState,
 			RowReader<R> rowReader) {
-		session.getPersistenceContext().getLoadContexts().register( jdbcValuesSourceProcessingState );
+		rowReader.startLoading( rowProcessingState );
 		if ( containsCollectionFetches( jdbcValues.getValuesMapping() ) ) {
 			return new FetchingScrollableResultsImpl<>(
 					jdbcValues,

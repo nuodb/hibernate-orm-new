@@ -13,14 +13,13 @@ import java.util.List;
 import org.hibernate.metamodel.mapping.PluralAttributeMapping;
 import org.hibernate.metamodel.mapping.ValuedModelPart;
 import org.hibernate.metamodel.mapping.ordering.OrderByFragment;
+import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.query.ReturnableType;
-import org.hibernate.persister.collection.QueryableCollection;
-import org.hibernate.persister.entity.Joinable;
+import org.hibernate.query.sqm.function.FunctionRenderer;
 import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.spi.QueryEngine;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.function.AbstractSqmFunctionDescriptor;
-import org.hibernate.query.sqm.function.FunctionRenderingSupport;
 import org.hibernate.query.sqm.function.SelfRenderingSqmFunction;
 import org.hibernate.query.sqm.function.SqmFunctionDescriptor;
 import org.hibernate.query.sqm.produce.function.ArgumentsValidator;
@@ -39,7 +38,6 @@ import org.hibernate.sql.ast.tree.from.NamedTableReference;
 import org.hibernate.sql.ast.tree.from.TableGroup;
 import org.hibernate.sql.ast.tree.from.TableReference;
 import org.hibernate.sql.ast.tree.select.QuerySpec;
-import org.hibernate.type.spi.TypeConfiguration;
 
 /**
  * Envers specific FunctionContributor
@@ -63,8 +61,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 	protected <T> SelfRenderingSqmFunction<T> generateSqmFunctionExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return new OrderByFragmentSelfRenderingSqmFunction<>( this, arguments, impliedResultType, queryEngine );
 	}
 
@@ -139,7 +136,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 				QueryEngine queryEngine) {
 			super(
 					orderByFragmentFunction,
-					null,
+					(sqlAppender, sqlAstArguments, returnType, walker) -> {},
 					arguments,
 					impliedResultType,
 					orderByFragmentFunction.getArgumentsValidator(),
@@ -151,7 +148,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 
 		private OrderByFragmentSelfRenderingSqmFunction(
 				SqmFunctionDescriptor descriptor,
-				FunctionRenderingSupport renderingSupport,
+				FunctionRenderer renderer,
 				List<? extends SqmTypedNode<?>> arguments,
 				ReturnableType<T> impliedResultType,
 				ArgumentsValidator argumentsValidator,
@@ -160,7 +157,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 				String name) {
 			super(
 					descriptor,
-					renderingSupport,
+					renderer,
 					arguments,
 					impliedResultType,
 					argumentsValidator,
@@ -184,7 +181,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 					this,
 					new OrderByFragmentSelfRenderingSqmFunction<>(
 							getFunctionDescriptor(),
-							getRenderingSupport(),
+							getFunctionRenderer(),
 							arguments,
 							getImpliedResultType(),
 							getArgumentsValidator(),
@@ -202,7 +199,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 			final TableGroup tableGroup = ( (FromClauseIndex) walker.getFromClauseAccess() ).findTableGroup(
 					sqmAlias
 			);
-			final QueryableCollection collectionDescriptor = (QueryableCollection) walker.getCreationContext()
+			final CollectionPersister collectionDescriptor = walker.getCreationContext()
 					.getSessionFactory()
 						.getRuntimeMetamodels()
 						.getMappingMetamodel()
@@ -221,7 +218,7 @@ public class OrderByFragmentFunction extends AbstractSqmFunctionDescriptor {
 				targetTableExpression = collectionDescriptor.getTableName();
 			}
 			else {
-				targetTableExpression = ( (Joinable) collectionDescriptor.getElementPersister() ).getTableName();
+				targetTableExpression = collectionDescriptor.getElementPersister().getTableName();
 			}
 			// We apply the fragment here and return null to signal that this is a no-op
 			fragment.apply(

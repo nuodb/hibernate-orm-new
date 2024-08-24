@@ -33,6 +33,7 @@ import org.hibernate.testing.orm.junit.EntityManagerFactoryBasedFunctionalTest;
 import org.hibernate.testing.logger.LoggerInspectionRule;
 import org.hibernate.testing.logger.Triggerable;
 import org.hibernate.testing.orm.junit.RequiresDialect;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.Rule;
 import org.junit.jupiter.api.Test;
 
@@ -75,8 +76,7 @@ public class PostgreSQLSequenceGeneratorWithSerialTest extends EntityManagerFact
 		assertFalse( triggerable.wasTriggered() );
 
 		//For this test, we need to make sure the DB is created prior to bootstrapping Hibernate
-		StandardServiceRegistry ssr = new StandardServiceRegistryBuilder()
-				.build();
+		StandardServiceRegistry ssr = ServiceRegistryUtil.serviceRegistry();
 
 		SessionFactory sessionFactory = null;
 
@@ -105,6 +105,11 @@ public class PostgreSQLSequenceGeneratorWithSerialTest extends EntityManagerFact
 				DROP_TABLE + ";" + DROP_SEQUENCE
 		) );
 		settings.put( AvailableSettings.SEQUENCE_INCREMENT_SIZE_MISMATCH_STRATEGY, SequenceMismatchStrategy.FIX );
+	}
+
+	@Override
+	protected boolean exportSchema() {
+		return false;
 	}
 
 	@Override

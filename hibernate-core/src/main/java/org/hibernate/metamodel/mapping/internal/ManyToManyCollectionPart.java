@@ -7,6 +7,7 @@
 package org.hibernate.metamodel.mapping.internal;
 
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
 
 import org.hibernate.annotations.NotFoundAction;
@@ -55,6 +56,8 @@ import org.hibernate.sql.ast.tree.from.TableReference;
 import org.hibernate.sql.ast.tree.predicate.Predicate;
 import org.hibernate.type.EntityType;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 import static java.util.Objects.requireNonNullElse;
 import static org.hibernate.metamodel.mapping.internal.MappingModelCreationHelper.createInverseModelPart;
 import static org.hibernate.metamodel.mapping.internal.MappingModelCreationHelper.getPropertyOrder;
@@ -82,8 +85,6 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 		LazyTableGroup.ParentTableGroupUseChecker {
 	private ForeignKeyDescriptor foreignKey;
 	private ValuedModelPart fkTargetModelPart;
-	private boolean[] isInsertable;
-	private boolean[] isUpdatable;
 
 	public ManyToManyCollectionPart(
 			Nature nature,
@@ -135,6 +136,11 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 		}
 
 		return super.findSubPart( name, targetType );
+	}
+
+	@Override
+	public Set<String> getTargetKeyPropertyNames() {
+		return targetKeyPropertyNames;
 	}
 
 	@Override
@@ -254,14 +260,13 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 	public TableGroupJoin createTableGroupJoin(
 			NavigablePath navigablePath,
 			TableGroup lhs,
-			String explicitSourceAlias,
-			SqlAliasBase explicitSqlAliasBase,
-			SqlAstJoinType requestedJoinType,
+			@Nullable String explicitSourceAlias,
+			@Nullable SqlAliasBase explicitSqlAliasBase,
+			@Nullable SqlAstJoinType requestedJoinType,
 			boolean fetched,
 			boolean addsPredicate,
 			SqlAstCreationState creationState) {
 		final SqlAstJoinType joinType = requireNonNullElse( requestedJoinType, SqlAstJoinType.INNER );
-
 		final LazyTableGroup lazyTableGroup = createRootTableGroupJoin(
 				navigablePath,
 				lhs,
@@ -298,11 +303,11 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 	public LazyTableGroup createRootTableGroupJoin(
 			NavigablePath navigablePath,
 			TableGroup lhs,
-			String explicitSourceAlias,
-			SqlAliasBase explicitSqlAliasBase,
-			SqlAstJoinType requestedJoinType,
+			@Nullable String explicitSourceAlias,
+			@Nullable SqlAliasBase explicitSqlAliasBase,
+			@Nullable SqlAstJoinType requestedJoinType,
 			boolean fetched,
-			Consumer<Predicate> predicateConsumer,
+			@Nullable Consumer<Predicate> predicateConsumer,
 			SqlAstCreationState creationState) {
 		final SqlAstJoinType joinType = requireNonNullElse( requestedJoinType, SqlAstJoinType.INNER );
 		final boolean canUseInnerJoin = joinType == SqlAstJoinType.INNER || lhs.canUseInnerJoins();
@@ -389,7 +394,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 				fkTargetModelPart = resolveNamedTargetPart( mapKeyPropertyName, entityMappingType, collectionDescriptor );
 			}
 			else {
-				fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMapping();
+				fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMappingForJoin();
+//				fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMapping();
 			}
 		}
 		else if ( StringHelper.isNotEmpty( bootCollectionDescriptor.getMappedByProperty() ) ) {
@@ -445,7 +451,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 		}
 		else {
 			// non-inverse @ManyToMany
-			fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMapping();
+			fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMappingForJoin();
+//			fkTargetModelPart = getAssociatedEntityMappingType().getIdentifierMapping();
 		}
 
 		if ( getNature() == Nature.ELEMENT ) {
@@ -502,7 +509,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 					false,
 					false,
 					creationProcess.getCreationContext().getDialect(),
-					creationProcess.getSqmFunctionRegistry()
+					creationProcess.getSqmFunctionRegistry(),
+					creationProcess.getCreationContext()
 			);
 
 			final BasicAttributeMapping keyModelPart = BasicAttributeMapping.withSelectableMapping(
@@ -538,7 +546,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 					elementBootDescriptor.getColumnInsertability(),
 					elementBootDescriptor.getColumnUpdateability(),
 					creationProcess.getCreationContext().getDialect(),
-					creationProcess.getSqmFunctionRegistry()
+					creationProcess.getSqmFunctionRegistry(),
+					creationProcess.getCreationContext()
 			);
 
 			return new EmbeddedForeignKeyDescriptor(
@@ -620,14 +629,15 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 
 		final String collectionTableName = ( (CollectionMutationTarget) getCollectionDescriptor() ).getCollectionTableMapping().getTableName();
 
-		if ( fkTargetModelPart instanceof BasicValuedModelPart ) {
+		final BasicValuedModelPart basicFkTarget = fkTargetModelPart.asBasicValuedModelPart();
+		if ( basicFkTarget != null ) {
 			return createSimpleForeignKeyDescriptor(
 					fkBootDescriptorSource,
 					entityType,
 					creationProcess,
 					dialect,
 					collectionTableName,
-					(BasicValuedModelPart) fkTargetModelPart
+					basicFkTarget
 			);
 		}
 
@@ -676,7 +686,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 						fkBootDescriptorSource.getColumnInsertability(),
 						fkBootDescriptorSource.getColumnUpdateability(),
 						creationProcess.getCreationContext().getDialect(),
-						creationProcess.getSqmFunctionRegistry()
+						creationProcess.getSqmFunctionRegistry(),
+						creationProcess.getCreationContext()
 				);
 				return foreignKeyDescriptor.withKeySelectionMapping(
 						declaringType,
@@ -718,7 +729,8 @@ public class ManyToManyCollectionPart extends AbstractEntityCollectionPart imple
 				columnUpdateable,
 				fkValue.isPartitionKey(),
 				dialect,
-				creationProcess.getSqmFunctionRegistry()
+				creationProcess.getSqmFunctionRegistry(),
+				creationProcess.getCreationContext()
 		);
 
 		// here we build a ModelPart that represents the many-to-many table key referring to the element table

@@ -7,9 +7,10 @@
 package org.hibernate.metamodel.model.domain.internal;
 
 import org.hibernate.metamodel.UnsupportedMappingException;
+import org.hibernate.metamodel.mapping.internal.AnyDiscriminatorPart;
+import org.hibernate.metamodel.mapping.internal.AnyKeyPart;
 import org.hibernate.metamodel.model.domain.AnyMappingDomainType;
 import org.hibernate.metamodel.model.domain.BasicDomainType;
-import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.sqm.SqmPathSource;
 import org.hibernate.query.sqm.tree.domain.SqmAnyValuedSimplePath;
 import org.hibernate.query.sqm.tree.domain.SqmPath;
@@ -21,7 +22,7 @@ import static jakarta.persistence.metamodel.Bindable.BindableType.SINGULAR_ATTRI
  */
 public class AnyMappingSqmPathSource<J> extends AbstractSqmPathSource<J> {
 	private final SqmPathSource<?> keyPathSource;
-	private final AnyDiscriminatorSqmPathSource discriminatorPathSource;
+	private final AnyDiscriminatorSqmPathSource<?> discriminatorPathSource;
 
 	public AnyMappingSqmPathSource(
 			String localPathName,
@@ -30,7 +31,7 @@ public class AnyMappingSqmPathSource<J> extends AbstractSqmPathSource<J> {
 			BindableType jpaBindableType) {
 		super( localPathName, pathModel, domainType, jpaBindableType );
 		keyPathSource = new BasicSqmPathSource<>(
-				"id",
+				AnyKeyPart.KEY_NAME,
 				null,
 				(BasicDomainType<?>) domainType.getKeyType(),
 				domainType.getKeyType().getExpressibleJavaType(),
@@ -45,32 +46,32 @@ public class AnyMappingSqmPathSource<J> extends AbstractSqmPathSource<J> {
 		);
 	}
 
-	@Override @SuppressWarnings("unchecked")
+	@Override
 	public AnyMappingDomainType<J> getSqmPathType() {
 		return (AnyMappingDomainType<J>) super.getSqmPathType();
 	}
 
 	@Override
 	public SqmPathSource<?> findSubPathSource(String name) {
-		if ( "id".equals( name ) ) {
-			return keyPathSource;
+		switch (name) {
+			case "id": // deprecated HQL .id syntax
+			case AnyKeyPart.KEY_NAME: // standard id() function
+				return keyPathSource;
+			case "class": // deprecated HQL .class syntax
+			case AnyDiscriminatorPart.ROLE_NAME: // standard type() function
+				return discriminatorPathSource;
+			default:
+				throw new UnsupportedMappingException( "Only the key and discriminator parts of an '@Any' mapping may be dereferenced" );
 		}
-		else if("{discriminator}".equals( name )) {
-			return discriminatorPathSource;
-		}
-
-		throw new UnsupportedMappingException( "De-referencing parts of an ANY mapping, other than the key, is not supported" );
 	}
 
 	@Override
 	public SqmPath<J> createSqmPath(SqmPath<?> lhs, SqmPathSource<?> intermediatePathSource) {
-		final NavigablePath navigablePath;
-		if ( intermediatePathSource == null ) {
-			navigablePath = lhs.getNavigablePath().append( getPathName() );
-		}
-		else {
-			navigablePath = lhs.getNavigablePath().append( intermediatePathSource.getPathName() ).append( getPathName() );
-		}
-		return new SqmAnyValuedSimplePath<>( navigablePath, pathModel, lhs, lhs.nodeBuilder() );
+		return new SqmAnyValuedSimplePath<>(
+				PathHelper.append( lhs, this, intermediatePathSource ),
+				pathModel,
+				lhs,
+				lhs.nodeBuilder()
+		);
 	}
 }

@@ -8,9 +8,10 @@ package org.hibernate.query.sqm.tree.expression;
 
 import org.hibernate.metamodel.model.domain.PluralPersistentAttribute;
 import org.hibernate.query.BindableType;
-import org.hibernate.query.internal.QueryHelper;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SqmExpressible;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Common support for SqmParameter impls
@@ -18,7 +19,7 @@ import org.hibernate.query.sqm.SqmExpressible;
  * @author Steve Ebersole
  */
 public abstract class AbstractSqmParameter<T> extends AbstractSqmExpression<T> implements SqmParameter<T> {
-	private final boolean canBeMultiValued;
+	private boolean canBeMultiValued;
 
 	public AbstractSqmParameter(
 			boolean canBeMultiValued,
@@ -29,18 +30,16 @@ public abstract class AbstractSqmParameter<T> extends AbstractSqmExpression<T> i
 	}
 
 	@Override
-	public void applyInferableType(SqmExpressible<?> type) {
-		if ( type == null ) {
-			return;
-		}
-		else if ( type instanceof PluralPersistentAttribute<?, ?, ?> ) {
-			type = ( (PluralPersistentAttribute<?, ?, ?>) type ).getElementType();
-		}
-		final SqmExpressible<T> oldType = getNodeType();
-
-		final SqmExpressible<?> newType = QueryHelper.highestPrecedenceType( oldType, type );
-		if ( newType != null && newType != oldType ) {
-			internalApplyInferableType( newType );
+	public void applyInferableType(@Nullable SqmExpressible<?> type) {
+		if ( type != null ) {
+			if ( type instanceof PluralPersistentAttribute ) {
+				final PluralPersistentAttribute<?, ?, ?> pluralPersistentAttribute =
+						(PluralPersistentAttribute<?, ?, ?>) type;
+				internalApplyInferableType( pluralPersistentAttribute.getElementType() );
+			}
+			else {
+				internalApplyInferableType( type );
+			}
 		}
 	}
 
@@ -59,6 +58,10 @@ public abstract class AbstractSqmParameter<T> extends AbstractSqmExpression<T> i
 		return canBeMultiValued;
 	}
 
+	public void disallowMultiValuedBinding() {
+		this.canBeMultiValued = false;
+	}
+
 	@Override
 	public BindableType<T> getAnticipatedType() {
 		return this.getNodeType();
@@ -67,5 +70,10 @@ public abstract class AbstractSqmParameter<T> extends AbstractSqmExpression<T> i
 	@Override
 	public Class<T> getParameterType() {
 		return this.getNodeType().getExpressibleJavaType().getJavaTypeClass();
+	}
+
+	@Override
+	public Integer getTupleLength() {
+		return null;
 	}
 }

@@ -63,7 +63,7 @@ public class CreateTableUniqueDelegate extends AlterTableUniqueDelegate {
 				// named unique constraint, then the name gets lost. Unfortunately the
 				// signature of getColumnDefinitionUniquenessFragment() doesn't let me
 				// detect this case. (But that would be easy to fix!)
-				if ( !isSingleColumnUnique( uniqueKey ) ) {
+				if ( !isSingleColumnUnique( table, uniqueKey ) ) {
 					appendUniqueConstraint( fragment, uniqueKey );
 				}
 			}
@@ -79,9 +79,22 @@ public class CreateTableUniqueDelegate extends AlterTableUniqueDelegate {
 		fragment.append( uniqueConstraintSql(uniqueKey) );
 	}
 
-	private static boolean isSingleColumnUnique(UniqueKey uniqueKey) {
-		return uniqueKey.getColumns().size() == 1
-			&& uniqueKey.getColumn(0).isUnique();
+	private static boolean isSingleColumnUnique(Table table, UniqueKey uniqueKey) {
+		if ( uniqueKey.getColumns().size() == 1)  {
+			// Since columns are created on demand in IndexBinder.createColumn,
+			// we also have to check if the "real" column is unique to be safe
+			final Column uniqueKeyColumn = uniqueKey.getColumn(0);
+			if ( uniqueKeyColumn.isUnique() ) {
+				return true;
+			}
+			else {
+				final Column column = table.getColumn( uniqueKeyColumn );
+				return column != null && column.isUnique();
+			}
+		}
+		else {
+			return false;
+		}
 	}
 
 	@Override

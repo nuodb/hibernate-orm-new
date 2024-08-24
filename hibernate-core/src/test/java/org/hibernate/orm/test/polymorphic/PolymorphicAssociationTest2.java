@@ -1,7 +1,7 @@
 /*
- * Hibernate Search, full-text search for your domain model
+ * Hibernate, Relational Persistence for Idiomatic Java
  *
- * License: GNU Lesser General Public License (LGPL), version 2.1 or later
+ * License: GNU Lesser General Public License (LGPL), version 2.1 or later.
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.orm.test.polymorphic;
@@ -50,9 +50,9 @@ public class PolymorphicAssociationTest2 {
 
 			level3.setName( "initial-name" );
 
-			session.save( level1 );
-			session.save( level2 );
-			session.save( level3 );
+			session.persist( level1 );
+			session.persist( level2 );
+			session.persist( level3 );
 		} );
 	}
 

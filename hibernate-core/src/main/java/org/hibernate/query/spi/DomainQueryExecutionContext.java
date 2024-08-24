@@ -29,8 +29,17 @@ public interface DomainQueryExecutionContext {
 	 */
 	Callback getCallback();
 
+	default boolean hasCallbackActions() {
+		final Callback callback = getCallback();
+		return callback != null && callback.hasAfterLoadActions();
+	}
+
 	/**
 	 * The underlying session
 	 */
 	SharedSessionContractImplementor getSession();
+
+	default Class<?> getResultType() {
+		return null;
+	}
 }

@@ -31,7 +31,7 @@ public class SessionFactoryServiceRegistryFactoryImpl implements SessionFactoryS
 	public SessionFactoryServiceRegistry buildServiceRegistry(
 			SessionFactoryImplementor sessionFactory,
 			SessionFactoryOptions options) {
-		final ClassLoaderService cls = options.getServiceRegistry().getService( ClassLoaderService.class );
+		final ClassLoaderService cls = options.getServiceRegistry().requireService( ClassLoaderService.class );
 		final SessionFactoryServiceRegistryBuilderImpl builder = new SessionFactoryServiceRegistryBuilderImpl( theBasicServiceRegistry );
 
 		for ( SessionFactoryServiceContributor contributor : cls.loadJavaServices( SessionFactoryServiceContributor.class ) ) {

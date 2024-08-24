@@ -6,7 +6,6 @@
  */
 package org.hibernate.mapping;
 
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 
@@ -94,9 +93,9 @@ public class OneToOne extends ToOne {
 	}
 
 	@Override
-	public void createUniqueKey() {
+	public void createUniqueKey(MetadataBuildingContext context) {
 		if ( !hasFormula() && getColumnSpan()>0  ) {
-			getTable().createUniqueKey( getConstraintColumns() );
+			getTable().createUniqueKey( getConstraintColumns(), context );
 		}
 	}
 
@@ -115,11 +114,6 @@ public class OneToOne extends ToOne {
 			columns = identifier.getColumns();
 		}
 		return columns;
-	}
-
-	@Override
-	public Iterator<Selectable> getConstraintColumnIterator() {
-		return identifier.getColumnIterator();
 	}
 
 	/**

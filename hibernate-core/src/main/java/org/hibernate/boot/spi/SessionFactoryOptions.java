@@ -15,6 +15,7 @@ import org.hibernate.Incubating;
 import org.hibernate.Interceptor;
 import org.hibernate.SessionFactoryObserver;
 import org.hibernate.TimeZoneStorageStrategy;
+import org.hibernate.annotations.CacheLayout;
 import org.hibernate.boot.SchemaAutoTooling;
 import org.hibernate.boot.TempTableDdlTransactionHandling;
 import org.hibernate.boot.registry.StandardServiceRegistry;
@@ -23,16 +24,18 @@ import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.internal.BaselineSessionEventsListenerBuilder;
 import org.hibernate.jpa.spi.JpaCompliance;
-import org.hibernate.loader.BatchFetchStyle;
 import org.hibernate.proxy.EntityNotFoundDelegate;
 import org.hibernate.query.ImmutableEntityUpdateQueryHandlingMode;
 import org.hibernate.query.criteria.ValueHandlingMode;
 import org.hibernate.query.spi.QueryEngineOptions;
-import org.hibernate.query.sqm.NullPrecedence;
 import org.hibernate.resource.jdbc.spi.PhysicalConnectionHandlingMode;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.hibernate.stat.Statistics;
+import org.hibernate.type.descriptor.java.JavaType;
+import org.hibernate.type.descriptor.java.ObjectJavaType;
 import org.hibernate.type.format.FormatMapper;
+
+import jakarta.persistence.criteria.Nulls;
 
 /**
  * Aggregator of special options used to build the {@link org.hibernate.SessionFactory}.
@@ -81,10 +84,10 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 	}
 
 	/**
-	 * The name to be used for the SessionFactory.  This is used both in:<ul>
-	 *     <li>in-VM serialization</li>
-	 *     <li>JNDI binding, depending on {@link #isSessionFactoryNameAlsoJndiName}</li>
-	 * </ul>
+	 * The name to be used for the SessionFactory.  This is used during in-VM serialization; see
+	 * {@link org.hibernate.internal.SessionFactoryRegistry}.
+	 * May also be used as a JNDI name depending on {@value org.hibernate.cfg.PersistenceSettings#SESSION_FACTORY_JNDI_NAME}
+	 * and {@value org.hibernate.cfg.PersistenceSettings#SESSION_FACTORY_NAME_IS_JNDI}.
 	 *
 	 * @return The SessionFactory name
 	 */
@@ -96,7 +99,7 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 	 *
 	 * @return {@code true} if the SessionFactory name is also a JNDI name; {@code false} otherwise.
 	 */
-	boolean isSessionFactoryNameAlsoJndiName();
+	Boolean isSessionFactoryNameAlsoJndiName();
 
 	boolean isFlushBeforeCompletionEnabled();
 
@@ -132,12 +135,6 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 
 	TempTableDdlTransactionHandling getTempTableDdlTransactionHandling();
 
-	/**
-	 * @deprecated : No longer used internally
-	 */
-	@Deprecated(since = "6.0")
-	BatchFetchStyle getBatchFetchStyle();
-
 	boolean isDelayBatchFetchLoaderCreationsEnabled();
 
 	int getDefaultBatchFetchSize();
@@ -146,7 +143,7 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 
 	boolean isSubselectFetchEnabled();
 
-	NullPrecedence getDefaultNullPrecedence();
+	Nulls getDefaultNullPrecedence();
 
 	boolean isOrderUpdatesEnabled();
 
@@ -154,7 +151,7 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 
 	boolean isMultiTenancyEnabled();
 
-	CurrentTenantIdentifierResolver getCurrentTenantIdentifierResolver();
+	CurrentTenantIdentifierResolver<Object> getCurrentTenantIdentifierResolver();
 
 	boolean isJtaTrackByThread();
 
@@ -163,6 +160,9 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 	boolean isSecondLevelCacheEnabled();
 
 	boolean isQueryCacheEnabled();
+
+	@Incubating
+	CacheLayout getQueryCacheLayout();
 
 	TimestampsCacheFactory getTimestampsCacheFactory();
 
@@ -231,6 +231,13 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 		return false;
 	}
 
+	/**
+	 * @see org.hibernate.cfg.AvailableSettings#NATIVE_IGNORE_JDBC_PARAMETERS
+	 */
+	default boolean getNativeJdbcParametersIgnored() {
+		return false;
+	}
+
 	JpaCompliance getJpaCompliance();
 
 	boolean isFailOnPaginationOverCollectionFetchEnabled();
@@ -259,7 +266,18 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 		return null;
 	}
 
+	/**
+	 * @see org.hibernate.cfg.AvailableSettings#IN_CLAUSE_PARAMETER_PADDING
+	 */
 	default boolean inClauseParameterPaddingEnabled() {
+		return false;
+	}
+
+	/**
+	 * @see org.hibernate.cfg.AvailableSettings#PORTABLE_INTEGER_DIVISION
+	 */
+	@Override
+	default boolean isPortableIntegerDivisionEnabled() {
 		return false;
 	}
 
@@ -301,6 +319,8 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 		return false;
 	}
 
+	boolean isUnownedAssociationTransientCheck();
+
 	@Incubating
 	int getPreferredSqlTypeCodeForBoolean();
 
@@ -319,6 +339,10 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 	@Incubating
 	TimeZoneStorageStrategy getDefaultTimeZoneStorageStrategy();
 
+	boolean isPreferJavaTimeJdbcTypesEnabled();
+
+	boolean isPreferNativeEnumTypesEnabled();
+
 	/**
 	 * The format mapper to use for serializing/deserializing JSON data.
 	 *
@@ -334,4 +358,16 @@ public interface SessionFactoryOptions extends QueryEngineOptions {
 	 */
 	@Incubating
 	FormatMapper getXmlFormatMapper();
+
+	/**
+	 * The default tenant identifier java type to use, in case no explicit tenant identifier property is defined.
+	 *
+	 * @since 6.4
+	 */
+	@Incubating
+	default JavaType<Object> getDefaultTenantIdentifierJavaType() {
+		return ObjectJavaType.INSTANCE;
+	}
+
+	boolean isPassProcedureParameterNames();
 }

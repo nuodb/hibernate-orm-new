@@ -34,7 +34,7 @@ public class SelfRenderingSqmWindowFunction<T> extends SelfRenderingSqmFunction<
 
 	public SelfRenderingSqmWindowFunction(
 			SqmFunctionDescriptor descriptor,
-			FunctionRenderingSupport renderingSupport,
+			FunctionRenderer renderer,
 			List<? extends SqmTypedNode<?>> arguments,
 			SqmPredicate filter,
 			Boolean respectNulls,
@@ -44,7 +44,7 @@ public class SelfRenderingSqmWindowFunction<T> extends SelfRenderingSqmFunction<
 			FunctionReturnTypeResolver returnTypeResolver,
 			NodeBuilder nodeBuilder,
 			String name) {
-		super( descriptor, renderingSupport, arguments, impliedResultType, argumentsValidator, returnTypeResolver, nodeBuilder, name );
+		super( descriptor, renderer, arguments, impliedResultType, argumentsValidator, returnTypeResolver, nodeBuilder, name );
 		this.filter = filter;
 		this.respectNulls = respectNulls;
 		this.fromFirst = fromFirst;
@@ -64,7 +64,7 @@ public class SelfRenderingSqmWindowFunction<T> extends SelfRenderingSqmFunction<
 				this,
 				new SelfRenderingSqmWindowFunction<>(
 						getFunctionDescriptor(),
-						getRenderingSupport(),
+						getFunctionRenderer(),
 						arguments,
 						filter == null ? null : filter.copy( context ),
 						respectNulls,
@@ -82,9 +82,7 @@ public class SelfRenderingSqmWindowFunction<T> extends SelfRenderingSqmFunction<
 
 	@Override
 	public Expression convertToSqlAst(SqmToSqlAstConverter walker) {
-		final ReturnableType<?> resultType = resolveResultType(
-				walker.getCreationContext().getMappingMetamodel().getTypeConfiguration()
-		);
+		final ReturnableType<?> resultType = resolveResultType( walker );
 
 		List<SqlAstNode> arguments = resolveSqlAstArguments( getArguments(), walker );
 		ArgumentsValidator argumentsValidator = getArgumentsValidator();
@@ -93,13 +91,13 @@ public class SelfRenderingSqmWindowFunction<T> extends SelfRenderingSqmFunction<
 		}
 		return new SelfRenderingWindowFunctionSqlAstExpression(
 				getFunctionName(),
-				getRenderingSupport(),
+				getFunctionRenderer(),
 				arguments,
 				filter == null ? null : walker.visitNestedTopLevelPredicate( filter ),
 				respectNulls,
 				fromFirst,
 				resultType,
-				getMappingModelExpressible( walker, resultType )
+				getMappingModelExpressible( walker, resultType, arguments )
 		);
 	}
 

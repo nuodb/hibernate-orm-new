@@ -37,10 +37,10 @@ public class JBossStandAloneJtaPlatform extends AbstractJtaPlatform {
 		}
 
 		try {
-			final Class jbossTmClass = serviceRegistry()
-					.getService( ClassLoaderService.class )
-					.classForName( JBOSS_TM_CLASS_NAME );
-			return (TransactionManager) jbossTmClass.getMethod( "transactionManager" ).invoke( null );
+			return (TransactionManager) serviceRegistry().requireService( ClassLoaderService.class )
+					.classForName( JBOSS_TM_CLASS_NAME )
+					.getMethod( "transactionManager" )
+					.invoke( null );
 		}
 		catch ( Exception e ) {
 			throw new JtaPlatformException( "Could not obtain JBoss Transactions transaction manager instance", e );
@@ -58,10 +58,11 @@ public class JBossStandAloneJtaPlatform extends AbstractJtaPlatform {
 		}
 
 		try {
-			final Class jbossUtClass = serviceRegistry()
-					.getService( ClassLoaderService.class )
-					.classForName( JBOSS_UT_CLASS_NAME );
-			return (UserTransaction) jbossUtClass.getMethod( "userTransaction" ).invoke( null );
+			return (UserTransaction) serviceRegistry()
+					.requireService( ClassLoaderService.class )
+					.classForName( JBOSS_UT_CLASS_NAME )
+					.getMethod( "userTransaction" )
+					.invoke( null );
 		}
 		catch ( Exception e ) {
 			throw new JtaPlatformException( "Could not obtain JBoss Transactions user transaction instance", e );

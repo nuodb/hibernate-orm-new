@@ -12,9 +12,10 @@ import java.util.List;
 
 import org.hibernate.metamodel.mapping.CollectionPart;
 import org.hibernate.metamodel.mapping.internal.AbstractDomainPath;
-import org.hibernate.query.sqm.NullPrecedence;
-import org.hibernate.query.sqm.SortOrder;
-import org.hibernate.query.sqm.function.FunctionRenderingSupport;
+import org.hibernate.query.NullPrecedence;
+import org.hibernate.query.ReturnableType;
+import org.hibernate.query.SortDirection;
+import org.hibernate.query.sqm.function.FunctionRenderer;
 import org.hibernate.query.sqm.function.SelfRenderingFunctionSqlAstExpression;
 import org.hibernate.sql.ast.SqlAstTranslator;
 import org.hibernate.sql.ast.spi.SqlAppender;
@@ -30,7 +31,7 @@ import org.hibernate.sql.ast.tree.select.SortSpecification;
  *
  * @author Steve Ebersole
  */
-public class FunctionExpression implements OrderingExpression, FunctionRenderingSupport {
+public class FunctionExpression implements OrderingExpression, FunctionRenderer {
 	private final String name;
 	private final List<OrderingExpression> arguments;
 
@@ -95,7 +96,7 @@ public class FunctionExpression implements OrderingExpression, FunctionRendering
 			TableGroup tableGroup,
 			String collation,
 			String modelPartName,
-			SortOrder sortOrder,
+			SortDirection sortOrder,
 			NullPrecedence nullPrecedence,
 			SqlAstCreationState creationState) {
 		final SelfRenderingFunctionSqlAstExpression expression = resolve( ast, tableGroup, modelPartName, creationState );
@@ -104,11 +105,15 @@ public class FunctionExpression implements OrderingExpression, FunctionRendering
 				collation,
 				creationState
 		);
-		ast.addSortSpecification( new SortSpecification( sortExpression, sortOrder, nullPrecedence ) );
+		ast.addSortSpecification( new SortSpecification( sortExpression, sortOrder, nullPrecedence.getJpaValue() ) );
 	}
 
 	@Override
-	public void render(SqlAppender sqlAppender, List<? extends SqlAstNode> sqlAstArguments, SqlAstTranslator<?> walker) {
+	public void render(
+			SqlAppender sqlAppender,
+			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
+			SqlAstTranslator<?> walker) {
 		sqlAppender.appendSql( name );
 		sqlAppender.appendSql( '(' );
 		if ( !sqlAstArguments.isEmpty() ) {

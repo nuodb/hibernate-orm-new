@@ -19,6 +19,7 @@ import org.hibernate.query.criteria.JpaCteCriteria;
 import org.hibernate.query.criteria.JpaRoot;
 import org.hibernate.query.criteria.JpaSelection;
 import org.hibernate.query.sqm.NodeBuilder;
+import org.hibernate.query.sqm.spi.SqmCreationHelper;
 import org.hibernate.query.sqm.tree.AbstractSqmNode;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.cte.SqmCteStatement;
@@ -36,6 +37,8 @@ import jakarta.persistence.criteria.Selection;
 import jakarta.persistence.criteria.Subquery;
 import jakarta.persistence.metamodel.EntityType;
 
+import static java.lang.Character.isAlphabetic;
+
 /**
  * @author Steve Ebersole
  */
@@ -45,7 +48,7 @@ public abstract class AbstractSqmSelectQuery<T>
 		implements SqmSelectQuery<T> {
 	private final Map<String, SqmCteStatement<?>> cteStatements;
 	private SqmQueryPart<T> sqmQueryPart;
-	private Class<T> resultType;
+	private final Class<T> resultType;
 
 	public AbstractSqmSelectQuery(Class<T> resultType, NodeBuilder builder) {
 		this( new SqmQuerySpec<>( builder ), resultType, builder );
@@ -55,7 +58,7 @@ public abstract class AbstractSqmSelectQuery<T>
 		super( builder );
 		this.cteStatements = new LinkedHashMap<>();
 		this.resultType = resultType;
-		setQueryPart( queryPart );
+		this.sqmQueryPart = queryPart;
 	}
 
 	protected AbstractSqmSelectQuery(
@@ -67,17 +70,32 @@ public abstract class AbstractSqmSelectQuery<T>
 		this.resultType = resultType;
 	}
 
+	public AbstractSqmSelectQuery(
+			SqmQueryPart<T> queryPart,
+			Map<String, SqmCteStatement<?>> cteStatements,
+			Class<T> resultType,
+			NodeBuilder builder) {
+		super( builder );
+		this.cteStatements = cteStatements;
+		this.resultType = resultType;
+		this.sqmQueryPart = queryPart;
+	}
+
 	protected Map<String, SqmCteStatement<?>> copyCteStatements(SqmCopyContext context) {
-		final Map<String, SqmCteStatement<?>> cteStatements = new LinkedHashMap<>( this.cteStatements.size() );
-		for ( Map.Entry<String, SqmCteStatement<?>> entry : this.cteStatements.entrySet() ) {
-			cteStatements.put( entry.getKey(), entry.getValue().copy( context ) );
+		final Map<String, SqmCteStatement<?>> copies = new LinkedHashMap<>( cteStatements.size() );
+		for ( Map.Entry<String, SqmCteStatement<?>> entry : cteStatements.entrySet() ) {
+			copies.put( entry.getKey(), entry.getValue().copy( context ) );
 		}
-		return cteStatements;
+		return copies;
 	}
 
 	@Override
 	public Collection<SqmCteStatement<?>> getCteStatements() {
 		return cteStatements.values();
+	}
+
+	Map<String, SqmCteStatement<?>> getCteStatementMap() {
+		return new LinkedHashMap<>( cteStatements );
 	}
 
 	@Override
@@ -97,21 +115,21 @@ public abstract class AbstractSqmSelectQuery<T>
 
 	@Override
 	public <X> JpaCteCriteria<X> with(AbstractQuery<X> criteria) {
-		return withInternal( Long.toString( System.nanoTime() ), criteria );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), criteria );
 	}
 
 	@Override
 	public <X> JpaCteCriteria<X> withRecursiveUnionAll(
 			AbstractQuery<X> baseCriteria,
 			Function<JpaCteCriteria<X>, AbstractQuery<X>> recursiveCriteriaProducer) {
-		return withInternal( Long.toString( System.nanoTime() ), baseCriteria, false, recursiveCriteriaProducer );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), baseCriteria, false, recursiveCriteriaProducer );
 	}
 
 	@Override
 	public <X> JpaCteCriteria<X> withRecursiveUnionDistinct(
 			AbstractQuery<X> baseCriteria,
 			Function<JpaCteCriteria<X>, AbstractQuery<X>> recursiveCriteriaProducer) {
-		return withInternal( Long.toString( System.nanoTime() ), baseCriteria, true, recursiveCriteriaProducer );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), baseCriteria, true, recursiveCriteriaProducer );
 	}
 
 	@Override
@@ -139,7 +157,7 @@ public abstract class AbstractSqmSelectQuery<T>
 		if ( name == null || name.isBlank() ) {
 			throw new IllegalArgumentException( "Illegal empty CTE name" );
 		}
-		if ( !Character.isAlphabetic( name.charAt( 0 ) ) ) {
+		if ( !isAlphabetic( name.charAt( 0 ) ) ) {
 			throw new IllegalArgumentException(
 					String.format(
 							"Illegal CTE name [%s]. Names must start with an alphabetic character!",
@@ -187,10 +205,6 @@ public abstract class AbstractSqmSelectQuery<T>
 		return resultType;
 	}
 
-	protected void setResultType(Class<T> resultType) {
-		this.resultType = resultType;
-	}
-
 	@Override
 	public SqmQuerySpec<T> getQuerySpec() {
 		return sqmQueryPart.getFirstQuerySpec();
@@ -206,9 +220,14 @@ public abstract class AbstractSqmSelectQuery<T>
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public Set<Root<?>> getRoots() {
 		return (Set) getQuerySpec().getRoots();
+	}
+
+	@SuppressWarnings("rawtypes")
+	public List<Root<?>> getRootList() {
+		return (List) getQuerySpec().getRootList();
 	}
 
 	@Override
@@ -249,7 +268,7 @@ public abstract class AbstractSqmSelectQuery<T>
 	}
 
 	private void validateComplianceFromSubQuery() {
-		if ( nodeBuilder().getDomainModel().getJpaCompliance().isJpaQueryComplianceEnabled() ) {
+		if ( nodeBuilder().isJpaQueryComplianceEnabled() ) {
 			throw new IllegalStateException(
 					"The JPA specification does not support subqueries in the from clause. " +
 							"Please disable the JPA query compliance if you want to use this feature." );
@@ -301,7 +320,7 @@ public abstract class AbstractSqmSelectQuery<T>
 	// Grouping
 
 	@Override
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public List<Expression<?>> getGroupList() {
 		return (List) getQuerySpec().getGroupingExpressions();
 	}
@@ -312,7 +331,7 @@ public abstract class AbstractSqmSelectQuery<T>
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
+	@SuppressWarnings("rawtypes")
 	public SqmSelectQuery<T> groupBy(List<Expression<?>> grouping) {
 		getQuerySpec().setGroupingExpressions( (List) grouping );
 		return this;
@@ -391,7 +410,6 @@ public abstract class AbstractSqmSelectQuery<T>
 					break;
 				}
 				default: {
-					setResultType( (Class<T>) Object[].class );
 					resultSelection = ( Selection<? extends T> ) nodeBuilder().array( selections );
 				}
 			}

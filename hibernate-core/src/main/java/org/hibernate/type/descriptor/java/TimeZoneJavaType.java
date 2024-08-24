@@ -31,6 +31,11 @@ public class TimeZoneJavaType extends AbstractClassJavaType<TimeZone> {
 		super( TimeZone.class, ImmutableMutabilityPlan.instance(), TimeZoneComparator.INSTANCE );
 	}
 
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	public String toString(TimeZone value) {
 		return value.getID();
 	}
@@ -44,6 +49,9 @@ public class TimeZoneJavaType extends AbstractClassJavaType<TimeZone> {
 		if ( value == null ) {
 			return null;
 		}
+		if ( TimeZone.class.isAssignableFrom( type ) ) {
+			return (X) value;
+		}
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) toString( value );
 		}
@@ -54,7 +62,10 @@ public class TimeZoneJavaType extends AbstractClassJavaType<TimeZone> {
 		if ( value == null ) {
 			return null;
 		}
-		if (value instanceof CharSequence) {
+		if ( value instanceof TimeZone ) {
+			return (TimeZone) value;
+		}
+		if ( value instanceof CharSequence ) {
 			return fromString( (CharSequence) value );
 		}
 		throw unknownWrap( value.getClass() );

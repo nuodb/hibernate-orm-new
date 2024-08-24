@@ -35,9 +35,15 @@ public class FloatJavaType extends AbstractClassJavaType<Float> implements Primi
 	}
 
 	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
+	@Override
 	public String toString(Float value) {
 		return value == null ? null : value.toString();
 	}
+
 	@Override
 	public Float fromString(CharSequence string) {
 		return Float.valueOf( string.toString() );
@@ -49,7 +55,7 @@ public class FloatJavaType extends AbstractClassJavaType<Float> implements Primi
 		if ( value == null ) {
 			return null;
 		}
-		if ( Float.class.isAssignableFrom( type ) ) {
+		if ( Float.class.isAssignableFrom( type ) || type == Object.class ) {
 			return (X) value;
 		}
 		if ( Double.class.isAssignableFrom( type ) ) {
@@ -78,6 +84,7 @@ public class FloatJavaType extends AbstractClassJavaType<Float> implements Primi
 		}
 		throw unknownUnwrap( type );
 	}
+
 	@Override
 	public <X> Float wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
@@ -97,7 +104,7 @@ public class FloatJavaType extends AbstractClassJavaType<Float> implements Primi
 
 	@Override
 	public boolean isWider(JavaType<?> javaType) {
-		switch ( javaType.getJavaType().getTypeName() ) {
+		switch ( javaType.getTypeName() ) {
 			case "byte":
 			case "java.lang.Byte":
 			case "short":
@@ -115,7 +122,7 @@ public class FloatJavaType extends AbstractClassJavaType<Float> implements Primi
 	}
 
 	@Override
-	public Class getPrimitiveClass() {
+	public Class<?> getPrimitiveClass() {
 		return float.class;
 	}
 

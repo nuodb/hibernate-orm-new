@@ -20,12 +20,12 @@ import org.hibernate.query.Query;
 import org.hibernate.stat.Statistics;
 
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.hibernate.testing.orm.junit.SessionFactoryScope;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hibernate.cfg.CacheSettings.USE_QUERY_CACHE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * @author Emmanuel Bernard
  * @author Hardy Ferentschik
  */
-@SuppressWarnings("unchecked")
 public class NaturalIdTest extends BaseCoreFunctionalTestCase {
 	@After
 	public void cleanupData() {
@@ -379,6 +378,6 @@ public class NaturalIdTest extends BaseCoreFunctionalTestCase {
 
 	@Override
 	protected void configure(Configuration cfg) {
-		cfg.setProperty( "hibernate.cache.use_query_cache", "true" );
+		cfg.setProperty( USE_QUERY_CACHE, true );
 	}
 }

@@ -22,26 +22,10 @@ import java.sql.Statement;
  *
  * @see JdbcCoordinator#getResultSetReturn()
  */
-//TODO: This could eventually utilize the new Return interface. It would be great to have a common API.
 public interface ResultSetReturn {
 
 	/**
 	 * Extract the {@link ResultSet} from the {@link PreparedStatement}.
-	 * <p>
-	 * If client passes {@link CallableStatement} reference, this method calls {@link #extract(CallableStatement)}
-	 * internally.  Otherwise, {@link PreparedStatement#executeQuery()} is called.
-	 *
-	 * @param statement The {@link PreparedStatement} from which to extract the {@link ResultSet}
-	 *
-	 * @return The extracted ResultSet
-	 */
-	ResultSet extract(PreparedStatement statement);
-
-	/**
-	 * Extract the {@link ResultSet} from the {@link PreparedStatement}.
-	 * <p>
-	 * If client passes {@link CallableStatement} reference, this method calls {@link #extract(CallableStatement)}
-	 * internally.  Otherwise, {@link PreparedStatement#executeQuery()} is called.
 	 *
 	 * @param statement The {@link PreparedStatement} from which to extract the {@link ResultSet}
 	 *
@@ -49,17 +33,6 @@ public interface ResultSetReturn {
 	 */
 	ResultSet extract(PreparedStatement statement, String sql);
 
-	/**
-	 * Extract the {@link ResultSet}  from the {@link CallableStatement}.  Note that this is the limited legacy
-	 * form which delegates to {@link org.hibernate.dialect.Dialect#getResultSet}.  Better option is to integrate
-	 * {@link org.hibernate.procedure.ProcedureCall}-like hooks
-	 *
-	 * @param callableStatement The {@link CallableStatement} from which to extract the {@link ResultSet}
-	 *
-	 * @return The extracted {@link ResultSet}
-	 */
-	ResultSet extract(CallableStatement callableStatement);
-	
 	/**
 	 * Performs the given SQL statement, expecting a {@link ResultSet} in return
 	 *
@@ -70,16 +43,6 @@ public interface ResultSetReturn {
 	 */
 	ResultSet extract(Statement statement, String sql);
 	
-	/**
-	 * Execute the {@link PreparedStatement} return its first {@link ResultSet}, if any.
-	 * If there is no {@link ResultSet}, returns {@code null}
-	 *
-	 * @param statement The {@link PreparedStatement} to execute
-	 *
-	 * @return The extracted {@link ResultSet}, or {@code null}
-	 */
-	ResultSet execute(PreparedStatement statement);
-
 	/**
 	 * Execute the {@link PreparedStatement} return its first {@link ResultSet}, if any.
 	 * If there is no {@link ResultSet}, returns {@code null}
@@ -102,15 +65,6 @@ public interface ResultSetReturn {
 	 */
 	ResultSet execute(Statement statement, String sql);
 	
-	/**
-	 * Execute the {@link PreparedStatement}, returning its "affected row count".
-	 *
-	 * @param statement The {@link PreparedStatement} to execute
-	 *
-	 * @return The {@link PreparedStatement#executeUpdate()} result
-	 */
-	int executeUpdate(PreparedStatement statement);
-
 	/**
 	 * Execute the {@link PreparedStatement}, returning its "affected row count".
 	 *

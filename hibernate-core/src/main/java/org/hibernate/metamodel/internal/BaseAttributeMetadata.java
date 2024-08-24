@@ -14,6 +14,7 @@ import org.hibernate.mapping.Property;
 import org.hibernate.metamodel.AttributeClassification;
 import org.hibernate.metamodel.model.domain.ManagedDomainType;
 import org.hibernate.metamodel.model.domain.internal.MapMember;
+import org.hibernate.type.CollectionType;
 
 /**
  * @author Steve Ebersole
@@ -54,8 +55,7 @@ public abstract class BaseAttributeMetadata<X, Y> implements AttributeMetadata<X
 		else {
 			throw new IllegalArgumentException( "Cannot determine java-type from given member [" + member + "]" );
 		}
-		//noinspection unchecked
-		this.javaType = AttributeFactory.accountForPrimitiveTypes( declaredType, metadataContext );
+		this.javaType = declaredType;
 	}
 
 	public String getName() {
@@ -88,7 +88,7 @@ public abstract class BaseAttributeMetadata<X, Y> implements AttributeMetadata<X
 	}
 
 	public boolean isPlural() {
-		return propertyMapping.getType().isCollectionType();
+		return propertyMapping.getType() instanceof CollectionType;
 	}
 
 	public Property getPropertyMapping() {

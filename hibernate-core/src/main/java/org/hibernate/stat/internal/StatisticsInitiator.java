@@ -21,6 +21,8 @@ import org.jboss.logging.Logger;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import static org.hibernate.cfg.StatisticsSettings.STATS_BUILDER;
+
 /**
  * @author Steve Ebersole
  */
@@ -28,12 +30,6 @@ public class StatisticsInitiator implements SessionFactoryServiceInitiator<Stati
 	private static final CoreMessageLogger LOG = Logger.getMessageLogger( CoreMessageLogger.class, StatisticsInitiator.class.getName() );
 
 	public static final StatisticsInitiator INSTANCE = new StatisticsInitiator();
-
-	/**
-	 * Names the {@link StatisticsFactory} to use.  Recognizes both a class name as well as an instance of
-	 * {@link StatisticsFactory}.
-	 */
-	public static final String STATS_BUILDER = "hibernate.stats.factory";
 
 	@Override
 	public Class<StatisticsImplementor> getServiceInitiated() {
@@ -43,7 +39,7 @@ public class StatisticsInitiator implements SessionFactoryServiceInitiator<Stati
 	@Override
 	public StatisticsImplementor initiateService(SessionFactoryServiceInitiatorContext context) {
 		final Object configValue = context.getServiceRegistry()
-				.getService( ConfigurationService.class )
+				.requireService( ConfigurationService.class )
 				.getSettings()
 				.get( STATS_BUILDER );
 		return initiateServiceInternal( context.getSessionFactory(), configValue, context.getServiceRegistry() );
@@ -63,7 +59,7 @@ public class StatisticsInitiator implements SessionFactoryServiceInitiator<Stati
 		}
 		else {
 			// assume it names the factory class
-			final ClassLoaderService classLoaderService = registry.getService( ClassLoaderService.class );
+			final ClassLoaderService classLoaderService = registry.requireService( ClassLoaderService.class );
 			try {
 				statisticsFactory = (StatisticsFactory) classLoaderService.classForName( configValue.toString() ).newInstance();
 			}

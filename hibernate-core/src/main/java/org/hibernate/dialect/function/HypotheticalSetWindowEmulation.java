@@ -49,8 +49,7 @@ public class HypotheticalSetWindowEmulation extends HypotheticalSetFunction {
 			SqmPredicate filter,
 			SqmOrderByClause withinGroupClause,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return new SelfRenderingSqmOrderedSetAggregateFunction<>(
 				this,
 				this,
@@ -73,9 +72,7 @@ public class HypotheticalSetWindowEmulation extends HypotheticalSetFunction {
 				else if ( currentClause != Clause.SELECT ) {
 					throw new IllegalArgumentException( "Can't emulate [" + getName() + "] in clause " + currentClause + ". Only the SELECT clause is supported" );
 				}
-				final ReturnableType<?> resultType = resolveResultType(
-						walker.getCreationContext().getMappingMetamodel().getTypeConfiguration()
-				);
+				final ReturnableType<?> resultType = resolveResultType( walker );
 
 				List<SqlAstNode> arguments = resolveSqlAstArguments( getArguments(), walker );
 				ArgumentsValidator argumentsValidator = getArgumentsValidator();
@@ -104,12 +101,12 @@ public class HypotheticalSetWindowEmulation extends HypotheticalSetFunction {
 				}
 				final SelfRenderingFunctionSqlAstExpression function = new SelfRenderingOrderedSetAggregateFunctionSqlAstExpression(
 						getFunctionName(),
-						getRenderingSupport(),
+						getFunctionRenderer(),
 						Collections.emptyList(),
 						getFilter() == null ? null : (Predicate) getFilter().accept( walker ),
 						Collections.emptyList(),
 						resultType,
-						getMappingModelExpressible( walker, resultType )
+						getMappingModelExpressible( walker, resultType, arguments )
 				);
 				final Over<Object> windowFunction = new Over<>( function, new ArrayList<>(), withinGroup );
 				walker.registerQueryTransformer(

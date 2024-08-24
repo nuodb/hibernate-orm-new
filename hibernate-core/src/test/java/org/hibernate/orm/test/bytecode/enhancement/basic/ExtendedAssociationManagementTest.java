@@ -6,31 +6,31 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.basic;
 
-import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
 import org.hibernate.testing.bytecode.enhancement.EnhancerTestUtils;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToOne;
-import java.util.UUID;
+
+import org.hibernate.testing.bytecode.enhancement.extension.BytecodeEnhanced;
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
 
 import static org.hibernate.testing.bytecode.enhancement.EnhancerTestUtils.getFieldByReflection;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * @author Luis Barreiro
  */
-@RunWith( BytecodeEnhancerRunner.class )
+@BytecodeEnhanced
 public class ExtendedAssociationManagementTest {
 
     @Test
     public void test() {
         User user = new User();
-        user.login = UUID.randomUUID().toString();
+        user.login = SafeRandomUUIDGenerator.safeRandomUUIDAsString();
 
         Customer customer = new Customer();
         customer.user = user;
@@ -41,11 +41,11 @@ public class ExtendedAssociationManagementTest {
         EnhancerTestUtils.checkDirtyTracking( user, "login", "customer" );
 
         User anotherUser = new User();
-        anotherUser.login = UUID.randomUUID().toString();
+        anotherUser.login = SafeRandomUUIDGenerator.safeRandomUUIDAsString();
 
         customer.user = anotherUser;
 
-        Assert.assertNull( user.customer );
+        assertNull( user.customer );
         assertEquals( customer, getFieldByReflection( anotherUser, "customer" ) );
 
         user.customer = new Customer();

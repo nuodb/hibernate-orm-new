@@ -35,6 +35,13 @@ public class JdbcServicesImpl implements JdbcServices, ServiceRegistryAwareServi
 	private SqlStatementLogger sqlStatementLogger;
 	private ParameterMarkerStrategy parameterMarkerStrategy;
 
+	public JdbcServicesImpl() {
+	}
+
+	public JdbcServicesImpl(ServiceRegistryImplementor serviceRegistry) {
+		this.serviceRegistry = serviceRegistry;
+	}
+
 	@Override
 	public void injectServices(ServiceRegistryImplementor serviceRegistry) {
 		this.serviceRegistry = serviceRegistry;
@@ -42,9 +49,7 @@ public class JdbcServicesImpl implements JdbcServices, ServiceRegistryAwareServi
 
 	@Override
 	public void configure(Map<String, Object> configValues) {
-		this.jdbcEnvironment = serviceRegistry.getService( JdbcEnvironment.class );
-		assert jdbcEnvironment != null : "JdbcEnvironment was not found";
-
+		this.jdbcEnvironment = serviceRegistry.requireService( JdbcEnvironment.class );
 		this.sqlStatementLogger = serviceRegistry.getService( SqlStatementLogger.class );
 		this.parameterMarkerStrategy = serviceRegistry.getService( ParameterMarkerStrategy.class );
 	}
@@ -79,26 +84,20 @@ public class JdbcServicesImpl implements JdbcServices, ServiceRegistryAwareServi
 
 	@Override
 	public SqlExceptionHelper getSqlExceptionHelper() {
-		if ( jdbcEnvironment != null ) {
-			return jdbcEnvironment.getSqlExceptionHelper();
-		}
-		return null;
+		assert jdbcEnvironment != null : "JdbcEnvironment was not found";
+		return jdbcEnvironment.getSqlExceptionHelper();
 	}
 
 	@Override
 	public ExtractedDatabaseMetaData getExtractedMetaDataSupport() {
-		if ( jdbcEnvironment != null ) {
-			return jdbcEnvironment.getExtractedDatabaseMetaData();
-		}
-		return null;
+		assert jdbcEnvironment != null : "JdbcEnvironment was not found";
+		return jdbcEnvironment.getExtractedDatabaseMetaData();
 	}
 
 	@Override
 	public LobCreator getLobCreator(LobCreationContext lobCreationContext) {
-		if ( jdbcEnvironment != null ) {
-			return jdbcEnvironment.getLobCreatorBuilder().buildLobCreator( lobCreationContext );
-		}
-		return null;
+		assert jdbcEnvironment != null : "JdbcEnvironment was not found";
+		return jdbcEnvironment.getLobCreatorBuilder().buildLobCreator( lobCreationContext );
 	}
 
 }

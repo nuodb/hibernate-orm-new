@@ -11,7 +11,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.query.sqm.SortOrder;
+import org.hibernate.query.SortDirection;
 import org.hibernate.query.sqm.function.SelfRenderingWindowFunctionSqlAstExpression;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.expression.Expression;
@@ -44,7 +44,7 @@ public final class SqmInsertStrategyHelper {
 
 			functionExpression = new SelfRenderingWindowFunctionSqlAstExpression(
 					"dense_rank",
-					(appender, args, walker) -> appender.appendSql( "dense_rank()" ),
+					(appender, args, returnType, walker) -> appender.appendSql( "dense_rank()" ),
 					Collections.emptyList(),
 					null,
 					null,
@@ -65,13 +65,13 @@ public final class SqmInsertStrategyHelper {
 				if ( containsSelectionExpression( orderList, sqlSelection ) ) {
 					continue;
 				}
-				orderList.add( new SortSpecification( sqlSelection.getExpression(), SortOrder.ASCENDING ) );
+				orderList.add( new SortSpecification( sqlSelection.getExpression(), SortDirection.ASCENDING ) );
 			}
 		}
 		else {
 			functionExpression = new SelfRenderingWindowFunctionSqlAstExpression(
 					"row_number",
-					(appender, args, walker) -> appender.appendSql( "row_number()" ),
+					(appender, args, returnType, walker) -> appender.appendSql( "row_number()" ),
 					Collections.emptyList(),
 					null,
 					null,

@@ -8,34 +8,69 @@ package org.hibernate.query.sqm.tree.domain;
 
 import org.hibernate.metamodel.model.domain.EntityDomainType;
 import org.hibernate.metamodel.model.domain.SingularPersistentAttribute;
+import org.hibernate.metamodel.model.domain.TreatableDomainType;
+import org.hibernate.query.criteria.JpaExpression;
+import org.hibernate.query.criteria.JpaPredicate;
 import org.hibernate.query.hql.spi.SqmCreationProcessingState;
 import org.hibernate.query.sqm.SqmPathSource;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.from.SqmAttributeJoin;
-import org.hibernate.query.sqm.tree.from.SqmJoin;
+import org.hibernate.query.sqm.tree.from.SqmTreatedAttributeJoin;
+import org.hibernate.spi.NavigablePath;
+
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
 
 /**
  * @author Steve Ebersole
  */
-public class SqmTreatedSingularJoin<O,T, S extends T> extends SqmSingularJoin<O,S> implements SqmTreatedPath<T,S> {
+public class SqmTreatedSingularJoin<O,T, S extends T> extends SqmSingularJoin<O,S> implements SqmTreatedAttributeJoin<O,T,S> {
 	private final SqmSingularJoin<O,T> wrappedPath;
-	private final EntityDomainType<S> treatTarget;
+	private final TreatableDomainType<S> treatTarget;
 
 	public SqmTreatedSingularJoin(
 			SqmSingularJoin<O,T> wrappedPath,
-			EntityDomainType<S> treatTarget,
+			TreatableDomainType<S> treatTarget,
 			String alias) {
+		this( wrappedPath, treatTarget, alias, false );
+	}
+
+	public SqmTreatedSingularJoin(
+			SqmSingularJoin<O,T> wrappedPath,
+			TreatableDomainType<S> treatTarget,
+			String alias,
+			boolean fetched) {
 		//noinspection unchecked
 		super(
 				wrappedPath.getLhs(),
 				wrappedPath.getNavigablePath().treatAs(
-						treatTarget.getHibernateEntityName(),
+						treatTarget.getTypeName(),
 						alias
 				),
 				(SingularPersistentAttribute<O, S>) wrappedPath.getAttribute(),
 				alias,
 				wrappedPath.getSqmJoinType(),
-				wrappedPath.isFetched(),
+				fetched,
+				wrappedPath.nodeBuilder()
+		);
+		this.treatTarget = treatTarget;
+		this.wrappedPath = wrappedPath;
+	}
+
+	private SqmTreatedSingularJoin(
+			NavigablePath navigablePath,
+			SqmSingularJoin<O,T> wrappedPath,
+			TreatableDomainType<S> treatTarget,
+			String alias,
+			boolean fetched) {
+		//noinspection unchecked
+		super(
+				wrappedPath.getLhs(),
+				navigablePath,
+				(SingularPersistentAttribute<O, S>) wrappedPath.getAttribute(),
+				alias,
+				wrappedPath.getSqmJoinType(),
+				fetched,
 				wrappedPath.nodeBuilder()
 		);
 		this.treatTarget = treatTarget;
@@ -51,9 +86,11 @@ public class SqmTreatedSingularJoin<O,T, S extends T> extends SqmSingularJoin<O,
 		final SqmTreatedSingularJoin<O, T, S> path = context.registerCopy(
 				this,
 				new SqmTreatedSingularJoin<>(
+						getNavigablePath(),
 						wrappedPath.copy( context ),
 						treatTarget,
-						getExplicitAlias()
+						getExplicitAlias(),
+						isFetched()
 				)
 		);
 		copyTo( path, context );
@@ -66,12 +103,22 @@ public class SqmTreatedSingularJoin<O,T, S extends T> extends SqmSingularJoin<O,
 	}
 
 	@Override
-	public EntityDomainType<S> getTreatTarget() {
+	public TreatableDomainType<S> getTreatTarget() {
 		return treatTarget;
 	}
 
 	@Override
 	public SqmPathSource<S> getNodeType() {
+		return treatTarget;
+	}
+
+	@Override
+	public TreatableDomainType<S> getReferencedPathSource() {
+		return treatTarget;
+	}
+
+	@Override
+	public SqmPathSource<?> getResolvedModel() {
 		return treatTarget;
 	}
 
@@ -85,7 +132,47 @@ public class SqmTreatedSingularJoin<O,T, S extends T> extends SqmSingularJoin<O,
 		sb.append( "treat(" );
 		wrappedPath.appendHqlString( sb );
 		sb.append( " as " );
-		sb.append( treatTarget.getName() );
+		sb.append( treatTarget.getTypeName() );
 		sb.append( ')' );
+	}
+
+	@Override
+	public <S1 extends S> SqmTreatedSingularJoin<O, S, S1> treatAs(Class<S1> treatJavaType) {
+		return (SqmTreatedSingularJoin<O, S, S1>) super.treatAs( treatJavaType );
+	}
+
+	@Override
+	public <S1 extends S> SqmTreatedSingularJoin<O, S, S1> treatAs(EntityDomainType<S1> treatTarget) {
+		return (SqmTreatedSingularJoin<O, S, S1>) super.treatAs( treatTarget );
+	}
+
+	@Override
+	public <S1 extends S> SqmTreatedSingularJoin<O, S, S1> treatAs(Class<S1> treatJavaType, String alias) {
+		return (SqmTreatedSingularJoin<O, S, S1>) super.treatAs( treatJavaType, alias );
+	}
+
+	@Override
+	public <S1 extends S> SqmTreatedSingularJoin<O, S, S1> treatAs(EntityDomainType<S1> treatTarget, String alias) {
+		return (SqmTreatedSingularJoin<O, S, S1>) super.treatAs( treatTarget, alias );
+	}
+
+	@Override
+	public SqmTreatedSingularJoin<O,T,S> on(JpaExpression<Boolean> restriction) {
+		return (SqmTreatedSingularJoin<O, T, S>) super.on( restriction );
+	}
+
+	@Override
+	public SqmTreatedSingularJoin<O,T,S> on(JpaPredicate... restrictions) {
+		return (SqmTreatedSingularJoin<O, T, S>) super.on( restrictions );
+	}
+
+	@Override
+	public SqmTreatedSingularJoin<O,T,S> on(Expression<Boolean> restriction) {
+		return (SqmTreatedSingularJoin<O, T, S>) super.on( restriction );
+	}
+
+	@Override
+	public SqmTreatedSingularJoin<O,T,S> on(Predicate... restrictions) {
+		return (SqmTreatedSingularJoin<O, T, S>) super.on( restrictions );
 	}
 }

@@ -17,6 +17,7 @@ import org.hibernate.jpa.internal.MutableJpaComplianceImpl;
 import org.hibernate.jpa.spi.JpaCompliance;
 
 import org.hibernate.testing.orm.junit.ServiceRegistryScope;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,7 +48,6 @@ public class JpaComplianceTests {
 		assertThat( compliance.isJpaQueryComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaTransactionComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaClosedComplianceEnabled() ).isEqualTo( expected );
-		assertThat( compliance.isJpaListComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaOrderByMappingComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaProxyComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaCacheComplianceEnabled() ).isEqualTo( expected );
@@ -77,7 +77,6 @@ public class JpaComplianceTests {
 		assertThat( compliance.isJpaQueryComplianceEnabled() ).isEqualTo( !expected );
 		assertThat( compliance.isJpaTransactionComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaClosedComplianceEnabled() ).isEqualTo( expected );
-		assertThat( compliance.isJpaListComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaOrderByMappingComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaProxyComplianceEnabled() ).isEqualTo( expected );
 		assertThat( compliance.isJpaCacheComplianceEnabled() ).isEqualTo( expected );
@@ -87,7 +86,7 @@ public class JpaComplianceTests {
 	@Test
 	public void testSettingTrue() {
 		ServiceRegistryScope.using(
-				() -> new StandardServiceRegistryBuilder()
+				() -> ServiceRegistryUtil.serviceRegistryBuilder()
 						.applySetting( AvailableSettings.JPA_COMPLIANCE, true )
 						.build(),
 				(serviceRegistryScope) -> {
@@ -108,7 +107,7 @@ public class JpaComplianceTests {
 	@Test
 	public void testSettingFalse() {
 		ServiceRegistryScope.using(
-				() -> new StandardServiceRegistryBuilder()
+				() -> ServiceRegistryUtil.serviceRegistryBuilder()
 						.applySetting( AvailableSettings.JPA_COMPLIANCE, false )
 						.build(),
 				(serviceRegistryScope) -> {

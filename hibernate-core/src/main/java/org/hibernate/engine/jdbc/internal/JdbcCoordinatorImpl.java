@@ -82,9 +82,7 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 			JdbcServices jdbcServices) {
 		this.isUserSuppliedConnection = userSuppliedConnection != null;
 
-		final ResourceRegistry resourceRegistry = new ResourceRegistryStandardImpl(
-				owner.getJdbcSessionContext().getObserver()
-		);
+		final ResourceRegistry resourceRegistry = new ResourceRegistryStandardImpl( owner.getJdbcSessionContext().getEventHandler() );
 		if ( isUserSuppliedConnection ) {
 			this.logicalConnection = new LogicalConnectionProvidedImpl( userSuppliedConnection, resourceRegistry );
 		}
@@ -92,8 +90,8 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 			this.logicalConnection = new LogicalConnectionManagedImpl(
 					owner.getJdbcConnectionAccess(),
 					owner.getJdbcSessionContext(),
-					resourceRegistry,
-					jdbcServices
+					owner.getSqlExceptionHelper(),
+					resourceRegistry
 			);
 		}
 		this.owner = owner;
@@ -257,11 +255,11 @@ public class JdbcCoordinatorImpl implements JdbcCoordinator {
 		if ( transactionTimeOutInstant < 0 ) {
 			return -1;
 		}
-		final int secondsRemaining = (int) ((transactionTimeOutInstant - System.currentTimeMillis()) / 1000);
-		if ( secondsRemaining <= 0 ) {
+		final long millisecondsRemaining = transactionTimeOutInstant - System.currentTimeMillis();
+		if ( millisecondsRemaining <= 0L ) {
 			throw new TransactionException( "transaction timeout expired" );
 		}
-		return secondsRemaining;
+		return Math.max( (int) (millisecondsRemaining / 1000), 1 );
 	}
 
 	@Override

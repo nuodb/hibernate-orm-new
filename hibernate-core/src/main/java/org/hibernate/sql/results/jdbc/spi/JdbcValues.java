@@ -19,9 +19,11 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 public interface JdbcValues {
 	JdbcValuesMapping getValuesMapping();
 
+	boolean usesFollowOnLocking();
+
 	/**
 	 * Advances the "cursor position" and returns a boolean indicating whether
-	 * there is a row available to read via {@link #getCurrentRowValuesArray()}.
+	 * there is a row available to read via {@link #getCurrentRowValue(int)}.
 	 *
 	 * @return {@code true} if there are results
 	 */
@@ -29,7 +31,7 @@ public interface JdbcValues {
 
 	/**
 	 * Advances the "cursor position" in reverse and returns a boolean indicating whether
-	 * there is a row available to read via {@link #getCurrentRowValuesArray()}.
+	 * there is a row available to read via {@link #getCurrentRowValue(int)}.
 	 *
 	 * @return {@code true} if there are results available
 	 */
@@ -37,7 +39,7 @@ public interface JdbcValues {
 
 	/**
 	 * Advances the "cursor position" the indicated number of rows and returns a boolean
-	 * indicating whether there is a row available to read via {@link #getCurrentRowValuesArray()}.
+	 * indicating whether there is a row available to read via {@link #getCurrentRowValue(int)}.
 	 *
 	 * @param numberOfRows The number of rows to advance.  This can also be negative meaning to
 	 * move in reverse
@@ -66,13 +68,15 @@ public interface JdbcValues {
 	boolean last(RowProcessingState rowProcessingState);
 
 	/**
-	 * Get the JDBC values for the row currently positioned at within
+	 * Get the JDBC value at the given index for the row currently positioned at within
 	 * this source.
 	 *
 	 * @return The current row's JDBC values, or {@code null} if the position
 	 * is beyond the end of the available results.
 	 */
-	Object[] getCurrentRowValuesArray();
+	Object getCurrentRowValue(int valueIndex);
+
+	void finishRowProcessing(RowProcessingState rowProcessingState, boolean wasAdded);
 
 	/**
 	 * Give implementations a chance to finish processing
@@ -80,4 +84,11 @@ public interface JdbcValues {
 	void finishUp(SharedSessionContractImplementor session);
 
 	void setFetchSize(int fetchSize);
+
+	/**
+	 * The estimate for the amount of results that can be expected for pre-sizing collections.
+	 * May return zero or negative values if the count can not be reasonably estimated.
+	 * @since 6.6
+	 */
+	int getResultCountEstimate();
 }

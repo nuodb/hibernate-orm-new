@@ -11,11 +11,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+
+import org.hibernate.boot.archive.internal.ArchiveHelper;
+import org.hibernate.bytecode.enhance.spi.EnhancementContext;
+import org.hibernate.bytecode.spi.ClassTransformer;
+
 import jakarta.persistence.SharedCacheMode;
 import jakarta.persistence.ValidationMode;
 import jakarta.persistence.spi.PersistenceUnitTransactionType;
-
-import org.hibernate.bytecode.enhance.spi.EnhancementContext;
 
 /**
  * Describes the information gleaned from a {@code <persistence-unit/>} element in a {@code persistence.xml} file
@@ -127,8 +130,12 @@ public class ParsedPersistenceXmlDescriptor implements org.hibernate.jpa.boot.sp
 		return validationMode;
 	}
 
+	public void setValidationMode(ValidationMode validationMode) {
+		this.validationMode = validationMode;
+	}
+
 	public void setValidationMode(String validationMode) {
-		this.validationMode = ValidationMode.valueOf( validationMode );
+		setValidationMode( ValidationMode.valueOf( validationMode ) );
 	}
 
 	@Override
@@ -136,8 +143,12 @@ public class ParsedPersistenceXmlDescriptor implements org.hibernate.jpa.boot.sp
 		return sharedCacheMode;
 	}
 
+	public void setSharedCacheMode(SharedCacheMode sharedCacheMode) {
+		this.sharedCacheMode = sharedCacheMode;
+	}
+
 	public void setSharedCacheMode(String sharedCacheMode) {
-		this.sharedCacheMode = SharedCacheMode.valueOf( sharedCacheMode );
+		setSharedCacheMode( SharedCacheMode.valueOf( sharedCacheMode ) );
 	}
 
 	@Override
@@ -175,6 +186,12 @@ public class ParsedPersistenceXmlDescriptor implements org.hibernate.jpa.boot.sp
 		jarFileUrls.add( jarFileUrl );
 	}
 
+	public void addJarFileUrls(List<String> jarFiles) {
+		jarFiles.forEach( (jarFile) -> {
+			addJarFileUrl( ArchiveHelper.getURLFromPath( jarFile ) );
+		} );
+	}
+
 	@Override
 	public ClassLoader getClassLoader() {
 		return null;
@@ -188,5 +205,10 @@ public class ParsedPersistenceXmlDescriptor implements org.hibernate.jpa.boot.sp
 	@Override
 	public void pushClassTransformer(EnhancementContext enhancementContext) {
 		// todo : log a message that this is currently not supported...
+	}
+
+	@Override
+	public ClassTransformer getClassTransformer() {
+		return null;
 	}
 }

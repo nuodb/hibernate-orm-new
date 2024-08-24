@@ -20,10 +20,12 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.internal.util.ReflectHelper;
 
 import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
@@ -40,7 +42,7 @@ public class GetAndIsVariantGetterTest {
 
 	@BeforeClass
 	public static void prepare() {
-		ssr = new StandardServiceRegistryBuilder(  ).build();
+		ssr = ServiceRegistryUtil.serviceRegistry();
 	}
 
 	@AfterClass
@@ -60,7 +62,7 @@ public class GetAndIsVariantGetterTest {
 			fail( "Expecting a failure" );
 		}
 		catch (MappingException e) {
-			assertThat( e.getMessage(), startsWith( "In trying to locate getter for property [id]" ) );
+			assertThat( e.getMessage(), endsWith( "variants of getter for property 'id'" ) );
 		}
 	}
 

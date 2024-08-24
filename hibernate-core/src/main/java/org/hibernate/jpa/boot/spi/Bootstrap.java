@@ -7,6 +7,7 @@
 package org.hibernate.jpa.boot.spi;
 
 import java.net.URL;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -14,7 +15,6 @@ import org.hibernate.Internal;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.internal.PersistenceUnitInfoDescriptor;
-import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 
 import jakarta.persistence.spi.PersistenceUnitInfo;
 import jakarta.persistence.spi.PersistenceUnitTransactionType;
@@ -63,10 +63,11 @@ public final class Bootstrap {
 	public static EntityManagerFactoryBuilder getEntityManagerFactoryBuilder(
 			URL persistenceXmlUrl,
 			String persistenceUnitName,
+			@SuppressWarnings("removal")
 			PersistenceUnitTransactionType transactionType,
 			Map integration) {
 		return new EntityManagerFactoryBuilderImpl(
-				PersistenceXmlParser.parse( persistenceXmlUrl, transactionType, integration ).get( persistenceUnitName ),
+				PersistenceXmlParser.create( integration ).parse( List.of( persistenceXmlUrl ), transactionType ).get( persistenceUnitName ),
 				integration
 		);
 	}

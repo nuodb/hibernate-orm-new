@@ -7,9 +7,6 @@
 package org.hibernate.query.sqm.mutation.internal.temptable;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -24,7 +21,6 @@ import org.hibernate.generator.Generator;
 import org.hibernate.id.OptimizableGenerator;
 import org.hibernate.id.enhanced.Optimizer;
 import org.hibernate.internal.util.collections.CollectionHelper;
-import org.hibernate.metamodel.mapping.MappingModelExpressible;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.spi.DomainQueryExecutionContext;
 import org.hibernate.query.sqm.internal.DomainParameterXref;
@@ -33,7 +29,6 @@ import org.hibernate.query.sqm.mutation.internal.InsertHandler;
 import org.hibernate.query.sqm.mutation.internal.MultiTableSqmMutationConverter;
 import org.hibernate.query.sqm.mutation.internal.SqmInsertStrategyHelper;
 import org.hibernate.query.sqm.sql.BaseSqmToSqlAstConverter;
-import org.hibernate.query.sqm.tree.expression.SqmParameter;
 import org.hibernate.query.sqm.tree.insert.SqmInsertSelectStatement;
 import org.hibernate.query.sqm.tree.insert.SqmInsertStatement;
 import org.hibernate.query.sqm.tree.insert.SqmInsertValuesStatement;
@@ -46,6 +41,7 @@ import org.hibernate.sql.ast.tree.from.NamedTableReference;
 import org.hibernate.sql.ast.tree.from.TableGroup;
 import org.hibernate.sql.ast.tree.from.TableReference;
 import org.hibernate.sql.ast.tree.from.TableReferenceJoin;
+import org.hibernate.sql.ast.tree.insert.ConflictClause;
 import org.hibernate.sql.ast.tree.insert.InsertSelectStatement;
 import org.hibernate.sql.ast.tree.insert.Values;
 import org.hibernate.sql.ast.tree.select.QueryPart;
@@ -134,20 +130,11 @@ public class TableBasedInsertHandler implements InsertHandler {
 
 		final TableGroup insertingTableGroup = converterDelegate.getMutatingTableGroup();
 
-		final Map<SqmParameter<?>, List<List<JdbcParameter>>> parameterResolutions;
-		if ( domainParameterXref.getSqmParameterCount() == 0 ) {
-			parameterResolutions = Collections.emptyMap();
-		}
-		else {
-			parameterResolutions = new IdentityHashMap<>();
-		}
-
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 		// visit the insertion target using our special converter, collecting
 		// information about the target paths
 
 		final List<Assignment> targetPathColumns = new ArrayList<>();
-		final Map<SqmParameter<?>, MappingModelExpressible<?>> paramTypeResolutions = new LinkedHashMap<>();
 		final NamedTableReference entityTableReference = new NamedTableReference(
 				entityTable.getTableExpression(),
 				TemporaryTable.DEFAULT_ALIAS,
@@ -162,14 +149,7 @@ public class TableBasedInsertHandler implements InsertHandler {
 				},
 				sqmInsertStatement,
 				entityDescriptor,
-				insertingTableGroup,
-				(sqmParameter, mappingType, jdbcParameters) -> {
-					parameterResolutions.computeIfAbsent(
-							sqmParameter,
-							k -> new ArrayList<>( 1 )
-					).add( jdbcParameters );
-					paramTypeResolutions.put( sqmParameter, mappingType );
-				}
+				insertingTableGroup
 		);
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -219,7 +199,6 @@ public class TableBasedInsertHandler implements InsertHandler {
 								targetPathColumns.add( new Assignment( columnReference, columnReference ) );
 								querySpec.getSelectClause().addSqlSelection(
 										new SqlSelectionImpl(
-												1,
 												0,
 												SqmInsertStrategyHelper.createRowNumberingExpression(
 														querySpec,
@@ -237,13 +216,12 @@ public class TableBasedInsertHandler implements InsertHandler {
 									null,
 									sessionUidColumn.getJdbcMapping()
 							);
-							insertStatement.getTargetColumns().add( sessionUidColumnReference );
-							targetPathColumns.add( new Assignment( sessionUidColumnReference, sessionUidParameter ) );
 							querySpec.getSelectClause().addSqlSelection( new SqlSelectionImpl(
 									insertStatement.getTargetColumns().size(),
-									insertStatement.getTargetColumns().size() - 1,
 									sessionUidParameter
 							) );
+							insertStatement.getTargetColumns().add( sessionUidColumnReference );
+							targetPathColumns.add( new Assignment( sessionUidColumnReference, sessionUidParameter ) );
 						}
 					}
 			);
@@ -257,7 +235,7 @@ public class TableBasedInsertHandler implements InsertHandler {
 				final Optimizer optimizer = ( (OptimizableGenerator) generator ).getOptimizer();
 				if ( optimizer != null && optimizer.getIncrementSize() > 1 ) {
 					final TemporaryTableColumn rowNumberColumn = entityTable.getColumns()
-							.get( entityTable.getColumns().size() - 1 );
+							.get( entityTable.getColumns().size() - ( sessionUidColumn == null ? 1 : 2 ) );
 					rowNumberType = (BasicType<?>) rowNumberColumn.getJdbcMapping();
 					final ColumnReference columnReference = new ColumnReference(
 							(String) null,
@@ -295,7 +273,8 @@ public class TableBasedInsertHandler implements InsertHandler {
 				if ( rowNumberType != null ) {
 					values.getExpressions().add(
 							new QueryLiteral<>(
-									i + 1,
+									rowNumberType.getJavaTypeDescriptor()
+											.wrap( i + 1, sessionFactory.getWrapperOptions() ),
 									rowNumberType
 							)
 					);
@@ -307,6 +286,7 @@ public class TableBasedInsertHandler implements InsertHandler {
 			}
 			insertStatement.setValuesList( valuesList );
 		}
+		final ConflictClause conflictClause = converterDelegate.visitConflictClause( sqmInsertStatement.getConflictClause() );
 		converterDelegate.pruneTableGroupJoins();
 
 		// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -330,9 +310,8 @@ public class TableBasedInsertHandler implements InsertHandler {
 				tableReferenceByAlias,
 				targetPathColumns,
 				insertStatement,
-				parameterResolutions,
+				conflictClause,
 				sessionUidParameter,
-				paramTypeResolutions,
 				executionContext
 		);
 	}
@@ -351,9 +330,8 @@ public class TableBasedInsertHandler implements InsertHandler {
 			Map<String, TableReference> tableReferenceByAlias,
 			List<Assignment> assignments,
 			InsertSelectStatement insertStatement,
-			Map<SqmParameter<?>, List<List<JdbcParameter>>> parameterResolutions,
+			ConflictClause conflictClause,
 			JdbcParameter sessionUidParameter,
-			Map<SqmParameter<?>, MappingModelExpressible<?>> paramTypeResolutions,
 			DomainQueryExecutionContext executionContext) {
 		return new InsertExecutionDelegate(
 				sqmInsertStatement,
@@ -366,9 +344,8 @@ public class TableBasedInsertHandler implements InsertHandler {
 				tableReferenceByAlias,
 				assignments,
 				insertStatement,
-				parameterResolutions,
+				conflictClause,
 				sessionUidParameter,
-				paramTypeResolutions,
 				executionContext
 		);
 	}

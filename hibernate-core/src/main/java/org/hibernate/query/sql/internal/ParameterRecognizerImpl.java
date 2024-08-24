@@ -14,6 +14,7 @@ import java.util.Map;
 
 import org.hibernate.QueryException;
 import org.hibernate.engine.query.ParameterRecognitionException;
+import org.hibernate.query.ParameterLabelException;
 import org.hibernate.query.internal.QueryParameterNamedImpl;
 import org.hibernate.query.internal.QueryParameterPositionalImpl;
 import org.hibernate.query.spi.QueryParameterImplementor;
@@ -56,10 +57,16 @@ public class ParameterRecognizerImpl implements ParameterRecognizer {
 			for ( Integer position : positionsArray ) {
 				if ( position != previous + 1 ) {
 					if ( first ) {
-						throw new QueryException( "Ordinal parameters did not start with base 1 : " + position );
+						throw new ParameterLabelException(
+								"Ordinal parameter labels start from '?" + position + "'"
+										+ " (ordinal parameters must be labelled from '?1')"
+						);
 					}
 					else {
-						throw new QueryException( "Gap in ordinal parameter positions; skipped " + (previous+1) );
+						throw new ParameterLabelException(
+								"Gap between '?" + previous + "' and '?" + position + "' in ordinal parameter labels"
+										+ " (ordinal parameters must be labelled sequentially)"
+						);
 					}
 				}
 				first = false;
@@ -93,7 +100,7 @@ public class ParameterRecognizerImpl implements ParameterRecognizer {
 			parameterStyle = ParameterStyle.JDBC;
 		}
 		else if ( parameterStyle != ParameterStyle.JDBC ) {
-			throw new IllegalStateException( "Cannot mix parameter styles between JDBC-style, ordinal and named in the same query" );
+			throw new ParameterRecognitionException( "Cannot mix parameter styles between JDBC-style, ordinal and named in the same query" );
 		}
 
 		int implicitPosition = ordinalParameterImplicitPosition++;
@@ -157,7 +164,7 @@ public class ParameterRecognizerImpl implements ParameterRecognizer {
 			parameterStyle = ParameterStyle.NAMED;
 		}
 		else if ( parameterStyle != ParameterStyle.NAMED ) {
-			throw new IllegalStateException( "Cannot mix parameter styles between JDBC-style, ordinal and named in the same query" );
+			throw new ParameterRecognitionException( "Cannot mix parameter styles between JDBC-style, ordinal and named in the same query" );
 		}
 
 		if ( position < 1 ) {

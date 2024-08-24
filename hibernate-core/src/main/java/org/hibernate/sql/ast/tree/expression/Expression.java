@@ -34,12 +34,14 @@ public interface Expression extends SqlAstNode, SqlSelectionProducer {
 			int jdbcPosition,
 			int valuesArrayPosition,
 			JavaType javaType,
+			boolean virtual,
 			TypeConfiguration typeConfiguration) {
 		return new SqlSelectionImpl(
 				jdbcPosition,
 				valuesArrayPosition,
 				javaType,
-				this
+				this,
+				virtual
 		);
 	}
 
@@ -47,6 +49,7 @@ public interface Expression extends SqlAstNode, SqlSelectionProducer {
 			int jdbcPosition,
 			int valuesArrayPosition,
 			JavaType javaType,
+			boolean virtual,
 			TypeConfiguration typeConfiguration) {
 		// Apply possible jdbc type wrapping
 		final Expression expression;
@@ -58,7 +61,7 @@ public interface Expression extends SqlAstNode, SqlSelectionProducer {
 			expression = expressionType.getJdbcMapping( 0 ).getJdbcType().wrapTopLevelSelectionExpression( this );
 		}
 		return expression == this
-			? createSqlSelection( jdbcPosition, valuesArrayPosition, javaType, typeConfiguration )
-			: new SqlSelectionImpl( jdbcPosition, valuesArrayPosition, expression );
+			? createSqlSelection( jdbcPosition, valuesArrayPosition, javaType, virtual, typeConfiguration )
+			: new SqlSelectionImpl( jdbcPosition, valuesArrayPosition, expression, virtual );
 	}
 }

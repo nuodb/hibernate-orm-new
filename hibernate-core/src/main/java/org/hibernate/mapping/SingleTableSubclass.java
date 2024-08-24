@@ -6,13 +6,11 @@
  */
 package org.hibernate.mapping;
 
-import java.util.Iterator;
 import java.util.List;
 
 import org.hibernate.MappingException;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.spi.MetadataBuildingContext;
-import org.hibernate.internal.util.collections.JoinedIterator;
 import org.hibernate.internal.util.collections.JoinedList;
 
 /**
@@ -28,23 +26,8 @@ public class SingleTableSubclass extends Subclass {
 		super( superclass, buildingContext );
 	}
 
-	@Deprecated @SuppressWarnings("deprecation")
-	protected Iterator<Property> getNonDuplicatedPropertyIterator() {
-		return new JoinedIterator<>(
-				getSuperclass().getUnjoinedPropertyIterator(),
-				getUnjoinedPropertyIterator()
-		);
-	}
-
 	protected List<Property> getNonDuplicatedProperties() {
 		return new JoinedList<>( getSuperclass().getUnjoinedProperties(), getUnjoinedProperties() );
-	}
-
-	@Deprecated @SuppressWarnings("deprecation")
-	protected Iterator<Selectable> getDiscriminatorColumnIterator() {
-		return isDiscriminatorInsertable() && !getDiscriminator().hasFormula()
-				? getDiscriminator().getColumnIterator()
-				: super.getDiscriminatorColumnIterator();
 	}
 
 	public Object accept(PersistentClassVisitor mv) {

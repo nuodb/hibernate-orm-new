@@ -16,6 +16,8 @@ import org.hibernate.resource.jdbc.spi.StatementInspector;
  * Allows creation of a new {@link Session} with specific options.
  * 
  * @author Steve Ebersole
+ *
+ * @see SessionFactory#withOptions()
  */
 public interface SessionBuilder {
 	/**
@@ -112,8 +114,20 @@ public interface SessionBuilder {
 	 * @param tenantIdentifier The tenant identifier.
 	 *
 	 * @return {@code this}, for method chaining
+	 * @deprecated Use {@link #tenantIdentifier(Object)} instead
 	 */
+	@Deprecated(forRemoval = true)
 	SessionBuilder tenantIdentifier(String tenantIdentifier);
+
+	/**
+	 * Define the tenant identifier to be associated with the opened session.
+	 *
+	 * @param tenantIdentifier The tenant identifier.
+	 *
+	 * @return {@code this}, for method chaining
+	 * @since 6.4
+	 */
+	SessionBuilder tenantIdentifier(Object tenantIdentifier);
 
 	/**
 	 * Add one or more {@link SessionEventListener} instances to the list of

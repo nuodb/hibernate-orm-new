@@ -9,7 +9,9 @@ package org.hibernate.query.sqm.tree.domain;
 import java.util.Set;
 
 import org.hibernate.metamodel.model.domain.EntityDomainType;
+import org.hibernate.metamodel.model.domain.ManagedDomainType;
 import org.hibernate.metamodel.model.domain.SetPersistentAttribute;
+import org.hibernate.metamodel.model.domain.TreatableDomainType;
 import org.hibernate.query.sqm.SemanticQueryWalker;
 import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.criteria.JpaExpression;
@@ -58,15 +60,16 @@ public class SqmSetJoin<O, E>
 		if ( existing != null ) {
 			return existing;
 		}
+		final SqmFrom<?, O> lhsCopy = getLhs().copy( context );
 		final SqmSetJoin<O, E> path = context.registerCopy(
 				this,
 				new SqmSetJoin<>(
-						getLhs().copy( context ),
-						getNavigablePath(),
-						getReferencedPathSource(),
+						lhsCopy,
+						getNavigablePathCopy( lhsCopy ),
+						getModel(),
 						getExplicitAlias(),
 						getSqmJoinType(),
-						isFetched(),
+						context.copyFetchedFlag() && isFetched(),
 						nodeBuilder()
 				)
 		);
@@ -75,13 +78,8 @@ public class SqmSetJoin<O, E>
 	}
 
 	@Override
-	public SetPersistentAttribute<O,E> getReferencedPathSource() {
-		return (SetPersistentAttribute<O, E>) super.getReferencedPathSource();
-	}
-
-	@Override
-	public SetPersistentAttribute<O,E> getModel() {
-		return getReferencedPathSource();
+	public SetPersistentAttribute<O, E> getModel() {
+		return (SetPersistentAttribute<O, E>) super.getNodeType();
 	}
 
 	@Override
@@ -90,8 +88,8 @@ public class SqmSetJoin<O, E>
 	}
 
 	@Override
-	public SetPersistentAttribute<O,E> getAttribute() {
-		return getReferencedPathSource();
+	public SetPersistentAttribute<O, E> getAttribute() {
+		return getModel();
 	}
 
 	@Override
@@ -120,8 +118,8 @@ public class SqmSetJoin<O, E>
 	}
 
 	@Override
-	public <S extends E> SqmTreatedSetJoin<O,E,S> treatAs(Class<S> treatAsType) {
-		return treatAs( nodeBuilder().getDomainModel().entity( treatAsType ) );
+	public <S extends E> SqmTreatedSetJoin<O,E,S> treatAs(Class<S> treatJavaType) {
+		return treatAs( treatJavaType, null );
 	}
 
 	@Override
@@ -131,14 +129,34 @@ public class SqmSetJoin<O, E>
 
 	@Override
 	public <S extends E> SqmTreatedSetJoin<O,E,S> treatAs(Class<S> treatJavaType, String alias) {
-		return treatAs( nodeBuilder().getDomainModel().entity( treatJavaType ), alias );
+		return treatAs( treatJavaType, alias, false );
 	}
 
 	@Override
 	public <S extends E> SqmTreatedSetJoin<O,E,S> treatAs(EntityDomainType<S> treatTarget, String alias) {
+		return treatAs( treatTarget, alias, false );
+	}
+
+	@Override
+	public <S extends E> SqmTreatedSetJoin<O, E, S> treatAs(Class<S> treatJavaType, String alias, boolean fetch) {
+		final ManagedDomainType<S> treatTarget = nodeBuilder().getDomainModel().managedType( treatJavaType );
 		final SqmTreatedSetJoin<O, E, S> treat = findTreat( treatTarget, alias );
 		if ( treat == null ) {
-			return addTreat( new SqmTreatedSetJoin<>( this, treatTarget, alias ) );
+			if ( treatTarget instanceof TreatableDomainType<?> ) {
+				return addTreat( new SqmTreatedSetJoin<>( this, (TreatableDomainType<S>) treatTarget, alias, fetch ) );
+			}
+			else {
+				throw new IllegalArgumentException( "Not a treatable type: " + treatJavaType.getName() );
+			}
+		}
+		return treat;
+	}
+
+	@Override
+	public <S extends E> SqmTreatedSetJoin<O,E,S> treatAs(EntityDomainType<S> treatTarget, String alias, boolean fetch) {
+		final SqmTreatedSetJoin<O, E, S> treat = findTreat( treatTarget, alias );
+		if ( treat == null ) {
+			return addTreat( new SqmTreatedSetJoin<>( this, treatTarget, alias, fetch ) );
 		}
 		return treat;
 	}
@@ -153,7 +171,7 @@ public class SqmSetJoin<O, E>
 	public SqmAttributeJoin<O, E> makeCopy(SqmCreationProcessingState creationProcessingState) {
 		return new SqmSetJoin<>(
 				creationProcessingState.getPathRegistry().findFromByPath( getLhs().getNavigablePath() ),
-				getReferencedPathSource(),
+				getModel(),
 				getExplicitAlias(),
 				getSqmJoinType(),
 				isFetched(),

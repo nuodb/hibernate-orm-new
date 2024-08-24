@@ -17,6 +17,7 @@ dependencies {
 
         api project( ":hibernate-envers" )
         api project( ":hibernate-spatial" )
+        api project( ":hibernate-community-dialects" )
 
         api project( ":hibernate-agroal" )
         api project( ":hibernate-c3p0" )
@@ -29,17 +30,17 @@ dependencies {
         api project( ":hibernate-micrometer" )
         api project( ":hibernate-graalvm")
 
-        api project( ":hibernate-jpamodelgen" )
+        api project( ":hibernate-processor" )
         api project( ":hibernate-gradle-plugin" )
         api project( ":hibernate-enhance-maven-plugin" )
         api project( ":hibernate-ant" )
 
-        api libs.hcann
+        api libs.hibernateModels
 
         api jakartaLibs.jpa
         api jakartaLibs.jta
 
-        runtime libs.antlr
+        runtime libs.antlrRuntime
         runtime libs.logging
         runtime libs.byteBuddy
         runtime libs.byteBuddyAgent

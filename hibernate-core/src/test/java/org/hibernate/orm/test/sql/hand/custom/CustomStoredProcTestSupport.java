@@ -42,7 +42,7 @@ public abstract class CustomStoredProcTestSupport extends CustomSQLTestSupport {
 		Session s = openSession();
 //		Query namedQuery = s.getNamedQuery( "simpleScalar" );
 		ProcedureCall namedQuery = s.createNamedStoredProcedureQuery( "simpleScalar" );
-		namedQuery.setParameter( "number", 43 );
+		namedQuery.setParameter( "p_number", 43 );
 		List list = namedQuery.getResultList();
 		Object o[] = ( Object[] ) list.get( 0 );
 		assertEquals( o[0], "getAll" );
@@ -105,10 +105,10 @@ public abstract class CustomStoredProcTestSupport extends CustomSQLTestSupport {
 		ProcedureCall namedQuery = s.createNamedStoredProcedureQuery( "selectAllEmployments" );
 		List list = namedQuery.getResultList();
 		assertTrue( list.get( 0 ) instanceof Employment );
-		s.delete( emp );
-		s.delete( ifa );
-		s.delete( jboss );
-		s.delete( gavin );
+		s.remove( emp );
+		s.remove( ifa );
+		s.remove( jboss );
+		s.remove( gavin );
 
 		t.commit();
 		s.close();

@@ -14,12 +14,17 @@ import org.antlr.v4.runtime.NoViableAltException;
 import org.hibernate.QueryException;
 import org.hibernate.grammars.hql.HqlLexer;
 import org.hibernate.grammars.hql.HqlParser;
-import org.hibernate.query.SemanticException;
+import org.hibernate.query.sqm.EntityTypeException;
+import org.hibernate.query.sqm.PathElementException;
+import org.hibernate.query.SyntaxException;
+import org.hibernate.query.sqm.TerminalPathException;
 import org.hibernate.query.hql.HqlLogging;
 import org.hibernate.query.hql.HqlTranslator;
 import org.hibernate.query.hql.spi.SqmCreationOptions;
 import org.hibernate.query.sqm.InterpretationException;
 import org.hibernate.query.sqm.ParsingException;
+import org.hibernate.query.sqm.UnknownEntityException;
+import org.hibernate.query.sqm.UnknownPathException;
 import org.hibernate.query.sqm.internal.SqmTreePrinter;
 import org.hibernate.query.sqm.spi.SqmCreationContext;
 import org.hibernate.query.sqm.tree.SqmStatement;
@@ -57,7 +62,7 @@ public class StandardHqlTranslator implements HqlTranslator {
 
 	@Override
 	public <R> SqmStatement<R> translate(String query, Class<R> expectedResultType) {
-		HqlLogging.QUERY_LOGGER.debugf( "HQL : " + query );
+		HqlLogging.QUERY_LOGGER.debugf( "HQL : %s", query );
 
 		final HqlParser.StatementContext hqlParseTree = parseHql( query );
 
@@ -67,7 +72,8 @@ public class StandardHqlTranslator implements HqlTranslator {
 					hqlParseTree,
 					expectedResultType,
 					sqmCreationOptions,
-					sqmCreationContext
+					sqmCreationContext,
+					query
 			);
 
 			// Log the SQM tree (if enabled)
@@ -78,7 +84,14 @@ public class StandardHqlTranslator implements HqlTranslator {
 		catch (QueryException e) {
 			throw e;
 		}
+		catch (PathElementException | TerminalPathException e) {
+			throw new UnknownPathException( e.getMessage(), query, e );
+		}
+		catch (EntityTypeException e) {
+			throw new UnknownEntityException( e.getMessage(), e.getReference(), e );
+		}
 		catch (Exception e) {
+			// this is some sort of "unexpected" exception, i.e. something buglike
 			throw new InterpretationException( query, e );
 		}
 	}
@@ -93,27 +106,7 @@ public class StandardHqlTranslator implements HqlTranslator {
 		ANTLRErrorListener errorListener = new ANTLRErrorListener() {
 			@Override
 			public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol, int line, int charPositionInLine, String msg, RecognitionException e) {
-				String errorText = "At " + line + ":" + charPositionInLine;
-				if ( offendingSymbol instanceof CommonToken ) {
-					String token = ( (CommonToken) offendingSymbol ).getText();
-					if ( token != null && !token.isEmpty() ) {
-						errorText += " and token '" + token + "'";
-					}
-				}
-				errorText += ", ";
-				if ( e instanceof NoViableAltException ) {
-					errorText +=  msg.substring( 0, msg.indexOf("'") );
-					String lineText = hql.lines().collect( toList() ).get( line-1 );
-					String text = lineText.substring( 0, charPositionInLine ) + "*" + lineText.substring( charPositionInLine );
-					errorText += "'" + text + "'";
-				}
-				else if ( e instanceof InputMismatchException ) {
-					errorText += msg.substring( 0,msg.length()-1 ).replace(" expecting {", ", expecting one of the following tokens: ");
-				}
-				else  {
-					errorText += msg;
-				}
-				throw new ParsingException( errorText );
+				throw new SyntaxException( prettifyAntlrError( offendingSymbol, line, charPositionInLine, msg, e, hql, true ), hql );
 			}
 
 			@Override
@@ -151,7 +144,52 @@ public class StandardHqlTranslator implements HqlTranslator {
 			return hqlParser.statement();
 		}
 		catch ( ParsingException ex ) {
-			throw new SemanticException( "Illegal HQL syntax [" + ex.getMessage() + "]", hql, ex );
+			// Note that this is supposed to represent a bug in the parser
+			// Ee wrap and rethrow in order to attach the HQL query to the error
+			throw new QueryException( "Failed to interpret HQL syntax [" + ex.getMessage() + "]", hql, ex );
 		}
+	}
+
+	/**
+	 * ANTLR's error messages are surprisingly bad,
+	 * so try to make them a bit better.
+	 */
+	public static String prettifyAntlrError(
+			Object offendingSymbol,
+			int line, int charPositionInLine,
+			String message,
+			RecognitionException e,
+			String hql,
+			boolean includeLocation) {
+		String errorText = "";
+		if ( includeLocation ) {
+			errorText += "At " + line + ":" + charPositionInLine;
+			if ( offendingSymbol instanceof CommonToken ) {
+				String token = ( (CommonToken) offendingSymbol).getText();
+				if ( token != null && !token.isEmpty() ) {
+					errorText += " and token '" + token + "'";
+				}
+			}
+			errorText += ", ";
+		}
+		if ( e instanceof NoViableAltException ) {
+			errorText +=  message.substring( 0, message.indexOf( '\'' ) );
+			if ( hql.isEmpty() ) {
+				errorText += "'*' (empty query string)";
+			}
+			else {
+				String lineText = hql.lines().collect( toList() ).get( line -1 );
+				String text = lineText.substring( 0, charPositionInLine) + "*" + lineText.substring(charPositionInLine);
+				errorText += "'" + text + "'";
+			}
+		}
+		else if ( e instanceof InputMismatchException ) {
+			errorText += message.substring( 0, message.length()-1 )
+					.replace(" expecting {", ", expecting one of the following tokens: ");
+		}
+		else  {
+			errorText += message;
+		}
+		return errorText;
 	}
 }

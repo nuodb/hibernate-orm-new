@@ -29,6 +29,7 @@ import org.hibernate.ScrollMode;
 import org.hibernate.ScrollableResults;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
+import org.hibernate.UnknownProfileException;
 import org.hibernate.dialect.Dialect;
 
 import jakarta.persistence.FlushModeType;
@@ -79,10 +80,23 @@ import org.hibernate.graph.GraphSemantic;
  * </ul>
  * <p>
  * The special built-in fetch profile named
- * {@value DefaultFetchProfile#HIBERNATE_DEFAULT_PROFILE} adds
- * a fetch join for every {@link jakarta.persistence.FetchType#EAGER eager}
- * {@code @ManyToOne} or {@code @OneToOne} association belonging to an entity
- * returned by the query.
+ * {@value DefaultFetchProfile#HIBERNATE_DEFAULT_PROFILE} adds a fetch join for
+ * every {@link jakarta.persistence.FetchType#EAGER eager} {@code @ManyToOne} or
+ * {@code @OneToOne} association belonging to an entity returned by the query.
+ * <p>
+ * Finally, two alternative approaches to pagination are available:
+ * <ol>
+ * <li>
+ * The operations and {@link #setOrder(List)} and {@link #setPage(Page)}, together
+ * with {@link Order} and {@link Page}, provide a streamlined API for offset-based
+ * pagination, at a slightly higher semantic level than the ancient but dependable
+ * {@link #setFirstResult(int)} and {@link #setMaxResults(int)}.
+ * <li>
+ * On the other hand, {@link KeyedPage} and {@link KeyedResultList}, along with
+ * {@link #getKeyedResultList(KeyedPage)}, provide for <em>key-based pagination</em>,
+ * which can help eliminate missed or duplicate results when data is modified
+ * between page requests.
+ * </ol>
  *
  * @author Steve Ebersole
  */
@@ -139,6 +153,10 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 * stream so that resources are freed as soon as possible.
 	 *
 	 * @return The results as a {@link Stream}
+	 *
+	 * @implNote The default implementation defined here simply returns
+	 *           {@link #list()}{@code .stream()}. Concrete implementations
+	 *           may be more efficient.
 	 */
 	default Stream<R> getResultStream() {
 		return stream();
@@ -158,7 +176,7 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 * @since 5.2
 	 */
 	default Stream<R> stream() {
-		return getResultStream();
+		return list().stream();
 	}
 
 	/**
@@ -189,6 +207,8 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 * @return the single result or {@code null} if there is no result to return
 	 *
 	 * @throws jakarta.persistence.NonUniqueResultException if there is more than one matching result
+	 *
+	 * @since 6.0
 	 */
 	R getSingleResultOrNull();
 
@@ -202,6 +222,37 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 */
 	Optional<R> uniqueResultOptional();
 
+	/**
+	 * Determine the size of the query result list that would be
+	 * returned by calling {@link #getResultList()} with no
+	 * {@linkplain #getFirstResult() offset} or
+	 * {@linkplain #getMaxResults() limit} applied to the query.
+	 *
+	 * @return the size of the list that would be returned
+	 *
+	 * @since 6.5
+	 */
+	@Incubating
+	long getResultCount();
+
+	/**
+	 * Execute the query and return the results for the given
+	 * {@linkplain KeyedPage page}, using key-based pagination.
+	 *
+	 * @param page the key-based specification of the page as
+	 *        an instance of {@link KeyedPage}
+	 *
+	 * @return the query results and the key of the next page
+	 *         as an instance of {@link KeyedResultList}
+	 *
+	 * @since 6.5
+	 *
+	 * @see KeyedPage
+	 * @see KeyedResultList
+	 */
+	@Incubating
+	KeyedResultList<R> getKeyedResultList(KeyedPage<R> page);
+
 	SelectionQuery<R> setHint(String hintName, Object value);
 
 	/**
@@ -213,6 +264,37 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 * @since 6.3
 	 */
 	SelectionQuery<R> setEntityGraph(EntityGraph<R> graph, GraphSemantic semantic);
+
+	/**
+	 * Enable the {@link org.hibernate.annotations.FetchProfile fetch profile}
+	 * for this query. If the requested fetch profile is already enabled,
+	 * the call has no effect.
+	 * <p>
+	 * This is an alternative way to specify the associations which
+	 * should be fetched as part of the initial query.
+	 *
+	 * @param profileName the name of the fetch profile to be enabled
+	 *
+	 * @throws UnknownProfileException Indicates that the given name does not
+	 *                                 match any known fetch profile names
+	 *
+	 * @see org.hibernate.annotations.FetchProfile
+	 */
+	SelectionQuery<R> enableFetchProfile(String profileName);
+
+	/**
+	 * Disable the {@link org.hibernate.annotations.FetchProfile fetch profile}
+	 * with the given name in this session. If the requested fetch profile
+	 * is not currently enabled, the call has no effect.
+	 *
+	 * @param profileName the name of the fetch profile to be disabled
+	 *
+	 * @throws UnknownProfileException Indicates that the given name does not
+	 *                                 match any known fetch profile names
+	 *
+	 * @see org.hibernate.annotations.FetchProfile
+	 */
+	SelectionQuery<R> disableFetchProfile(String profileName);
 
 	@Override
 	SelectionQuery<R> setFlushMode(FlushModeType flushMode);
@@ -315,15 +397,25 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 
 	/**
 	 * The first row position to return from the query results. Applied
-	 * to the SQL query
+	 * to the SQL query.
 	 */
 	int getFirstResult();
 
 	/**
 	 * Set the first row position to return from the query results. Applied
-	 * to the SQL query
+	 * to the SQL query.
 	 */
 	SelectionQuery<R> setFirstResult(int startPosition);
+
+	/**
+	 * Set the {@linkplain Page page} of results to return.
+	 *
+	 * @see Page
+	 *
+	 * @since 6.3
+	 */
+	@Incubating
+	SelectionQuery<R> setPage(Page page);
 
 	/**
 	 * Obtain the {@link CacheMode} in effect for this query. By default,
@@ -404,6 +496,18 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	SelectionQuery<R> setCacheable(boolean cacheable);
 
 	/**
+	 * Should the query plan of the query be stored in the query plan cache?
+	 */
+	boolean isQueryPlanCacheable();
+
+	/**
+	 * Enable/disable query plan caching for this query.
+	 *
+	 * @see #isQueryPlanCacheable
+	 */
+	SelectionQuery<R> setQueryPlanCacheable(boolean queryPlanCacheable);
+
+	/**
 	 * Obtain the name of the second level query cache region in which query
 	 * results will be stored (if they are cached, see the discussion on
 	 * {@link #isCacheable()} for more information). {@code null} indicates
@@ -457,6 +561,32 @@ public interface SelectionQuery<R> extends CommonQueryContract {
 	 * Specify a {@link LockMode} to apply to a specific alias defined in the query
 	 */
 	SelectionQuery<R> setLockMode(String alias, LockMode lockMode);
+
+	/**
+	 * If the result type of this query is an entity class, add one or more
+	 * {@linkplain Order rules} for ordering the query results.
+	 *
+	 * @param orderList one or more instances of {@link Order}
+	 *
+	 * @see Order
+	 *
+	 * @since 6.3
+	 */
+	@Incubating
+	SelectionQuery<R> setOrder(List<Order<? super R>> orderList);
+
+	/**
+	 * If the result type of this query is an entity class, add a
+	 * {@linkplain Order rule} for ordering the query results.
+	 *
+	 * @param order an instance of {@link Order}
+	 *
+	 * @see Order
+	 *
+	 * @since 6.3
+	 */
+	@Incubating
+	SelectionQuery<R> setOrder(Order<? super R> order);
 
 	/**
 	 * Specify a {@link LockMode} to apply to a specific alias defined in the query

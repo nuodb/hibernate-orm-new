@@ -10,12 +10,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import org.hibernate.Hibernate;
 import org.hibernate.Transaction;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
 import org.hibernate.orm.test.bootstrap.binding.annotations.embedded.FloatLeg.RateIndex;
 import org.hibernate.orm.test.bootstrap.binding.annotations.embedded.Leg.Frequency;
 import org.hibernate.query.Query;
@@ -66,7 +66,7 @@ public class EmbeddedTest {
 	public void cleanup(SessionFactoryScope scope) {
 		scope.inTransaction( session -> {
 			for ( Person person : session.createQuery( "from Person", Person.class ).getResultList() ) {
-				session.delete( person );
+				session.remove( person );
 			}
 			session.createQuery( "delete from InternetProvider" ).executeUpdate();
 			session.createQuery( "delete from Manager" ).executeUpdate();
@@ -100,10 +100,13 @@ public class EmbeddedTest {
 			assertNotNull( p );
 			assertNotNull( p.address );
 			assertEquals( "Springfield", p.address.city );
+			assertEquals( (Integer) 1, p.address.formula );
+
 			assertNotNull( p.address.country );
 			assertEquals( "DM", p.address.country.getIso2() );
 			assertNotNull( p.bornIn );
 			assertEquals( "US", p.bornIn.getIso2() );
+			assertEquals( (Integer) 2, p.addressBis.formula );
 		} );
 	}
 
@@ -344,7 +347,7 @@ public class EmbeddedTest {
 					assertNotNull( "Floating leg retrieved as null", floating );
 					assertEquals( Frequency.SEMIANNUALLY, fixed.getPaymentFrequency() );
 					assertEquals( Frequency.QUARTERLY, floating.getPaymentFrequency() );
-					session.delete( vanillaSwap );
+					session.remove( vanillaSwap );
 				}
 		);
 	}
@@ -441,7 +444,7 @@ public class EmbeddedTest {
 					assertEquals( 1.1, spreadDeal.getShortSwap().getFloatLeg().getRateSpread(), 0.01 );
 					assertEquals( 0.8, spreadDeal.getSwap().getFloatLeg().getRateSpread(), 0.01 );
 					assertEquals( 0.8, spreadDeal.getLongSwap().getFloatLeg().getRateSpread(), 0.01 );
-					session.delete( spreadDeal );
+					session.remove( spreadDeal );
 				}
 		);
 	}
@@ -468,7 +471,7 @@ public class EmbeddedTest {
 						Book loadedBook = session.get( Book.class, book.getIsbn() );
 						assertNotNull( loadedBook.getSummary() );
 						assertEquals( book.getSummary().getText(), loadedBook.getSummary().getText() );
-						session.delete( loadedBook );
+						session.remove( loadedBook );
 						tx.commit();
 					}
 					catch (Exception e) {
@@ -501,7 +504,7 @@ public class EmbeddedTest {
 					Book loadedBook = session.get( Book.class, book.getIsbn() );
 					assertNotNull( loadedBook.getSummary() );
 					assertEquals( loadedBook, loadedBook.getSummary().getSummarizedBook() );
-					session.delete( loadedBook );
+					session.remove( loadedBook );
 				}
 		);
 	}
@@ -541,9 +544,9 @@ public class EmbeddedTest {
 					);
 					assertNotNull( "2nd Many to one not set", internetProvider.getOwner().getOrigin() );
 					assertEquals( "Wrong 2nd link", nat.getName(), internetProvider.getOwner().getOrigin().getName() );
-					session.delete( internetProvider );
-					session.delete( internetProvider.getOwner().getCorporationType() );
-					session.delete( internetProvider.getOwner().getOrigin() );
+					session.remove( internetProvider );
+					session.remove( internetProvider.getOwner().getCorporationType() );
+					session.remove( internetProvider.getOwner().getOrigin() );
 				}
 		);
 	}
@@ -576,8 +579,8 @@ public class EmbeddedTest {
 					assertEquals( "Wrong number of elements", 1, topManagement.size() );
 					Manager manager = topManagement.iterator().next();
 					assertEquals( "Wrong element", "Bill", manager.getName() );
-					session.delete( manager );
-					session.delete( internetProvider );
+					session.remove( manager );
+					session.remove( internetProvider );
 				}
 		);
 	}
@@ -637,8 +640,8 @@ public class EmbeddedTest {
 				session -> {
 					InternetProvider internetProvider = session.get( InternetProvider.class, provider.getId() );
 					Manager manager = internetProvider.getOwner().getTopManagement().iterator().next();
-					session.delete( manager );
-					session.delete( internetProvider );
+					session.remove( manager );
+					session.remove( internetProvider );
 				}
 		);
 	}
@@ -772,7 +775,7 @@ public class EmbeddedTest {
 		scope.inTransaction(
 				session -> {
 					Book b = new Book();
-					b.setIsbn( UUID.randomUUID().toString() );
+					b.setIsbn( SafeRandomUUIDGenerator.safeRandomUUIDAsString() );
 					b.setSummary( new Summary() );
 					b = (Book) session.merge( b );
 				}

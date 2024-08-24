@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 import jakarta.persistence.FlushModeType;
 import jakarta.persistence.TransactionRequiredException;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import org.hibernate.CacheMode;
 import org.hibernate.FlushMode;
@@ -42,8 +43,7 @@ import org.hibernate.type.spi.TypeConfiguration;
  * including implementors of {@link org.hibernate.type.Type}, {@link EntityPersister},
  * and {@link org.hibernate.persister.collection.CollectionPersister}.
  * <p>
- * The {@code Session}, via this interface and {@link SharedSessionContractImplementor},
- * implements:
+ * The {@code Session}, via this interface, implements:
  * <ul>
  *     <li>
  *         {@link JdbcSessionOwner}, and so the session also acts as the orchestrator
@@ -307,7 +307,7 @@ public interface SharedSessionContractImplementor
 	 * @param entityName optional entity name
 	 * @param object the entity instance
 	 */
-	EntityPersister getEntityPersister(String entityName, Object object) throws HibernateException;
+	EntityPersister getEntityPersister(@Nullable String entityName, Object object) throws HibernateException;
 
 	/**
 	 * Get the entity instance associated with the given {@link EntityKey},
@@ -379,6 +379,10 @@ public interface SharedSessionContractImplementor
 	void setCriteriaCopyTreeEnabled(boolean jpaCriteriaCopyComplianceEnabled);
 
 	boolean isCriteriaCopyTreeEnabled();
+
+	boolean getNativeJdbcParametersIgnored();
+
+	void setNativeJdbcParametersIgnored(boolean nativeJdbcParametersIgnored);
 
 	/**
 	 * Get the current {@link FlushModeType} for this session.
@@ -532,23 +536,12 @@ public interface SharedSessionContractImplementor
 	 */
 	boolean autoFlushIfRequired(Set<String> querySpaces) throws HibernateException;
 
-	/**
-	 * Are we currently enforcing a {@linkplain GraphSemantic#FETCH fetch graph}?
-	 *
-	 * @deprecated this is not used  anywhere
-	 */
-	@Deprecated(since = "6", forRemoval = true)
-	default boolean isEnforcingFetchGraph() {
-		return false;
+	default boolean autoFlushIfRequired(Set<String> querySpaces, boolean skipPreFlush)
+			throws HibernateException {
+		return autoFlushIfRequired( querySpaces );
 	}
 
-	/**
-	 * Enable or disable {@linkplain GraphSemantic#FETCH fetch graph} enforcement.
-	 *
-	 * @deprecated this is not used  anywhere
-	 */
-	@Deprecated(since = "6", forRemoval = true)
-	default void setEnforcingFetchGraph(boolean enforcingFetchGraph) {
+	default void autoPreFlush(){
 	}
 
 	/**

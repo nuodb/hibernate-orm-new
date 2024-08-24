@@ -299,8 +299,9 @@ public class StandardServiceRegistryBuilder {
 	/**
 	 * Discard all the settings applied so far.
 	 */
-	public void clearSettings() {
+	public StandardServiceRegistryBuilder clearSettings() {
 		settings.clear();
+		return this;
 	}
 
 	/**
@@ -365,7 +366,7 @@ public class StandardServiceRegistryBuilder {
 		settingsCopy.put( LOADED_CONFIG_KEY, aggregatedCfgXml );
 		ConfigurationHelper.resolvePlaceHolders( settingsCopy );
 
-		return new StandardServiceRegistryImpl(
+		return StandardServiceRegistryImpl.create(
 				autoCloseRegistry,
 				bootstrapServiceRegistry,
 				initiators,
@@ -376,7 +377,7 @@ public class StandardServiceRegistryBuilder {
 
 	private void applyServiceContributors() {
 		final Iterable<ServiceContributor> serviceContributors =
-				bootstrapServiceRegistry.getService( ClassLoaderService.class )
+				bootstrapServiceRegistry.requireService( ClassLoaderService.class )
 						.loadJavaServices( ServiceContributor.class );
 
 		for ( ServiceContributor serviceContributor : serviceContributors ) {

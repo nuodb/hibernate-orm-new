@@ -6,6 +6,8 @@
  */
 package org.hibernate.sql.results.graph;
 
+import java.util.BitSet;
+
 import org.hibernate.Incubating;
 import org.hibernate.engine.FetchTiming;
 import org.hibernate.metamodel.mapping.EmbeddableMappingType;
@@ -58,7 +60,9 @@ public interface FetchParent extends DomainResultGraphNode {
 				return getNavigablePath().treatAs( fetchableEntityType.getEntityName() )
 						.append( fetchableName );
 			}
-			return getNavigablePath().append( fetchableName );
+			else {
+				return getNavigablePath().append( fetchableName );
+			}
 		}
 	}
 
@@ -66,7 +70,7 @@ public interface FetchParent extends DomainResultGraphNode {
 	 * Whereas {@link #getReferencedMappingContainer} and {@link #getReferencedMappingType} return the
 	 * referenced container type, this method returns the referenced part.
 	 *
-	 * E.g. for a many-to-one this methods returns the
+	 * E.g. for a many-to-one this method returns the
 	 * {@link ToOneAttributeMapping} while
 	 * {@link #getReferencedMappingContainer} and {@link #getReferencedMappingType} return the referenced
 	 * {@link org.hibernate.metamodel.mapping.EntityMappingType}.
@@ -90,6 +94,19 @@ public interface FetchParent extends DomainResultGraphNode {
 	boolean hasJoinFetches();
 
 	boolean containsCollectionFetches();
+
+	default int getCollectionFetchesCount() {
+		return getFetches().getCollectionFetchesCount();
+	}
+
+	@Override
+	default void collectValueIndexesToCache(BitSet valueIndexes) {
+		for ( Fetch fetch : getFetches() ) {
+			fetch.collectValueIndexesToCache( valueIndexes );
+		}
+	}
+
+	Initializer<?> createInitializer(InitializerParent<?> parent, AssemblerCreationState creationState);
 
 	default FetchParent getRoot() {
 		if ( this instanceof Fetch ) {

@@ -13,7 +13,9 @@ import javax.sql.DataSource;
 
 import org.hibernate.HibernateException;
 import org.hibernate.cfg.Environment;
+import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
+import org.hibernate.engine.jdbc.connections.spi.DatabaseConnectionInfo;
 import org.hibernate.engine.jndi.spi.JndiService;
 import org.hibernate.service.UnknownUnwrapTypeException;
 import org.hibernate.service.spi.Configurable;
@@ -38,6 +40,7 @@ public class DatasourceConnectionProviderImpl implements ConnectionProvider, Con
 	private String pass;
 	private boolean useCredentials;
 	private JndiService jndiService;
+	private String dataSourceJndiName;
 
 	private boolean available;
 
@@ -57,16 +60,16 @@ public class DatasourceConnectionProviderImpl implements ConnectionProvider, Con
 
 	@Override
 	public boolean isUnwrappableAs(Class<?> unwrapType) {
-		return ConnectionProvider.class.equals( unwrapType ) ||
-				DatasourceConnectionProviderImpl.class.isAssignableFrom( unwrapType ) ||
-				DataSource.class.isAssignableFrom( unwrapType );
+		return ConnectionProvider.class.equals( unwrapType )
+			|| DatasourceConnectionProviderImpl.class.isAssignableFrom( unwrapType )
+			|| DataSource.class.isAssignableFrom( unwrapType );
 	}
 
 	@Override
 	@SuppressWarnings( {"unchecked"})
 	public <T> T unwrap(Class<T> unwrapType) {
-		if ( ConnectionProvider.class.equals( unwrapType ) ||
-				DatasourceConnectionProviderImpl.class.isAssignableFrom( unwrapType ) ) {
+		if ( ConnectionProvider.class.equals( unwrapType )
+				|| DatasourceConnectionProviderImpl.class.isAssignableFrom( unwrapType ) ) {
 			return (T) this;
 		}
 		else if ( DataSource.class.isAssignableFrom( unwrapType ) ) {
@@ -79,26 +82,27 @@ public class DatasourceConnectionProviderImpl implements ConnectionProvider, Con
 
 	@Override
 	public void configure(Map<String, Object> configValues) {
-		if ( this.dataSource == null ) {
-			final Object dataSource = configValues.get( Environment.DATASOURCE );
-			if ( dataSource instanceof DataSource ) {
-				this.dataSource = (DataSource) dataSource;
+		if ( dataSource == null ) {
+			final Object dataSourceSetting = configValues.get( Environment.DATASOURCE );
+			if ( dataSourceSetting instanceof DataSource ) {
+				dataSource = (DataSource) dataSourceSetting;
 			}
 			else {
-				final String dataSourceJndiName = (String) dataSource;
+				final String dataSourceJndiName = (String) dataSourceSetting;
 				if ( dataSourceJndiName == null ) {
 					throw new HibernateException(
 							"DataSource to use was not injected nor specified by [" + Environment.DATASOURCE
 									+ "] configuration property"
 					);
 				}
+				this.dataSourceJndiName = dataSourceJndiName;
 				if ( jndiService == null ) {
 					throw new HibernateException( "Unable to locate JndiService to lookup Datasource" );
 				}
-				this.dataSource = (DataSource) jndiService.locate( dataSourceJndiName );
+				dataSource = (DataSource) jndiService.locate( dataSourceJndiName );
 			}
 		}
-		if ( this.dataSource == null ) {
+		if ( dataSource == null ) {
 			throw new HibernateException( "Unable to determine appropriate DataSource to use" );
 		}
 
@@ -130,5 +134,18 @@ public class DatasourceConnectionProviderImpl implements ConnectionProvider, Con
 	@Override
 	public boolean supportsAggressiveRelease() {
 		return true;
+	}
+
+	@Override
+	public DatabaseConnectionInfo getDatabaseConnectionInfo(Dialect dialect) {
+		return new DatabaseConnectionInfoImpl(
+				"Connecting through datasource" + dataSourceJndiName,
+				null,
+				dialect.getVersion(),
+				null,
+				null,
+				null,
+				null
+		);
 	}
 }

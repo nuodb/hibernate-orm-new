@@ -20,6 +20,7 @@ import org.hibernate.dialect.Dialect;
 import org.hibernate.internal.util.collections.ArrayHelper;
 import org.hibernate.loader.internal.AliasConstantsHelper;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public final class StringHelper {
@@ -42,7 +43,7 @@ public final class StringHelper {
 		return string.length() - 1;
 	}
 
-	public static String join(String seperator, String[] strings) {
+	public static String join(String separator, String[] strings) {
 		int length = strings.length;
 		if ( length == 0 ) {
 			return "";
@@ -54,7 +55,7 @@ public final class StringHelper {
 		StringBuilder buf = new StringBuilder( length * firstStringLength )
 				.append( strings[0] );
 		for ( int i = 1; i < length; i++ ) {
-			buf.append( seperator ).append( strings[i] );
+			buf.append( separator ).append( strings[i] );
 		}
 		return buf.toString();
 	}
@@ -76,17 +77,17 @@ public final class StringHelper {
 		return buf.toString();
 	}
 
-	public static String join(String separator, Iterable objects) {
+	public static String join(String separator, Iterable<?> objects) {
 		return join( separator, objects.iterator() );
 	}
 
-	public static String join(String seperator, Iterator<?> objects) {
+	public static String join(String separator, Iterator<?> objects) {
 		StringBuilder buf = new StringBuilder();
 		if ( objects.hasNext() ) {
 			buf.append( objects.next() );
 		}
 		while ( objects.hasNext() ) {
-			buf.append( seperator ).append( objects.next() );
+			buf.append( separator ).append( objects.next() );
 		}
 		return buf.toString();
 	}
@@ -395,7 +396,7 @@ public final class StringHelper {
 	public static String collapseQualifier(String qualifier, boolean includeDots) {
 		StringTokenizer tokenizer = new StringTokenizer( qualifier, "." );
 		StringBuilder sb = new StringBuilder();
-		sb.append( Character.toString( tokenizer.nextToken().charAt( 0 ) ) );
+		sb.append( tokenizer.nextToken().charAt( 0 ) );
 		while ( tokenizer.hasMoreTokens() ) {
 			if ( includeDots ) {
 				sb.append( '.' );
@@ -560,15 +561,15 @@ public final class StringHelper {
 		return count;
 	}
 
-	public static boolean isNotEmpty(String string) {
+	public static boolean isNotEmpty(@Nullable String string) {
 		return string != null && !string.isEmpty();
 	}
 
-	public static boolean isEmpty(String string) {
+	public static boolean isEmpty(@Nullable String string) {
 		return string == null || string.isEmpty();
 	}
 
-	public static boolean isBlank(String string) {
+	public static boolean isBlank(@Nullable String string) {
 		return string == null || string.isBlank();
 	}
 
@@ -741,7 +742,7 @@ public final class StringHelper {
 		final char first = name.charAt( 0 );
 		final char last = name.charAt( name.length() - 1 );
 
-		return ( ( first == last ) && ( first == '`' || first == '"' ) );
+		return first == last && ( first == '`' || first == '"' );
 	}
 
 	/**
@@ -852,6 +853,22 @@ public final class StringHelper {
 			buffer.append( String.join(", ", renderer.render( value ) ) );
 		}
 		return buffer.toString();
+	}
+
+	public static String coalesce(@NonNull String fallbackValue, @NonNull String... values) {
+		for ( int i = 0; i < values.length; i++ ) {
+			if ( isNotEmpty( values[i] ) ) {
+				return values[i];
+			}
+		}
+		return fallbackValue;
+	}
+
+	public static String coalesce(@NonNull String fallbackValue, String value) {
+		if ( isNotEmpty( value ) ) {
+			return value;
+		}
+		return fallbackValue;
 	}
 
 	public interface Renderer<T> {

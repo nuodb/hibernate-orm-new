@@ -6,8 +6,6 @@
  */
 package org.hibernate.orm.test.annotations.embeddables.nested.fieldaccess;
 
-import java.sql.Types;
-
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
@@ -20,8 +18,9 @@ import org.hibernate.mapping.Property;
 import org.hibernate.mapping.SimpleValue;
 import org.hibernate.mapping.Value;
 import org.hibernate.type.SqlTypes;
-import org.hibernate.type.spi.TypeConfiguration;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
 
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.hibernate.testing.junit4.ExtraAssertions.assertJdbcTypeCode;
@@ -34,13 +33,15 @@ public class FieldAccessedNestedEmbeddableMetadataTest {
 
 	@Test
 	public void testEnumTypeInterpretation() {
-		StandardServiceRegistry ssr = new StandardServiceRegistryBuilder().build();
+		StandardServiceRegistry ssr = ServiceRegistryUtil.serviceRegistry();
 
 		try {
 			final Metadata metadata = new MetadataSources( ssr )
 					.addAnnotatedClass( Customer.class )
 					.buildMetadata();
-			final TypeConfiguration typeConfiguration = metadata.getDatabase().getTypeConfiguration();
+			final JdbcTypeRegistry jdbcTypeRegistry = metadata.getDatabase()
+					.getTypeConfiguration()
+					.getJdbcTypeRegistry();
 
 			PersistentClass classMetadata = metadata.getEntityBinding( Customer.class.getName() );
 			Property investmentsProperty = classMetadata.getProperty( "investments" );
@@ -48,14 +49,14 @@ public class FieldAccessedNestedEmbeddableMetadataTest {
 			Component investmentMetadata = (Component) investmentsValue.getElement();
 			Value descriptionValue = investmentMetadata.getProperty( "description" ).getValue();
 			assertEquals( 1, descriptionValue.getColumnSpan() );
-			Column selectable = (Column) descriptionValue.getColumnIterator().next();
+			Column selectable = (Column) descriptionValue.getSelectables().get( 0 );
 			assertEquals( (Long) 500L, selectable.getLength() );
 			Component amountMetadata = (Component) investmentMetadata.getProperty( "amount" ).getValue();
 			SimpleValue currencyMetadata = (SimpleValue) amountMetadata.getProperty( "currency" ).getValue();
 			int[] currencySqlTypes = currencyMetadata.getType().getSqlTypeCodes( metadata );
 			assertEquals( 1, currencySqlTypes.length );
 			assertJdbcTypeCode(
-					new int[]{Types.VARCHAR, SqlTypes.ENUM},
+					new int[] { jdbcTypeRegistry.getDescriptor( SqlTypes.VARCHAR ).getJdbcTypeCode(), SqlTypes.ENUM },
 					currencySqlTypes[0]
 			);
 		}

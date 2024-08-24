@@ -8,8 +8,11 @@ package org.hibernate.query.spi;
 
 import java.sql.Statement;
 import java.util.List;
+import java.util.Set;
+
 import jakarta.persistence.CacheRetrieveMode;
 import jakarta.persistence.CacheStoreMode;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import org.hibernate.CacheMode;
 import org.hibernate.FlushMode;
@@ -55,13 +58,13 @@ public interface QueryOptions {
 	 * Transformer applied to the query to transform the structure of each "row"
 	 * in the results
 	 */
-	TupleTransformer<?> getTupleTransformer();
+	@Nullable TupleTransformer<?> getTupleTransformer();
 
 	/**
 	 * Transformer applied to the query to transform the structure of the
 	 * overall results
 	 */
-	ResultListTransformer<?> getResultListTransformer();
+	@Nullable ResultListTransformer<?> getResultListTransformer();
 
 	/**
 	 * Should results from the query be cached?
@@ -99,6 +102,21 @@ public interface QueryOptions {
 	 */
 	String getResultCacheRegionName();
 
+	/**
+	 * Should the query plan of the query be cached?
+	 */
+	Boolean getQueryPlanCachingEnabled();
+
+	/**
+	 * The explicitly enabled profiles for this query
+	 */
+	Set<String> getEnabledFetchProfiles();
+
+	/**
+	 * The explicitly disabled profiles for this query
+	 */
+	Set<String> getDisabledFetchProfiles();
+
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// JDBC / SQL options
@@ -125,6 +143,7 @@ public interface QueryOptions {
 	 * @see Statement#getFetchSize
 	 */
 	Integer getFetchSize();
+
 	/**
 	 * The limit to the query results.  May also be accessed via
 	 * {@link #getFirstRow} and {@link #getMaxRows}

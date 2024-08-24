@@ -45,7 +45,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 
 	@Test
 	@RequiresDialectFeature(
-			value = DialectChecks.SupportsUnboundedLobLocatorMaterializationCheck.class,
+			value = DialectChecks.SupportsExpectedLobUsagePattern.class,
 			comment = "database/driver does not support materializing a LOB locator outside the owning transaction"
 	)
 	public void testBoundedBlobLocatorAccess() throws Throwable {
@@ -57,7 +57,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		s.beginTransaction();
 		LobHolder entity = new LobHolder();
 		entity.setBlobLocator( s.getLobHelper().createBlob( original ) );
-		s.save( entity );
+		s.persist( entity );
 		s.getTransaction().commit();
 		s.close();
 
@@ -120,7 +120,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 			Assert.assertEquals( empty.length, entity.getBlobLocator().length() );
 			assertEquals( empty, extractData( entity.getBlobLocator() ) );
 		}
-		s.delete( entity );
+		s.remove( entity );
 		s.getTransaction().commit();
 		s.close();
 
@@ -142,7 +142,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 		s.beginTransaction();
 		LobHolder entity = new LobHolder();
 		entity.setBlobLocator( s.getLobHelper().createBlob( original ) );
-		s.save( entity );
+		s.persist( entity );
 		s.getTransaction().commit();
 		s.close();
 
@@ -159,7 +159,7 @@ public class BlobLocatorTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		s.beginTransaction();
-		s.delete( entity );
+		s.remove( entity );
 		s.getTransaction().commit();
 		s.close();
 	}

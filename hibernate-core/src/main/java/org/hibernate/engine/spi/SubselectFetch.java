@@ -12,16 +12,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.hibernate.internal.util.NullnessUtil;
 import org.hibernate.spi.NavigablePath;
-import org.hibernate.sql.ast.tree.expression.JdbcParameter;
 import org.hibernate.sql.ast.tree.from.TableGroup;
 import org.hibernate.sql.ast.tree.select.QuerySpec;
 import org.hibernate.sql.ast.tree.select.SelectStatement;
 import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.JdbcParametersList;
-import org.hibernate.sql.results.graph.DomainResult;
-import org.hibernate.sql.results.graph.entity.LoadingEntityEntry;
-import org.hibernate.sql.results.graph.entity.internal.EntityResultInitializer;
+import org.hibernate.sql.results.graph.entity.EntityInitializer;
 
 /**
  * Encapsulates details related to entities which contain sub-select-fetchable
@@ -121,12 +119,12 @@ public class SubselectFetch {
 	}
 
 	public interface RegistrationHandler {
-		void addKey(EntityKey key, LoadingEntityEntry entry);
+		void addKey(EntityHolder holder);
 	}
 
 	private static final RegistrationHandler NO_OP_REG_HANDLER = new RegistrationHandler() {
 		@Override
-		public void addKey(EntityKey key, LoadingEntityEntry entry) {
+		public void addKey(EntityHolder holder) {
 		}
 	} ;
 
@@ -149,42 +147,25 @@ public class SubselectFetch {
 			this.loadingJdbcParameterBindings = loadingJdbcParameterBindings;
 		}
 
-		public void addKey(EntityKey key, LoadingEntityEntry entry) {
+		@Override
+		public void addKey(EntityHolder holder) {
 			if ( batchFetchQueue.getSession().getLoadQueryInfluencers()
-						.hasSubselectLoadableCollections( entry.getDescriptor() )
-					&& shouldAddSubselectFetch( entry ) ) {
+					.hasSubselectLoadableCollections( holder.getDescriptor() ) ) {
+				final EntityInitializer<?> entityInitializer = NullnessUtil.castNonNull( holder.getEntityInitializer() );
 				final SubselectFetch subselectFetch = subselectFetches.computeIfAbsent(
-						entry.getEntityInitializer().getNavigablePath(),
+						entityInitializer.getNavigablePath(),
 						navigablePath -> new SubselectFetch(
 								loadingSqlAst.getQuerySpec(),
 								loadingSqlAst.getQuerySpec()
 										.getFromClause()
-										.findTableGroup( entry.getEntityInitializer().getNavigablePath() ),
+										.findTableGroup( entityInitializer.getNavigablePath() ),
 								loadingJdbcParameters,
 								loadingJdbcParameterBindings,
 								new HashSet<>()
 						)
 				);
-				subselectFetch.resultingEntityKeys.add( key );
-				batchFetchQueue.addSubselect( key, subselectFetch );
-			}
-		}
-
-		private boolean shouldAddSubselectFetch(LoadingEntityEntry entry) {
-			if ( entry.getEntityInitializer() instanceof EntityResultInitializer ) {
-				return true;
-			}
-			else {
-				final NavigablePath entityInitializerParent = entry.getEntityInitializer().getNavigablePath().getParent();
-
-				// We want to add only the collections of the loading entities
-				for ( DomainResult<?> domainResult : loadingSqlAst.getDomainResultDescriptors() ) {
-					if ( domainResult.getNavigablePath().equals( entityInitializerParent ) ) {
-						return true;
-					}
-				}
-
-				return false;
+				subselectFetch.resultingEntityKeys.add( holder.getEntityKey() );
+				batchFetchQueue.addSubselect( holder.getEntityKey(), subselectFetch );
 			}
 		}
 	}

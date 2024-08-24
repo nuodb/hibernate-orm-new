@@ -23,22 +23,30 @@ public class ResolvedSqlSelection extends SqlSelectionImpl {
 	private final BasicType<Object> resolvedType;
 
 	public ResolvedSqlSelection(
+			int valuesArrayPosition,
+			Expression sqlExpression,
+			BasicType<Object> resolvedType) {
+		super( valuesArrayPosition + 1, valuesArrayPosition, sqlExpression, null, false, resolvedType.getJdbcValueExtractor() );
+		this.resolvedType = resolvedType;
+	}
+
+	public ResolvedSqlSelection(
 			int jdbcPosition,
 			int valuesArrayPosition,
 			Expression sqlExpression,
 			BasicType<Object> resolvedType) {
-		super( jdbcPosition, valuesArrayPosition, null, sqlExpression );
+		super( jdbcPosition, valuesArrayPosition, sqlExpression, null, false, resolvedType.getJdbcValueExtractor() );
 		this.resolvedType = resolvedType;
-	}
-
-	@Override
-	public ValueExtractor getJdbcValueExtractor() {
-		return resolvedType.getJdbcMapping().getJdbcValueExtractor();
 	}
 
 	@Override
 	public JdbcMappingContainer getExpressionType() {
 		return resolvedType;
+	}
+
+	@Override
+	public boolean isVirtual() {
+		return false;
 	}
 
 	@Override

@@ -37,7 +37,7 @@ public class SelfRenderingSqmOrderedSetAggregateFunction<T> extends SelfRenderin
 
 	public SelfRenderingSqmOrderedSetAggregateFunction(
 			SqmFunctionDescriptor descriptor,
-			FunctionRenderingSupport renderingSupport,
+			FunctionRenderer renderer,
 			List<? extends SqmTypedNode<?>> arguments,
 			SqmPredicate filter,
 			SqmOrderByClause withinGroupClause,
@@ -48,7 +48,7 @@ public class SelfRenderingSqmOrderedSetAggregateFunction<T> extends SelfRenderin
 			String name) {
 		super(
 				descriptor,
-				renderingSupport,
+				renderer,
 				arguments,
 				filter,
 				impliedResultType,
@@ -74,7 +74,7 @@ public class SelfRenderingSqmOrderedSetAggregateFunction<T> extends SelfRenderin
 				this,
 				new SelfRenderingSqmOrderedSetAggregateFunction<>(
 						getFunctionDescriptor(),
-						getRenderingSupport(),
+						getFunctionRenderer(),
 						arguments,
 						getFilter() == null ? null : getFilter().copy( context ),
 						withinGroup == null ? null : withinGroup.copy( context ),
@@ -91,9 +91,7 @@ public class SelfRenderingSqmOrderedSetAggregateFunction<T> extends SelfRenderin
 
 	@Override
 	public Expression convertToSqlAst(SqmToSqlAstConverter walker) {
-		final ReturnableType<?> resultType = resolveResultType(
-				walker.getCreationContext().getMappingMetamodel().getTypeConfiguration()
-		);
+		final ReturnableType<?> resultType = resolveResultType( walker );
 
 		List<SqlAstNode> arguments = resolveSqlAstArguments( getArguments(), walker );
 		ArgumentsValidator argumentsValidator = getArgumentsValidator();
@@ -122,12 +120,12 @@ public class SelfRenderingSqmOrderedSetAggregateFunction<T> extends SelfRenderin
 		}
 		return new SelfRenderingOrderedSetAggregateFunctionSqlAstExpression(
 				getFunctionName(),
-				getRenderingSupport(),
+				getFunctionRenderer(),
 				arguments,
 				getFilter() == null ? null : walker.visitNestedTopLevelPredicate( getFilter() ),
 				withinGroup,
 				resultType,
-				getMappingModelExpressible( walker, resultType )
+				getMappingModelExpressible( walker, resultType, arguments )
 		);
 	}
 

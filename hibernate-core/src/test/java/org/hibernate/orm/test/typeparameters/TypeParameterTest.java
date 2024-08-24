@@ -53,7 +53,8 @@ public class TypeParameterTest {
 				session -> {
 					Widget obj = new Widget();
 					obj.setValueThree( 5 );
-					return session.save( obj );
+					session.persist( obj );
+					return obj.getId();
 				}
 		);
 
@@ -68,27 +69,28 @@ public class TypeParameterTest {
 				new Work() {
 					@Override
 					public void execute(Connection connection) throws SQLException {
+						final String sql = "SELECT * FROM STRANGE_TYPED_OBJECT WHERE id=?";
 						PreparedStatement statement = ( (SessionImplementor) s ).getJdbcCoordinator()
 								.getStatementPreparer()
-								.prepareStatement( "SELECT * FROM STRANGE_TYPED_OBJECT WHERE ID=?" );
+								.prepareStatement( sql );
 						statement.setInt( 1, id.intValue() );
 						ResultSet resultSet = ( (SessionImplementor) s ).getJdbcCoordinator()
 								.getResultSetReturn()
-								.extract( statement );
+								.extract( statement, sql );
 
 						assertTrue( "A row should have been returned", resultSet.next() );
 						assertTrue(
 								"Default value should have been mapped to null",
-								resultSet.getObject( "VALUE_ONE" ) == null
+								resultSet.getObject( "value_one" ) == null
 						);
 						assertTrue(
 								"Default value should have been mapped to null",
-								resultSet.getObject( "VALUE_TWO" ) == null
+								resultSet.getObject( "value_two" ) == null
 						);
-						assertEquals( "Non-Default value should not be changed", resultSet.getInt( "VALUE_THREE" ), 5 );
+						assertEquals( "Non-Default value should not be changed", resultSet.getInt( "value_three" ), 5 );
 						assertTrue(
 								"Default value should have been mapped to null",
-								resultSet.getObject( "VALUE_FOUR" ) == null
+								resultSet.getObject( "value_four" ) == null
 						);
 					}
 				}
@@ -130,7 +132,7 @@ public class TypeParameterTest {
 					obj.setValueThree( 9 );
 					obj.setValueFour( 10 );
 					obj.setString( "all-normal" );
-					session.save( obj );
+					session.persist( obj );
 
 					obj = new Widget();
 					obj.setValueOne( 1 );
@@ -138,7 +140,7 @@ public class TypeParameterTest {
 					obj.setValueThree( -1 );
 					obj.setValueFour( -5 );
 					obj.setString( "all-default" );
-					session.save( obj );
+					session.persist( obj );
 				}
 		);
 	}

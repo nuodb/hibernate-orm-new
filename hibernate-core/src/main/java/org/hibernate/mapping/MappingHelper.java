@@ -6,18 +6,20 @@
  */
 package org.hibernate.mapping;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.Supplier;
 
 import org.hibernate.Internal;
+import org.hibernate.MappingException;
 import org.hibernate.boot.BootLogging;
 import org.hibernate.boot.model.internal.DelayedParameterizedTypeBean;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.internal.util.collections.CollectionHelper;
-import org.hibernate.metamodel.mapping.MappingModelCreationLogging;
 import org.hibernate.resource.beans.internal.FallbackBeanInstanceProducer;
 import org.hibernate.resource.beans.spi.ManagedBean;
 import org.hibernate.resource.beans.spi.ManagedBeanRegistry;
@@ -52,13 +54,15 @@ public final class MappingHelper {
 			String role,
 			String propertyRef,
 			MetadataImplementor metadata) {
-		final ClassLoaderService cls = metadata.getMetadataBuildingOptions().getServiceRegistry().getService( ClassLoaderService.class );
-		final Class<? extends UserCollectionType> userCollectionTypeClass = cls.classForName( typeName );
+		final Class<? extends UserCollectionType> userCollectionTypeClass =
+				metadata.getMetadataBuildingOptions().getServiceRegistry()
+						.requireService( ClassLoaderService.class )
+						.classForName( typeName );
 
 		final boolean hasParameters = CollectionHelper.isNotEmpty( typeParameters );
 		final ManagedBean<? extends UserCollectionType> userTypeBean;
 
-		if ( metadata.getMetadataBuildingOptions().disallowExtensionsInCdi() ) {
+		if ( !metadata.getMetadataBuildingOptions().isAllowExtensionsInCdi() ) {
 			//noinspection unchecked,rawtypes
 			userTypeBean = createLocalUserCollectionTypeBean(
 					role,
@@ -68,11 +72,11 @@ public final class MappingHelper {
 			);
 		}
 		else {
-			final ManagedBeanRegistry beanRegistry = metadata
-					.getMetadataBuildingOptions()
-					.getServiceRegistry()
-					.getService( ManagedBeanRegistry.class );
-			final ManagedBean<? extends UserCollectionType> userCollectionTypeBean = beanRegistry.getBean( userCollectionTypeClass );
+			final ManagedBean<? extends UserCollectionType> userCollectionTypeBean =
+					metadata.getMetadataBuildingOptions()
+							.getServiceRegistry()
+							.requireService( ManagedBeanRegistry.class )
+							.getBean( userCollectionTypeClass );
 
 			if ( hasParameters ) {
 				if ( ParameterizedType.class.isAssignableFrom( userCollectionTypeBean.getBeanClass() ) ) {
@@ -236,5 +240,16 @@ public final class MappingHelper {
 		}
 
 		return new ProvidedInstanceManagedBeanImpl<>( userCollectionType );
+	}
+
+	public static void checkPropertyColumnDuplication(
+			Set<String> distinctColumns,
+			List<Property> properties,
+			String owner) throws MappingException {
+		for ( Property prop : properties ) {
+			if ( prop.isUpdateable() || prop.isInsertable() ) {
+				prop.getValue().checkColumnDuplication( distinctColumns, owner );
+			}
+		}
 	}
 }

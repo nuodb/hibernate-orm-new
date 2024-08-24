@@ -11,7 +11,6 @@ import java.util.Properties;
 import org.hibernate.boot.model.relational.Database;
 import org.hibernate.boot.model.relational.internal.SqlStringGenerationContextImpl;
 import org.hibernate.boot.registry.StandardServiceRegistry;
-import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Environment;
@@ -38,6 +37,7 @@ import org.hibernate.type.spi.TypeConfiguration;
 
 import org.hibernate.testing.boot.MetadataBuildingContextTestingImpl;
 import org.hibernate.testing.orm.junit.BaseUnitTest;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.Matchers.instanceOf;
@@ -61,7 +61,7 @@ public class SequenceStyleConfigUnitTest {
 	 */
 	@Test
 	public void testDefaultedSequenceBackedConfiguration() {
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, PooledSequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -96,10 +96,6 @@ public class SequenceStyleConfigUnitTest {
 	private Properties buildGeneratorPropertiesBase(MetadataBuildingContext buildingContext) {
 		Properties props = new Properties();
 		props.put(
-				PersistentIdentifierGenerator.IDENTIFIER_NORMALIZER,
-				buildingContext.getObjectNameNormalizer()
-		);
-		props.put(
 				PersistentIdentifierGenerator.IMPLICIT_NAME_BASE,
 				"ID"
 		);
@@ -111,7 +107,7 @@ public class SequenceStyleConfigUnitTest {
 	 */
 	@Test
 	public void testDefaultedTableBackedConfiguration() {
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, TableDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -151,7 +147,7 @@ public class SequenceStyleConfigUnitTest {
 	@Test
 	public void testDefaultOptimizerBasedOnIncrementBackedBySequence() {
 		// for dialects which do not support pooled sequences, we default to pooled+table
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, SequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -181,7 +177,7 @@ public class SequenceStyleConfigUnitTest {
 		}
 
 		// for dialects which do support pooled sequences, we default to pooled+sequence
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, PooledSequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -217,7 +213,7 @@ public class SequenceStyleConfigUnitTest {
 	 */
 	@Test
 	public void testDefaultOptimizerBasedOnIncrementBackedByTable() {
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, TableDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -251,7 +247,7 @@ public class SequenceStyleConfigUnitTest {
 	 */
 	@Test
 	public void testForceTableUse() {
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, SequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -290,7 +286,7 @@ public class SequenceStyleConfigUnitTest {
 	@Test
 	public void testExplicitOptimizerWithExplicitIncrementSize() {
 		// optimizer=none w/ increment > 1 => should honor optimizer
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, SequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );
@@ -359,7 +355,7 @@ public class SequenceStyleConfigUnitTest {
 
 	@Test
 	public void testPreferredPooledOptimizerSetting() {
-		try (StandardServiceRegistry serviceRegistry = new StandardServiceRegistryBuilder()
+		try (StandardServiceRegistry serviceRegistry = ServiceRegistryUtil.serviceRegistryBuilder()
 				.applySetting( AvailableSettings.DIALECT, PooledSequenceDialect.class.getName() )
 				.build()) {
 			MetadataBuildingContextTestingImpl buildingContext = new MetadataBuildingContextTestingImpl( serviceRegistry );

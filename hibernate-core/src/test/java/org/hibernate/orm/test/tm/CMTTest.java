@@ -59,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 				@Setting(name = AvailableSettings.FLUSH_BEFORE_COMPLETION, value = "true"),
 				@Setting(name = AvailableSettings.USE_QUERY_CACHE, value = "true"),
 				@Setting(name = AvailableSettings.CACHE_REGION_PREFIX, value = ""),
+				@Setting(name = AvailableSettings.CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT, value = "true"),
 				@Setting(name = "javax.persistence.transactionType", value = "JTA"),
 
 		},
@@ -435,7 +436,7 @@ public class CMTTest {
 			s = sessionFactory.openSession();
 			item = (Map) s.createQuery( "from Item" ).uniqueResult();
 			assertNotNull( item );
-			s.delete( item );
+			s.remove( item );
 			transactionManager.commit();
 			assertFalse( s.isOpen() );
 

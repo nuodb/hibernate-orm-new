@@ -47,7 +47,7 @@ public class JoinFetchProfileTest extends BaseCoreFunctionalTestCase {
 	}
 
 	public void configure(Configuration cfg) {
-		cfg.setProperty( Environment.GENERATE_STATISTICS, "true" );
+		cfg.setProperty( Environment.GENERATE_STATISTICS, true );
 	}
 
 	@SuppressWarnings({ "UnusedDeclaration" })
@@ -76,12 +76,12 @@ public class JoinFetchProfileTest extends BaseCoreFunctionalTestCase {
 		final Enrollment enrollment = new Enrollment( section, me );
 		inTransaction(
 				session -> {
-					session.save( literatureDepartment );
-					session.save( lit101 );
-					session.save( section );
-					session.save( me );
+					session.persist( literatureDepartment );
+					session.persist( lit101 );
+					session.persist( section );
+					session.persist( me );
 					section.getEnrollments().add( enrollment );
-					session.save( enrollment );
+					session.persist( enrollment );
 				}
 		);
 
@@ -113,11 +113,11 @@ public class JoinFetchProfileTest extends BaseCoreFunctionalTestCase {
 
 		inTransaction(
 				session -> {
-					session.delete( enrollment );
-					session.delete( me );
-					session.delete( enrollment.getOffering() );
-					session.delete( enrollment.getOffering().getCourse() );
-					session.delete( enrollment.getOffering().getCourse().getCode().getDepartment() );
+					session.remove( enrollment );
+					session.remove( me );
+					session.remove( enrollment.getOffering() );
+					session.remove( enrollment.getOffering().getCourse() );
+					session.remove( enrollment.getOffering().getCourse().getCode().getDepartment() );
 				}
 		);
 	}

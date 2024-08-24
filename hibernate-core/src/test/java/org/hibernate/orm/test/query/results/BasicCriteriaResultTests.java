@@ -30,13 +30,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * @author Steve Ebersole
  */
-@DomainModel( annotatedClasses = SimpleEntity.class )
+@DomainModel( annotatedClasses = {SimpleEntity.class, Dto.class, Dto2.class } )
 @SessionFactory
 public class BasicCriteriaResultTests {
 	@BeforeEach
 	public void prepareTestData(SessionFactoryScope scope) {
 		scope.inTransaction( (session) -> {
-			session.save( new SimpleEntity( 1, "first", new SimpleComposite( "a", "b" ) ) );
+			session.persist( new SimpleEntity( 1, "first", new SimpleComposite( "a", "b" ) ) );
 		});
 	}
 

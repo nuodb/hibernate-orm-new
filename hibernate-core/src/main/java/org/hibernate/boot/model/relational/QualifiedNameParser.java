@@ -11,6 +11,7 @@ import java.util.Objects;
 import org.hibernate.HibernateException;
 import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.boot.model.naming.IllegalIdentifierException;
+import org.hibernate.internal.util.StringHelper;
 
 /**
  * Parses a qualified name.
@@ -41,12 +42,12 @@ public class QualifiedNameParser {
 
 			StringBuilder buff = new StringBuilder();
 			if ( catalogName != null ) {
-				buff.append( catalogName.toString() ).append( '.' );
+				buff.append( catalogName ).append( '.' );
 			}
 			if ( schemaName != null ) {
-				buff.append( schemaName.toString() ).append( '.' );
+				buff.append( schemaName ).append( '.' );
 			}
-			buff.append( objectName.toString() );
+			buff.append( objectName );
 			qualifiedText = buff.toString();
 		}
 
@@ -88,8 +89,8 @@ public class QualifiedNameParser {
 			NameParts that = (NameParts) o;
 
 			return Objects.equals( this.getCatalogName(), that.getCatalogName() )
-					&& Objects.equals( this.getSchemaName(), that.getSchemaName() )
-					&& Objects.equals( this.getObjectName(), that.getObjectName() );
+				&& Objects.equals( this.getSchemaName(), that.getSchemaName() )
+				&& Objects.equals( this.getObjectName(), that.getObjectName() );
 		}
 
 		@Override
@@ -114,6 +115,17 @@ public class QualifiedNameParser {
 			throw new IllegalIdentifierException( "Object name to parse must be specified, but found null" );
 		}
 
+		final int quoteCharCount = StringHelper.count( text, "`" );
+		final boolean wasQuotedInEntirety = quoteCharCount == 2 && text.startsWith( "`" ) && text.endsWith( "`" );
+
+		if ( wasQuotedInEntirety ) {
+			return new NameParts(
+					defaultCatalog,
+					defaultSchema,
+					Identifier.toIdentifier( unquote( text ), true )
+			);
+		}
+
 		String catalogName = null;
 		String schemaName = null;
 		String name;
@@ -121,15 +133,6 @@ public class QualifiedNameParser {
 		boolean catalogWasQuoted = false;
 		boolean schemaWasQuoted = false;
 		boolean nameWasQuoted;
-
-		// Note that we try to handle both forms of quoting,
-		//		1) where the entire string was quoted
-		//		2) where  one or more individual parts were quoted
-
-		boolean wasQuotedInEntirety = text.startsWith( "`" ) && text.endsWith( "`" );
-		if ( wasQuotedInEntirety ) {
-			text = unquote( text );
-		}
 
 		final String[] tokens = text.split( "\\." );
 		if ( tokens.length == 0 || tokens.length == 1 ) {

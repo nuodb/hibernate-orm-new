@@ -6,66 +6,68 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.association;
 
-import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
 import org.hibernate.testing.bytecode.enhancement.EnhancerTestUtils;
-import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToOne;
-import java.util.UUID;
+
+import org.hibernate.testing.bytecode.enhancement.extension.BytecodeEnhanced;
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
 
 /**
  * @author Luis Barreiro
  */
-@RunWith( BytecodeEnhancerRunner.class )
+@BytecodeEnhanced
 public class OneToOneAssociationTest {
 
     @Test
     public void test() {
         User user = new User();
-        user.setLogin( UUID.randomUUID().toString() );
+        user.setLogin( SafeRandomUUIDGenerator.safeRandomUUIDAsString() );
 
         Customer customer = new Customer();
         customer.setUser( user );
 
-        Assert.assertEquals( customer, user.getCustomer() );
+        assertEquals( customer, user.getCustomer() );
 
         // check dirty tracking is set automatically with bi-directional association management
         EnhancerTestUtils.checkDirtyTracking( user, "login", "customer" );
 
         User anotherUser = new User();
-        anotherUser.setLogin( UUID.randomUUID().toString() );
+        anotherUser.setLogin( SafeRandomUUIDGenerator.safeRandomUUIDAsString() );
 
         customer.setUser( anotherUser );
 
-        Assert.assertNull( user.getCustomer() );
-        Assert.assertEquals( customer, anotherUser.getCustomer() );
+        assertNull( user.getCustomer() );
+        assertEquals( customer, anotherUser.getCustomer() );
 
         user.setCustomer( new Customer() );
 
-        Assert.assertEquals( user, user.getCustomer().getUser() );
+        assertEquals( user, user.getCustomer().getUser() );
     }
 
     @Test
     public void testSetNull() {
         User user = new User();
-        user.setLogin( UUID.randomUUID().toString() );
+        user.setLogin( SafeRandomUUIDGenerator.safeRandomUUIDAsString() );
 
         Customer customer = new Customer();
         customer.setUser( user );
 
-        Assert.assertEquals( customer, user.getCustomer() );
+        assertEquals( customer, user.getCustomer() );
 
         // check dirty tracking is set automatically with bi-directional association management
         EnhancerTestUtils.checkDirtyTracking( user, "login", "customer" );
 
         user.setCustomer( null );
 
-        Assert.assertNull( user.getCustomer() );
-        Assert.assertNull( customer.getUser() );
+        assertNull( user.getCustomer() );
+        assertNull( customer.getUser() );
     }
 
     // --- //

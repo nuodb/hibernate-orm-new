@@ -31,7 +31,7 @@ public class SelfRenderingOrderedSetAggregateFunctionSqlAstExpression extends Se
 
 	public SelfRenderingOrderedSetAggregateFunctionSqlAstExpression(
 			String functionName,
-			FunctionRenderingSupport renderer,
+			FunctionRenderer renderer,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			List<SortSpecification> withinGroup,
@@ -51,6 +51,6 @@ public class SelfRenderingOrderedSetAggregateFunctionSqlAstExpression extends Se
 			SqlAppender sqlAppender,
 			SqlAstTranslator<?> walker,
 			SessionFactoryImplementor sessionFactory) {
-		getRenderer().render( sqlAppender, getArguments(), getFilter(), withinGroup, walker );
+		getFunctionRenderer().render( sqlAppender, getArguments(), getFilter(), withinGroup, getType(), walker );
 	}
 }

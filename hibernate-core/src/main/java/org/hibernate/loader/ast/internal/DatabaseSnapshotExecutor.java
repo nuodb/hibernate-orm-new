@@ -40,7 +40,7 @@ import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.JdbcParametersList;
 import org.hibernate.sql.results.graph.DomainResult;
 import org.hibernate.sql.results.graph.internal.ImmutableFetchList;
-import org.hibernate.sql.results.internal.RowTransformerDatabaseSnapshotImpl;
+import org.hibernate.sql.results.internal.RowTransformerArrayImpl;
 import org.hibernate.sql.results.spi.ListResultsConsumer;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.StandardBasicTypes;
@@ -133,14 +133,15 @@ class DatabaseSnapshotExecutor {
 		entityDescriptor.forEachAttributeMapping(
 				attributeMapping -> {
 					final NavigablePath navigablePath = rootPath.append( attributeMapping.getAttributeName() );
-					domainResults.add(
-							attributeMapping.createSnapshotDomainResult(
-									navigablePath,
-									rootTableGroup,
-									null,
-									state
-							)
+					final DomainResult<Object> snapshotDomainResult = attributeMapping.createSnapshotDomainResult(
+							navigablePath,
+							rootTableGroup,
+							null,
+							state
 					);
+					if ( snapshotDomainResult != null ) {
+						domainResults.add( snapshotDomainResult );
+					}
 				}
 		);
 
@@ -175,8 +176,10 @@ class DatabaseSnapshotExecutor {
 				jdbcSelect,
 				jdbcParameterBindings,
 				new BaseExecutionContext( session ),
-				RowTransformerDatabaseSnapshotImpl.instance(),
-				ListResultsConsumer.UniqueSemantic.FILTER
+				RowTransformerArrayImpl.instance(),
+				null,
+				ListResultsConsumer.UniqueSemantic.FILTER,
+				1
 		);
 
 		final int size = list.size();

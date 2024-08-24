@@ -6,13 +6,12 @@
  */
 package org.hibernate.procedure.internal;
 
-import java.sql.CallableStatement;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import java.util.Locale;
 import java.util.Objects;
 
 import org.hibernate.engine.jdbc.env.spi.ExtractedDatabaseMetaData;
-import org.hibernate.metamodel.mapping.JdbcMapping;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.procedure.ParameterTypeException;
 import org.hibernate.procedure.spi.NamedCallableQueryMemento;
 import org.hibernate.procedure.spi.ParameterStrategy;
 import org.hibernate.procedure.spi.ProcedureCallImplementor;
@@ -26,7 +25,6 @@ import org.hibernate.sql.exec.internal.JdbcCallParameterExtractorImpl;
 import org.hibernate.sql.exec.internal.JdbcCallParameterRegistrationImpl;
 import org.hibernate.sql.exec.internal.JdbcCallRefCursorExtractorImpl;
 import org.hibernate.sql.exec.internal.JdbcParameterImpl;
-import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcCallParameterRegistration;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.type.BasicType;
@@ -44,6 +42,9 @@ public class ProcedureParameterImpl<T> extends AbstractQueryParameter<T> impleme
 	private final ParameterMode mode;
 	private final Class<T> javaType;
 
+	/**
+	 * Used for named Query parameters
+	 */
 	public ProcedureParameterImpl(
 			String name,
 			ParameterMode mode,
@@ -56,6 +57,9 @@ public class ProcedureParameterImpl<T> extends AbstractQueryParameter<T> impleme
 		this.javaType = javaType;
 	}
 
+	/**
+	 * Used for ordinal Query parameters
+	 */
 	public ProcedureParameterImpl(
 			Integer position,
 			ParameterMode mode,
@@ -115,97 +119,118 @@ public class ProcedureParameterImpl<T> extends AbstractQueryParameter<T> impleme
 			int startIndex,
 			ProcedureCallImplementor<?> procedureCall) {
 		final QueryParameterBinding<T> binding = procedureCall.getParameterBindings().getBinding( this );
-		final OutputableType<T> typeToUse = (OutputableType<T>) BindingTypeHelper.INSTANCE.resolveTemporalPrecision(
-				binding == null || binding.getExplicitTemporalPrecision() == null
-						? null
-						: binding.getExplicitTemporalPrecision(),
-				getHibernateType(),
-				procedureCall.getSession().getFactory()
-		);
+		final boolean isNamed = procedureCall.getParameterStrategy() == ParameterStrategy.NAMED && this.name != null;
 
-		final String name;
-		if ( procedureCall.getParameterStrategy() == ParameterStrategy.NAMED
-				&& canDoNameParameterBinding( typeToUse, procedureCall ) ) {
-			name = this.name;
+		final BindableType<T> bindableType;
+		if ( getHibernateType() != null ) {
+			bindableType = getHibernateType();
+		}
+		else if ( binding != null ) {
+			//noinspection unchecked
+			bindableType = (BindableType<T>) binding.getBindType();
 		}
 		else {
-			name = null;
+			bindableType = null;
 		}
 
+		final SharedSessionContractImplementor session = procedureCall.getSession();
+
+		final OutputableType<T> typeToUse = (OutputableType<T>) BindingTypeHelper.INSTANCE.resolveTemporalPrecision(
+				binding == null ? null : binding.getExplicitTemporalPrecision(),
+				bindableType,
+				session.getFactory()
+		);
+
+		final String jdbcParamName;
 		final JdbcParameterBinder parameterBinder;
 		final JdbcCallRefCursorExtractorImpl refCursorExtractor;
 		final JdbcCallParameterExtractorImpl<T> parameterExtractor;
-
-		switch ( mode ) {
-			case REF_CURSOR:
-				refCursorExtractor = new JdbcCallRefCursorExtractorImpl( name, startIndex );
-				parameterBinder = null;
-				parameterExtractor = null;
-				break;
-			case IN:
-				parameterBinder = getParameterBinder( typeToUse, name );
-				parameterExtractor = null;
-				refCursorExtractor = null;
-				break;
-			case INOUT:
-				parameterBinder = getParameterBinder( typeToUse, name );
-				parameterExtractor = new JdbcCallParameterExtractorImpl<>( procedureCall.getProcedureName(), name, startIndex, typeToUse );
-				refCursorExtractor = null;
-				break;
-			default:
-				parameterBinder = null;
-				parameterExtractor = new JdbcCallParameterExtractorImpl<>( procedureCall.getProcedureName(), name, startIndex, typeToUse );
-				refCursorExtractor = null;
-				break;
-		}
-
-		return new JdbcCallParameterRegistrationImpl( name, startIndex, mode, typeToUse, parameterBinder, parameterExtractor, refCursorExtractor );
-	}
-
-	private JdbcParameterBinder getParameterBinder(BindableType<T> typeToUse, String name) {
-		if ( typeToUse instanceof BasicType<?> ) {
-			if ( name == null ) {
-				return new JdbcParameterImpl( (BasicType<T>) typeToUse );
-			}
-			else {
-				return new JdbcParameterImpl( (BasicType<T>) typeToUse ) {
-					@Override
-					protected void bindParameterValue(
-							JdbcMapping jdbcMapping,
-							PreparedStatement statement,
-							Object bindValue,
-							int startPosition,
-							ExecutionContext executionContext) throws SQLException {
-						jdbcMapping.getJdbcValueBinder().bind(
-								(CallableStatement) statement,
-								bindValue,
-								name,
-								executionContext.getSession()
-						);
-					}
-					@Override
-					public String toString() {
-						return "JdbcParameter(" + name + ")";
-					}
-				};
-			}
-		}
-		else if ( typeToUse == null ) {
-			throw new IllegalArgumentException( "Cannot determine the bindable type for procedure parameter: " + name );
-		}
-		else {
-			throw new UnsupportedOperationException();
-		}
-	}
-
-	private boolean canDoNameParameterBinding(
-			BindableType<?> hibernateType,
-			ProcedureCallImplementor<?> procedureCall) {
-		final ExtractedDatabaseMetaData databaseMetaData = procedureCall.getSession()
+		final ExtractedDatabaseMetaData databaseMetaData = session
 				.getFactory()
 				.getJdbcServices()
 				.getJdbcEnvironment()
 				.getExtractedDatabaseMetaData();
+		final boolean passProcedureParameterNames = session.getFactory()
+				.getSessionFactoryOptions()
+				.isPassProcedureParameterNames();
+		switch ( mode ) {
+			case REF_CURSOR:
+				jdbcParamName = this.name != null && databaseMetaData.supportsNamedParameters() && passProcedureParameterNames ? this.name : null;
+				refCursorExtractor = new JdbcCallRefCursorExtractorImpl( startIndex );
+				parameterBinder = null;
+				parameterExtractor = null;
+				break;
+			case IN:
+				jdbcParamName = getJdbcParamName( procedureCall, isNamed, passProcedureParameterNames, typeToUse, databaseMetaData );
+				validateBindableType( typeToUse, startIndex );
+				parameterBinder = getParameterBinder( typeToUse, jdbcParamName );
+				parameterExtractor = null;
+				refCursorExtractor = null;
+				break;
+			case INOUT:
+				jdbcParamName = getJdbcParamName( procedureCall, isNamed, passProcedureParameterNames, typeToUse, databaseMetaData );
+				validateBindableType( typeToUse, startIndex );
+				parameterBinder = getParameterBinder( typeToUse, jdbcParamName );
+				parameterExtractor = new JdbcCallParameterExtractorImpl<>( procedureCall.getProcedureName(), jdbcParamName, startIndex, typeToUse );
+				refCursorExtractor = null;
+				break;
+			default:
+				jdbcParamName = getJdbcParamName( procedureCall, isNamed, passProcedureParameterNames, typeToUse, databaseMetaData );
+				validateBindableType( typeToUse, startIndex );
+				parameterBinder = null;
+				parameterExtractor = new JdbcCallParameterExtractorImpl<>( procedureCall.getProcedureName(), jdbcParamName, startIndex, typeToUse );
+				refCursorExtractor = null;
+				break;
+		}
+
+		return new JdbcCallParameterRegistrationImpl( jdbcParamName, startIndex, mode, typeToUse, parameterBinder, parameterExtractor, refCursorExtractor );
+	}
+
+	private String getJdbcParamName(
+			ProcedureCallImplementor<?> procedureCall,
+			boolean isNamed,
+			boolean passProcedureParameterNames,
+			OutputableType<T> typeToUse,
+			ExtractedDatabaseMetaData databaseMetaData) {
+		return isNamed && passProcedureParameterNames && canDoNameParameterBinding( typeToUse, procedureCall, databaseMetaData ) ? this.name : null;
+	}
+
+	private void validateBindableType(BindableType<T> bindableType, int startIndex) {
+		if ( bindableType == null ) {
+			throw new ParameterTypeException(
+					String.format(
+							Locale.ROOT,
+							"Could not determine ProcedureCall parameter bind type - %s (%s)",
+							this.name != null ? this.name : this.position,
+							startIndex
+					)
+			);
+		}
+	}
+
+	private JdbcParameterBinder getParameterBinder(BindableType<T> typeToUse, String name) {
+		if ( typeToUse == null ) {
+			throw new ParameterTypeException(
+					String.format(
+							Locale.ROOT,
+							"Cannot determine the bindable type for procedure parameter %s (%s)",
+							this.name != null ? this.name : this.position,
+							name
+					)
+			);
+		}
+
+		if ( typeToUse instanceof BasicType<?> ) {
+			return new JdbcParameterImpl( (BasicType<T>) typeToUse );
+		}
+
+		throw new UnsupportedOperationException();
+	}
+
+	private boolean canDoNameParameterBinding(
+			BindableType<?> hibernateType,
+			ProcedureCallImplementor<?> procedureCall,
+			ExtractedDatabaseMetaData databaseMetaData) {
 		return procedureCall.getFunctionReturn() == null
 				&& databaseMetaData.supportsNamedParameters()
 				&& hibernateType instanceof ProcedureParameterNamedBinder

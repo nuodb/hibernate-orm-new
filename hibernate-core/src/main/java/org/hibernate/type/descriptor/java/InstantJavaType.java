@@ -29,6 +29,8 @@ import org.hibernate.type.spi.TypeConfiguration;
 /**
  * Java type descriptor for the Java {@link Instant} type.
  *
+ * @see org.hibernate.cfg.AvailableSettings#PREFERRED_INSTANT_JDBC_TYPE
+ *
  * @author Steve Ebersole
  */
 public class InstantJavaType extends AbstractTemporalJavaType<Instant>
@@ -47,27 +49,29 @@ public class InstantJavaType extends AbstractTemporalJavaType<Instant>
 		return TemporalType.TIMESTAMP;
 	}
 
-	@Override
+	@Override @SuppressWarnings("unchecked")
 	protected <X> TemporalJavaType<X> forDatePrecision(TypeConfiguration typeConfiguration) {
-		//noinspection unchecked
 		return (TemporalJavaType<X>) this;
 	}
 
-	@Override
+	@Override @SuppressWarnings("unchecked")
 	protected <X> TemporalJavaType<X> forTimestampPrecision(TypeConfiguration typeConfiguration) {
-		//noinspection unchecked
 		return (TemporalJavaType<X>) this;
 	}
 
-	@Override
+	@Override @SuppressWarnings("unchecked")
 	protected <X> TemporalJavaType<X> forTimePrecision(TypeConfiguration typeConfiguration) {
-		//noinspection unchecked
 		return (TemporalJavaType<X>) this;
 	}
 
 	@Override
 	public JdbcType getRecommendedJdbcType(JdbcTypeIndicators context) {
 		return context.getJdbcType( context.getPreferredSqlTypeCodeForInstant() );
+	}
+
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
 	}
 
 	@Override
@@ -124,7 +128,7 @@ public class InstantJavaType extends AbstractTemporalJavaType<Instant>
 		}
 
 		if ( java.sql.Time.class.isAssignableFrom( type ) ) {
-			return (X) new java.sql.Time( instant.toEpochMilli() );
+			return (X) new java.sql.Time( instant.toEpochMilli() % 86_400_000 );
 		}
 
 		if ( Date.class.isAssignableFrom( type ) ) {

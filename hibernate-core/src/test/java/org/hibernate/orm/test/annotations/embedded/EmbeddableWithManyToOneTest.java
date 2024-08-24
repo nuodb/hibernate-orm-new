@@ -51,8 +51,8 @@ public class EmbeddableWithManyToOneTest {
 					entityTest2.setEmbeddedAttribute( embeddable );
 
 					entity.setEntity2( entityTest2 );
-					session.save( entity );
-					session.save( entityTest2 );
+					session.persist( entity );
+					session.persist( entityTest2 );
 				}
 		);
 	}
@@ -61,17 +61,14 @@ public class EmbeddableWithManyToOneTest {
 	public void tearDown(SessionFactoryScope scope) {
 		scope.inTransaction(
 				session -> {
-					session.createQuery( "from EntityTest", EntityTest.class ).list().forEach(
-							entityTest -> {
-								session.delete( entityTest );
-							}
-					);
-
-					session.createQuery( "from EntityTest2", EntityTest2.class ).list().forEach(
-							entityTest -> {
-								session.delete( entityTest );
-							}
-					);
+					session.createQuery( "from EntityTest", EntityTest.class ).getResultList().forEach( entity -> {
+						final EntityTest2 entity2 = entity.getEntity2();
+						if ( entity2 != null && entity2.getEmbeddedAttribute() != null ) {
+							entity2.getEmbeddedAttribute().setEntity( null );
+						}
+						session.remove( entity );
+					} );
+					session.createMutationQuery( "delete from EntityTest2" ).executeUpdate();
 				}
 		);
 	}
@@ -107,9 +104,9 @@ public class EmbeddableWithManyToOneTest {
 					entityTest2.setEmbeddedAttribute( embeddable );
 
 					entity.setEntity2( entityTest2 );
-					session.save( entity );
-					session.save( entity3 );
-					session.save( entityTest2 );
+					session.persist( entity );
+					session.persist( entity3 );
+					session.persist( entityTest2 );
 				}
 		);
 		SQLStatementInspector statementInspector = scope.getCollectingStatementInspector();
@@ -146,10 +143,10 @@ public class EmbeddableWithManyToOneTest {
 					entityTest.setEmbeddedAttribute( embeddable );
 
 					entity.setEntity2( entityTest );
-					session.save( entity );
-					session.save( entity3 );
-					session.save( entityTest );
-					session.save( entityTest2 );
+					session.persist( entity );
+					session.persist( entity3 );
+					session.persist( entityTest );
+					session.persist( entityTest2 );
 				}
 		);
 		SQLStatementInspector statementInspector = scope.getCollectingStatementInspector();

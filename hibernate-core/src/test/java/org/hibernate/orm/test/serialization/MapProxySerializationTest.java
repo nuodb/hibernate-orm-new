@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.hibernate.Hibernate;
+import org.hibernate.LockMode;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.internal.util.SerializationHelper;
 import org.hibernate.proxy.AbstractLazyInitializer;
@@ -59,8 +60,8 @@ public class MapProxySerializationTest {
 			c1.put( "id", 1L );
 			c1.put( "parent", entity );
 
-			s.save( "SimpleEntity", entity );
-			s.save( "ChildEntity", c1 );
+			s.persist( "SimpleEntity", entity );
+			s.persist( "ChildEntity", c1 );
 		} );
 	}
 
@@ -115,14 +116,14 @@ public class MapProxySerializationTest {
 			// Load the target of the proxy without the proxy being made aware of it
 			s.detach( parent );
 			s.byId( "SimpleEntity" ).load( 1L );
-			s.update( parent );
+			Map<String, Object> merged = s.merge( parent );
 
-			// assert we still have an uninitialized proxy
+			assertTrue( Hibernate.isInitialized( merged ) );
 			assertFalse( Hibernate.isInitialized( parent ) );
 
 			// serialize/deserialize the proxy
 			final Map<String, Object> deserializedParent =
-					(Map<String, Object>) SerializationHelper.clone( (Serializable) parent );
+					(Map<String, Object>) SerializationHelper.clone( (Serializable) merged );
 
 			// assert the deserialized object is no longer a proxy, but the target of the proxy
 			assertFalse( deserializedParent instanceof HibernateProxy );

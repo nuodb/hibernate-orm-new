@@ -16,7 +16,7 @@ import org.hibernate.query.sqm.tree.SqmQuery;
 import org.hibernate.query.sqm.tree.domain.SqmCorrelation;
 import org.hibernate.query.sqm.tree.from.SqmFrom;
 import org.hibernate.query.sqm.tree.from.SqmFromClause;
-import org.hibernate.query.sqm.tree.from.SqmQualifiedJoin;
+import org.hibernate.query.sqm.tree.from.SqmJoin;
 import org.hibernate.query.sqm.tree.from.SqmRoot;
 import org.hibernate.query.sqm.tree.select.SqmQuerySpec;
 import org.hibernate.query.sqm.tree.select.SqmSelectQuery;
@@ -29,10 +29,10 @@ import org.hibernate.query.sqm.tree.select.SqmSubQuery;
  * @author Steve Ebersole
  */
 public class QualifiedJoinPredicatePathConsumer extends BasicDotIdentifierConsumer {
-	private final SqmQualifiedJoin<?, ?> sqmJoin;
+	private final SqmJoin<?, ?> sqmJoin;
 
 	public QualifiedJoinPredicatePathConsumer(
-			SqmQualifiedJoin<?, ?> sqmJoin,
+			SqmJoin<?, ?> sqmJoin,
 			SqmCreationState creationState) {
 		super( creationState );
 		this.sqmJoin = sqmJoin;
@@ -46,9 +46,11 @@ public class QualifiedJoinPredicatePathConsumer extends BasicDotIdentifierConsum
 				final SqmRoot<?> root = pathRoot.findRoot();
 				final SqmRoot<?> joinRoot = sqmJoin.findRoot();
 				if ( root != joinRoot ) {
-					// The root of a path within a join condition doesn't have the same root as the current join we are processing.
-					// The aim of this check is to prevent uses of different "spaces" i.e. `from A a, B b join b.id = a.id` would be illegal
-					SqmCreationProcessingState processingState = getCreationState().getCurrentProcessingState();
+					// The root of a path within a join condition doesn't have the same root as the
+					// current join we are processing.
+					// The aim of this check is to prevent uses of different roots i.e.
+					// `from A a, B b join C c c.id = a.id` would be illegal
+					final SqmCreationProcessingState processingState = getCreationState().getCurrentProcessingState();
 					// First, we need to find out if the current join is part of current processing query
 					final SqmQuery<?> currentProcessingQuery = processingState.getProcessingQuery();
 					if ( currentProcessingQuery instanceof SqmSelectQuery<?> ) {
@@ -74,10 +76,11 @@ public class QualifiedJoinPredicatePathConsumer extends BasicDotIdentifierConsum
 						validateAsRootOnParentQueryClosure( pathRoot, root, processingState );
 						return;
 					}
+
 					throw new SemanticException(
 							String.format(
 									Locale.ROOT,
-									"SqmQualifiedJoin predicate referred to SqmRoot [`%s`] other than the join's root [`%s`]",
+									"SqmQualifiedJoin predicate referred to SqmRoot [%s] other than the join's root [%s]",
 									pathRoot.getNavigablePath(),
 									sqmJoin.getNavigablePath()
 							)
@@ -109,7 +112,7 @@ public class QualifiedJoinPredicatePathConsumer extends BasicDotIdentifierConsum
 				throw new SemanticException(
 						String.format(
 								Locale.ROOT,
-								"SqmQualifiedJoin predicate referred to SqmRoot [`%s`] other than the join's root [`%s`]",
+								"SqmQualifiedJoin predicate referred to SqmRoot [%s] other than the join's root [%s]",
 								pathRoot.getNavigablePath(),
 								sqmJoin.getNavigablePath()
 						)

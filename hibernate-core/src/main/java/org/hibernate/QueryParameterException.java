@@ -7,7 +7,7 @@
 package org.hibernate;
 
 /**
- * Parameter invalid or not found in the query.
+ * Indicates a problem with the runtime arguments bound to query parameters.
  * 
  * @author Emmanuel Bernard
  */
@@ -32,8 +32,13 @@ public class QueryParameterException extends QueryException {
 		super( message, queryString, cause );
 	}
 
-	@Override
-	protected QueryException generateQueryException(String queryString) {
-		return new QueryParameterException( super.getOriginalMessage(), queryString, this );
+	/**
+	 * Constructs a {@code QueryParameterException}
+	 *
+	 * @param message The message explaining the exception condition
+	 * @param queryString The query that led to the exception
+	 */
+	public QueryParameterException(String message, String queryString) {
+		super( message, queryString );
 	}
 }

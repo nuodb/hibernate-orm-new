@@ -7,11 +7,13 @@
 package org.hibernate.persister.entity;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import org.hibernate.HibernateException;
+import org.hibernate.Incubating;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.MappingException;
@@ -28,26 +30,35 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.event.spi.EventSource;
-import org.hibernate.generator.Generator;
 import org.hibernate.generator.BeforeExecutionGenerator;
+import org.hibernate.generator.EventType;
+import org.hibernate.generator.Generator;
 import org.hibernate.generator.internal.VersionGeneration;
+import org.hibernate.generator.values.GeneratedValues;
 import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.internal.FilterAliasGenerator;
 import org.hibernate.internal.TableGroupFilterAliasGenerator;
 import org.hibernate.loader.ast.spi.MultiIdLoadOptions;
 import org.hibernate.loader.ast.spi.MultiNaturalIdLoader;
 import org.hibernate.loader.ast.spi.NaturalIdLoader;
-import org.hibernate.metadata.ClassMetadata;
 import org.hibernate.metamodel.mapping.AttributeMapping;
+import org.hibernate.metamodel.mapping.EntityDiscriminatorMapping;
 import org.hibernate.metamodel.mapping.EntityMappingType;
+import org.hibernate.metamodel.mapping.ModelPart;
 import org.hibernate.metamodel.mapping.internal.InFlightEntityMappingType;
 import org.hibernate.metamodel.spi.EntityRepresentationStrategy;
+import org.hibernate.persister.entity.mutation.DeleteCoordinator;
+import org.hibernate.persister.entity.mutation.EntityMutationTarget;
+import org.hibernate.persister.entity.mutation.InsertCoordinator;
+import org.hibernate.persister.entity.mutation.UpdateCoordinator;
 import org.hibernate.persister.walking.spi.AttributeSource;
 import org.hibernate.query.sqm.mutation.spi.SqmMultiTableInsertStrategy;
 import org.hibernate.query.sqm.mutation.spi.SqmMultiTableMutationStrategy;
 import org.hibernate.sql.ast.spi.SqlAliasStemHelper;
 import org.hibernate.sql.ast.tree.from.RootTableGroupProducer;
 import org.hibernate.sql.ast.tree.from.TableGroup;
+import org.hibernate.sql.ast.tree.insert.InsertSelectStatement;
+import org.hibernate.sql.ast.tree.select.SelectStatement;
 import org.hibernate.tuple.entity.EntityMetamodel;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.Type;
@@ -102,7 +113,7 @@ import org.hibernate.type.descriptor.java.VersionJavaType;
  * @see org.hibernate.persister.spi.PersisterFactory
  * @see org.hibernate.persister.spi.PersisterClassResolver
  */
-public interface EntityPersister extends EntityMappingType, RootTableGroupProducer, AttributeSource {
+public interface EntityPersister extends EntityMappingType, EntityMutationTarget, RootTableGroupProducer, AttributeSource {
 
 	/**
 	 * Finish the initialization of this object.
@@ -117,6 +128,17 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 * @throws MappingException Indicates an issue in the metadata.
 	 */
 	void postInstantiate() throws MappingException;
+
+	/**
+	 * Prepare loaders associated with the persister.  Distinct "phase"
+	 * in building the persister after {@linkplain InFlightEntityMappingType#prepareMappingModel}
+	 * and {@linkplain #postInstantiate()} have occurred.
+	 * <p/>
+	 * The distinct phase is used to ensure that all {@linkplain org.hibernate.metamodel.mapping.TableDetails}
+	 * are available across the entire model
+	 */
+	default void prepareLoaders() {
+	}
 
 	/**
 	 * Return the {@link org.hibernate.SessionFactory} to which this persister
@@ -209,7 +231,7 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 *
 	 * @return The property spaces.
 	 */
-	Serializable[] getPropertySpaces();
+	String[] getPropertySpaces();
 
 	/**
 	 * Returns an array of objects that identify spaces in which properties of
@@ -229,7 +251,10 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 * entity spaces.
 	 *
 	 * @return The synchronization spaces.
+	 *
+	 * @deprecated No longer called
 	 */
+	@Deprecated(since = "7.0", forRemoval = true)
 	default String[] getSynchronizationSpaces() {
 		return (String[]) getQuerySpaces();
 	}
@@ -509,7 +534,7 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 		else {
 			for ( int i = 0; i < getNumberOfAttributeMappings(); i++ ) {
 				final AttributeMapping attributeMapping = getAttributeMapping( i );
-				final Object attributeValue = attributeMapping.getPropertyAccess().getGetter().get( domainValue );
+				final Object attributeValue = attributeMapping.getValue( domainValue );
 				span += attributeMapping.breakDownJdbcValues(
 						attributeValue,
 						offset + span,
@@ -610,23 +635,46 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 
 	/**
 	 * Persist an instance
+	 *
+	 * @see #getInsertCoordinator()
+	 * @deprecated Use {@link InsertCoordinator#insert(Object, Object, Object[], SharedSessionContractImplementor)} instead.
 	 */
-	void insert(Object id, Object[] fields, Object object, SharedSessionContractImplementor session);
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void insert(Object id, Object[] fields, Object object, SharedSessionContractImplementor session) {
+		getInsertCoordinator().insert( object, id, fields, session );
+	}
 
 	/**
-	 * Persist an instance, using a natively generated identifier (optional operation)
+	 * Persist an instance
+	 *
+	 * @see #getInsertCoordinator()
+	 * @deprecated Use {@link InsertCoordinator#insert(Object, Object[], SharedSessionContractImplementor)} instead.
 	 */
-	Object insert(Object[] fields, Object object, SharedSessionContractImplementor session);
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default Object insert(Object[] fields, Object object, SharedSessionContractImplementor session) {
+		final GeneratedValues generatedValues = getInsertCoordinator().insert( object, fields, session );
+		return generatedValues == null ? null : generatedValues.getGeneratedValue( getIdentifierMapping() );
+	}
 
 	/**
 	 * Delete a persistent instance
+	 *
+	 * @see #getDeleteCoordinator()
+	 * @deprecated Use {@link DeleteCoordinator#delete} instead.
 	 */
-	void delete(Object id, Object version, Object object, SharedSessionContractImplementor session);
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void delete(Object id, Object version, Object object, SharedSessionContractImplementor session) {
+		getDeleteCoordinator().delete( object, id, version, session );
+	}
 
 	/**
 	 * Update a persistent instance
+	 *
+	 * @see #getUpdateCoordinator()
+	 * @deprecated Use {@link UpdateCoordinator#update} instead.
 	 */
-	void update(
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void update(
 			Object id,
 			Object[] fields,
 			int[] dirtyFields,
@@ -635,7 +683,79 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 			Object oldVersion,
 			Object object,
 			Object rowId,
-			SharedSessionContractImplementor session);
+			SharedSessionContractImplementor session) {
+		getUpdateCoordinator().update(
+				object,
+				id,
+				rowId,
+				fields,
+				oldVersion,
+				oldFields,
+				dirtyFields,
+				hasDirtyCollection,
+				session
+		);
+	}
+
+	/**
+	 * Merge a persistent instance
+	 *
+	 * @see #getMergeCoordinator()
+	 * @deprecated Use {@link UpdateCoordinator#update} instead.
+	 */
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void merge(
+			Object id,
+			Object[] fields,
+			int[] dirtyFields,
+			boolean hasDirtyCollection,
+			Object[] oldFields,
+			Object oldVersion,
+			Object object,
+			Object rowId,
+			SharedSessionContractImplementor session) {
+		getMergeCoordinator().update(
+				object,
+				id,
+				rowId,
+				fields,
+				oldVersion,
+				oldFields,
+				dirtyFields,
+				hasDirtyCollection,
+				session
+		);
+	}
+
+	/**
+	 * Get the insert coordinator instance.
+	 *
+	 * @since 6.5
+	 */
+	InsertCoordinator getInsertCoordinator();
+
+	/**
+	 * Get the update coordinator instance.
+	 *
+	 * @since 6.5
+	 */
+	UpdateCoordinator getUpdateCoordinator();
+
+	/**
+	 * Get the delete coordinator instance.
+	 *
+	 * @since 6.5
+	 */
+	DeleteCoordinator getDeleteCoordinator();
+
+	/**
+	 * Get the merge coordinator instance.
+	 *
+	 * @since 6.5
+	 */
+	default UpdateCoordinator getMergeCoordinator() {
+		throw new UnsupportedOperationException();
+	}
 
 	/**
 	 * Get the Hibernate types of the class properties
@@ -677,7 +797,11 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 * (is the property optimistic-locked)
 	 */
 	boolean[] getPropertyVersionability();
+
 	boolean[] getPropertyLaziness();
+
+	boolean[] getNonLazyPropertyUpdateability();
+
 	/**
 	 * Get the cascade styles of the properties (optional operation)
 	 */
@@ -741,16 +865,8 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	NaturalIdDataAccess getNaturalIdCacheAccessStrategy();
 
 	/**
-	 * Get the user-visible metadata for the class (optional operation)
-	 *
-	 * @deprecated This operation is no longer called by Hibernate.
-	 */
-	@Deprecated(since = "6.0")
-	ClassMetadata getClassMetadata();
-
-	/**
 	 * The batch size for batch loading.
-	 * 
+	 *
 	 * @see org.hibernate.engine.spi.LoadQueryInfluencers#effectiveBatchSize(EntityPersister)
 	 */
 	default int getBatchSize() {
@@ -789,6 +905,14 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	Object getCurrentVersion(Object id, SharedSessionContractImplementor session) throws HibernateException;
 
 	Object forceVersionIncrement(Object id, Object currentVersion, SharedSessionContractImplementor session) throws HibernateException;
+
+	default Object forceVersionIncrement(
+			Object id,
+			Object currentVersion,
+			boolean batching,
+			SharedSessionContractImplementor session) throws HibernateException {
+		return forceVersionIncrement( id, currentVersion, session );
+	}
 
 	/**
 	 * Has the class actually been bytecode instrumented?
@@ -859,8 +983,39 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 * Note, that because we update the PersistenceContext here, callers
 	 * need to take care that they have already written the initial snapshot
 	 * to the PersistenceContext before calling this method.
+	 * @deprecated Use {@link #processInsertGeneratedProperties(Object, Object, Object[], GeneratedValues, SharedSessionContractImplementor)} instead.
 	 */
-	void processInsertGeneratedProperties(Object id, Object entity, Object[] state, SharedSessionContractImplementor session);
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void processInsertGeneratedProperties(Object id, Object entity, Object[] state, SharedSessionContractImplementor session) {
+		processInsertGeneratedProperties( id, entity, state, null, session );
+	}
+
+	/**
+	 * Retrieve the values of any insert generated properties through the provided
+	 * {@link GeneratedValues} or, when that's not available, by selecting them
+	 * back from the database, injecting these generated values into the
+	 * given entity as well as writing this state to the
+	 * {@link org.hibernate.engine.spi.PersistenceContext}.
+	 * <p>
+	 * Note, that because we update the PersistenceContext here, callers
+	 * need to take care that they have already written the initial snapshot
+	 * to the PersistenceContext before calling this method.
+	 */
+	default void processInsertGeneratedProperties(
+			Object id,
+			Object entity,
+			Object[] state,
+			GeneratedValues generatedValues,
+			SharedSessionContractImplementor session) {
+	}
+
+	default List<? extends ModelPart> getGeneratedProperties(EventType timing) {
+		return timing == EventType.INSERT ? getInsertGeneratedProperties() : getUpdateGeneratedProperties();
+	}
+
+	default List<? extends ModelPart> getInsertGeneratedProperties() {
+		return Collections.emptyList();
+	}
 
 	/**
 	 * Perform a select to retrieve the values of any generated properties
@@ -871,8 +1026,34 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	 * Note, that because we update the PersistenceContext here, callers
 	 * need to take care that they have already written the initial snapshot
 	 * to the PersistenceContext before calling this method.
+	 * @deprecated Use {@link #processUpdateGeneratedProperties(Object, Object, Object[], GeneratedValues, SharedSessionContractImplementor)} instead.
 	 */
-	void processUpdateGeneratedProperties(Object id, Object entity, Object[] state, SharedSessionContractImplementor session);
+	@Deprecated( forRemoval = true, since = "6.5" )
+	default void processUpdateGeneratedProperties(Object id, Object entity, Object[] state, SharedSessionContractImplementor session) {
+		processUpdateGeneratedProperties( id, entity, state, null, session );
+	}
+
+	/**
+	 * Retrieve the values of any update generated properties through the provided
+	 * {@link GeneratedValues} or, when that's not available, by selecting them
+	 * back from the database, injecting these generated values into the
+	 * given entity as well as writing this state to the
+	 * {@link org.hibernate.engine.spi.PersistenceContext}.
+	 * <p>
+	 * Note, that because we update the PersistenceContext here, callers
+	 * need to take care that they have already written the initial snapshot
+	 * to the PersistenceContext before calling this method.
+	 */
+	void processUpdateGeneratedProperties(
+			Object id,
+			Object entity,
+			Object[] state,
+			GeneratedValues generatedValues,
+			SharedSessionContractImplementor session);
+
+	default List<? extends ModelPart> getUpdateGeneratedProperties() {
+		return Collections.emptyList();
+	}
 
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1042,9 +1223,13 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	FilterAliasGenerator getFilterAliasGenerator(final String rootAlias);
 
 	default FilterAliasGenerator getFilterAliasGenerator(TableGroup rootTableGroup) {
-		assert this instanceof Joinable;
-		return new TableGroupFilterAliasGenerator( ( (Joinable) this ).getTableName(), rootTableGroup );
+		return new TableGroupFilterAliasGenerator( getTableName(), rootTableGroup );
 	}
+
+	/**
+	 * The table to join to.
+	 */
+	String getTableName();
 
 	/**
 	 * Converts an array of attribute names to a set of indexes, according to the entity metamodel
@@ -1072,6 +1257,14 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 
 	boolean canUseReferenceCacheEntries();
 
+	@Incubating
+	boolean useShallowQueryCacheLayout();
+
+	@Incubating
+	boolean storeDiscriminatorInShallowQueryCacheLayout();
+
+	boolean hasFilterForLoadByKey();
+
 	/**
 	 * The property name of the "special" identifier property in HQL
 	 *
@@ -1080,4 +1273,183 @@ public interface EntityPersister extends EntityMappingType, RootTableGroupProduc
 	@Deprecated(since = "6.2")
 	String ENTITY_ID = "id";
 
+	/**
+	 * @return Metadata for each unique key defined
+	 */
+	@Incubating
+	Iterable<UniqueKeyEntry> uniqueKeyEntries();
+
+	/**
+	 * Get a SQL select string that performs a select based on a unique
+	 * key determined by the given property name.
+	 *
+	 * @param propertyName The name of the property which maps to the
+	 *           column(s) to use in the select statement restriction.
+	 * @return The SQL select string
+	 */
+	String getSelectByUniqueKeyString(String propertyName);
+
+	/**
+	 * Get a SQL select string that performs a select based on a unique
+	 * key determined by the given property names.
+	 *
+	 * @param propertyNames The names of the properties which maps to the
+	 *               column(s) to use in the select statement restriction.
+	 * @return The SQL select string
+	 */
+	default String getSelectByUniqueKeyString(String[] propertyNames) {
+		// default impl only for backward compatibility
+		if ( propertyNames.length > 1 ) {
+			throw new IllegalArgumentException( "support for multiple properties not implemented" );
+		}
+		return getSelectByUniqueKeyString( propertyNames[0] );
+	}
+
+	String getSelectByUniqueKeyString(String[] propertyNames, String[] columnNames);
+
+
+	/**
+	 * The names of the primary key columns in the root table.
+	 *
+	 * @return The primary key column names.
+	 */
+	String[] getRootTableKeyColumnNames();
+
+	/**
+	 * Get the database-specific SQL command to retrieve the last
+	 * generated IDENTITY value.
+	 *
+	 * @return The SQL command string
+	 */
+	String getIdentitySelectString();
+
+	/**
+	 * Get the names of columns used to persist the identifier
+	 */
+	String[] getIdentifierColumnNames();
+
+	/**
+	 * Get the result set aliases used for the identifier columns, given a suffix
+	 */
+	String[] getIdentifierAliases(String suffix);
+
+	/**
+	 * Locks are always applied to the "root table".
+	 *
+	 * @return The root table name
+	 */
+	String getRootTableName();
+
+	/**
+	 * Get the names of columns on the root table used to persist the identifier.
+	 *
+	 * @return The root table identifier column names.
+	 */
+	String[] getRootTableIdentifierColumnNames();
+
+	/**
+	 * For versioned entities, get the name of the column (again, expected on the
+	 * root table) used to store the version values.
+	 *
+	 * @return The version column name.
+	 */
+	String getVersionColumnName();
+
+	/**
+	 * Get the result set aliases used for the property columns, given a suffix (properties of this class, only).
+	 */
+	String[] getPropertyAliases(String suffix, int i);
+
+	/**
+	 * Get the result set aliases used for the identifier columns, given a suffix
+	 */
+	String getDiscriminatorAlias(String suffix);
+
+	boolean hasMultipleTables();
+
+	String[] getTableNames();
+
+	/**
+	 * @deprecated Only ever used from places where we really want to use<ul>
+	 *     <li>{@link SelectStatement} (select generator)</li>
+	 *     <li>{@link InsertSelectStatement}</li>
+	 *     <li>{@link org.hibernate.sql.ast.tree.update.UpdateStatement}</li>
+	 *     <li>{@link org.hibernate.sql.ast.tree.delete.DeleteStatement}</li>
+	 * </ul>
+	 */
+	@Deprecated( since = "6.2" )
+	String getTableName(int j);
+
+	String[] getKeyColumns(int j);
+
+	int getTableSpan();
+
+	boolean isInverseTable(int j);
+
+	boolean isNullableTable(int j);
+
+	boolean hasDuplicateTables();
+
+	int getSubclassTableSpan();
+
+	String getSubclassTableName(int j);
+
+	String getTableNameForColumn(String columnName);
+
+	/**
+	 * @return the column name for the discriminator as specified in the mapping.
+	 *
+	 * @deprecated Use {@link EntityDiscriminatorMapping#getSelectionExpression()} instead
+	 */
+	@Deprecated
+	String getDiscriminatorColumnName();
+
+	/**
+	 * Get the discriminator type
+	 */
+	Type getDiscriminatorType();
+
+	/**
+	 * Does the result set contain rowids?
+	 */
+	boolean hasRowId();
+
+	String[] getSubclassPropertyColumnNames(int i);
+
+	/**
+	 * Return the column alias names used to persist/query the named property of the class or a subclass (optional operation).
+	 */
+	String[] getSubclassPropertyColumnAliases(String propertyName, String suffix);
+
+	int countSubclassProperties();
+
+	/**
+	 * Get the column names for the given property path
+	 */
+	String[] getPropertyColumnNames(String propertyPath);
+
+	/**
+	 * All columns to select, when loading.
+	 */
+	String selectFragment(String alias, String suffix);
+
+	/**
+	 * Retrieve the information needed to properly deal with this entity's discriminator
+	 * in a query.
+	 *
+	 * @return The entity discriminator metadata
+	 */
+	DiscriminatorMetadata getTypeDiscriminatorMetadata();
+
+	/**
+	 * Given a property path, return the corresponding column name(s).
+	 * 
+	 * @deprecated No longer used in ORM core
+	 */
+	@Deprecated(since = "7.0", forRemoval = true)
+	String[] toColumns(String propertyName);
+
+	boolean isSharedColumn(String columnExpression);
+
+	String[][] getConstraintOrderedTableKeyColumnClosure();
 }

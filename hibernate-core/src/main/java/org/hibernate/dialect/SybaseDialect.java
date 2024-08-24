@@ -40,7 +40,6 @@ import org.hibernate.query.spi.QueryParameterBindings;
 import org.hibernate.query.sqm.CastType;
 import org.hibernate.query.sqm.IntervalType;
 import org.hibernate.query.sqm.TemporalUnit;
-import org.hibernate.query.sqm.TrimSpec;
 import org.hibernate.query.sqm.internal.DomainParameterXref;
 import org.hibernate.query.sqm.sql.SqmTranslator;
 import org.hibernate.query.sqm.sql.SqmTranslatorFactory;
@@ -139,6 +138,24 @@ public class SybaseDialect extends AbstractTransactSQLDialect {
 				scale,
 				jdbcTypeRegistry
 		);
+	}
+
+	@Override
+	public int resolveSqlTypeLength(
+			String columnTypeName,
+			int jdbcTypeCode,
+			int precision,
+			int scale,
+			int displaySize) {
+		// Sybase jconnect driver reports the "actual" precision in the display size
+		switch ( jdbcTypeCode ) {
+			case Types.CHAR:
+			case Types.VARCHAR:
+			case Types.REAL:
+			case Types.DOUBLE:
+				return displaySize;
+		}
+		return super.resolveSqlTypeLength( columnTypeName, jdbcTypeCode, precision, scale, displaySize );
 	}
 
 	@Override
@@ -309,7 +326,7 @@ public class SybaseDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public String getCurrentSchemaCommand() {
-		return "select db_name()";
+		return "select user_name()";
 	}
 
 	@Override
@@ -448,12 +465,6 @@ public class SybaseDialect extends AbstractTransactSQLDialect {
 	}
 
 	@Override
-	public String trimPattern(TrimSpec specification, char character) {
-		return super.trimPattern(specification, character)
-				.replace("replace", "str_replace");
-	}
-
-	@Override
 	public void appendDatetimeFormat(SqlAppender appender, String format) {
 		throw new UnsupportedOperationException( "format() function not supported on Sybase");
 	}
@@ -477,9 +488,7 @@ public class SybaseDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public NameQualifierSupport getNameQualifierSupport() {
-		// No support for schemas: https://userapps.support.sap.com/sap/support/knowledge/en/2591730
-		// Authorization schemas seem to be something different: https://infocenter.sybase.com/help/index.jsp?topic=/com.sybase.infocenter.dc36272.1550/html/commands/X48762.htm
-		return NameQualifierSupport.CATALOG;
+		return NameQualifierSupport.BOTH;
 	}
 
 	@Override
@@ -515,5 +524,15 @@ public class SybaseDialect extends AbstractTransactSQLDialect {
 		return driverKind == SybaseDriverKind.JTDS
 				? AbstractTransactSQLIdentityColumnSupport.INSTANCE
 				: SybaseJconnIdentityColumnSupport.INSTANCE;
+	}
+
+	@Override
+	public DmlTargetColumnQualifierSupport getDmlTargetColumnQualifierSupport() {
+		return DmlTargetColumnQualifierSupport.TABLE_ALIAS;
+	}
+
+	@Override
+	public boolean supportsFromClauseInUpdate() {
+		return true;
 	}
 }

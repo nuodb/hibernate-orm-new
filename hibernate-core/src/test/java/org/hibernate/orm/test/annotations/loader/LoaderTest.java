@@ -24,12 +24,6 @@ import org.junit.Test;
  * @author Emmanuel Bernard
  */
 public class LoaderTest extends BaseCoreFunctionalTestCase {
-	@Override
-	protected String[] getOrmXmlFiles() {
-		return new String[] {
-				"org/hibernate/orm/test/annotations/loader/Loader.hbm.xml"
-		};
-	}
 
 	@Override
 	protected Class[] getAnnotatedClasses() {
@@ -68,8 +62,8 @@ public class LoaderTest extends BaseCoreFunctionalTestCase {
 		tx = s.beginTransaction();
 		t = s.get( Team.class, t2.getId() );
 		p = s.get( Player.class, p.getId() );
-		s.delete( p );
-		s.delete( t );
+		s.remove( p );
+		s.remove( t );
 		tx.commit();
 		s.close();
 	}

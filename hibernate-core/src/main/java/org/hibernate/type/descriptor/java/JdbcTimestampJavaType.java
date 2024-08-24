@@ -10,7 +10,6 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -159,7 +158,7 @@ public class JdbcTimestampJavaType extends AbstractTemporalJavaType<Date> implem
 		if ( java.sql.Time.class.isAssignableFrom( type ) ) {
 			return value instanceof java.sql.Time
 					? ( java.sql.Time ) value
-					: new java.sql.Time( value.getTime() );
+					: new java.sql.Time( value.getTime() % 86_400_000 );
 		}
 
 		throw unknownUnwrap( type );
@@ -195,7 +194,7 @@ public class JdbcTimestampJavaType extends AbstractTemporalJavaType<Date> implem
 
 	@Override
 	public boolean isWider(JavaType<?> javaType) {
-		switch ( javaType.getJavaType().getTypeName() ) {
+		switch ( javaType.getTypeName() ) {
 			case "java.sql.Date":
 			case "java.sql.Timestamp":
 			case "java.util.Date":
@@ -259,13 +258,12 @@ public class JdbcTimestampJavaType extends AbstractTemporalJavaType<Date> implem
 		return context.getJdbcType( Types.TIMESTAMP );
 	}
 
-	@Override
+	@Override @SuppressWarnings("unchecked")
 	protected <X> TemporalJavaType<X> forTimestampPrecision(TypeConfiguration typeConfiguration) {
-		//noinspection unchecked
 		return (TemporalJavaType<X>) this;
 	}
 
-	@Override
+	@Override @SuppressWarnings("unchecked")
 	protected <X> TemporalJavaType<X> forDatePrecision(TypeConfiguration typeConfiguration) {
 		return (TemporalJavaType<X>) JdbcDateJavaType.INSTANCE;
 	}

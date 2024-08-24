@@ -6,19 +6,18 @@
  */
 package org.hibernate.sql.results.internal;
 
+import org.hibernate.LockMode;
 import org.hibernate.engine.spi.CollectionKey;
-import org.hibernate.engine.spi.EntityKey;
+import org.hibernate.engine.spi.EntityHolder;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.resource.jdbc.spi.LogicalConnectionImplementor;
-import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.query.spi.QueryParameterBindings;
 import org.hibernate.sql.exec.internal.BaseExecutionContext;
 import org.hibernate.sql.exec.spi.Callback;
 import org.hibernate.sql.exec.spi.ExecutionContext;
-import org.hibernate.sql.results.graph.Initializer;
+import org.hibernate.sql.results.graph.InitializerData;
 import org.hibernate.sql.results.graph.entity.EntityFetch;
-import org.hibernate.sql.results.graph.entity.LoadingEntityEntry;
 import org.hibernate.sql.results.jdbc.internal.JdbcValuesCacheHit;
 import org.hibernate.sql.results.jdbc.internal.JdbcValuesSourceProcessingStateStandardImpl;
 import org.hibernate.sql.results.jdbc.spi.JdbcValues;
@@ -33,11 +32,12 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 
 	private final JdbcValuesSourceProcessingStateStandardImpl resultSetProcessingState;
 
-	private final InitializersList initializers;
-
 	private final RowReader<?> rowReader;
 	private final JdbcValues jdbcValues;
 	private final ExecutionContext executionContext;
+	private final boolean needsResolveState;
+
+	private final InitializerData[] initializerData;
 
 	public RowProcessingStateStandardImpl(
 			JdbcValuesSourceProcessingStateStandardImpl resultSetProcessingState,
@@ -49,12 +49,45 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 		this.executionContext = executionContext;
 		this.rowReader = rowReader;
 		this.jdbcValues = jdbcValues;
-		this.initializers = rowReader.getInitializersList();
+		this.needsResolveState = !isQueryCacheHit()
+				&& getQueryOptions().isResultCachingEnabled() == Boolean.TRUE;
+		this.initializerData = new InitializerData[rowReader.getInitializerCount()];
 	}
 
 	@Override
 	public JdbcValuesSourceProcessingState getJdbcValuesSourceProcessingState() {
 		return resultSetProcessingState;
+	}
+
+	@Override
+	public LockMode determineEffectiveLockMode(String alias) {
+		if ( jdbcValues.usesFollowOnLocking() ) {
+			// If follow-on locking is used, we must omit the lock options here,
+			// because these lock options are only for Initializers.
+			// If we wouldn't omit this, the follow-on lock requests would be no-ops,
+			// because the EntityEntrys would already have the desired lock mode
+			return LockMode.NONE;
+		}
+		final LockMode effectiveLockMode = resultSetProcessingState.getQueryOptions().getLockOptions()
+				.getEffectiveLockMode( alias );
+		return effectiveLockMode == LockMode.NONE
+				? jdbcValues.getValuesMapping().determineDefaultLockMode( alias, effectiveLockMode )
+				: effectiveLockMode;
+	}
+
+	@Override
+	public boolean needsResolveState() {
+		return needsResolveState;
+	}
+
+	@Override
+	public <T extends InitializerData> T getInitializerData(int initializerId) {
+		return (T) initializerData[initializerId];
+	}
+
+	@Override
+	public void setInitializerData(int initializerId, InitializerData state) {
+		initializerData[initializerId] = state;
 	}
 
 	@Override
@@ -116,7 +149,7 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 
 	@Override
 	public Object getJdbcValue(int position) {
-		return jdbcValues.getCurrentRowValuesArray()[ position ];
+		return jdbcValues.getCurrentRowValue( position );
 	}
 
 	@Override
@@ -129,7 +162,8 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 	}
 
 	@Override
-	public void finishRowProcessing() {
+	public void finishRowProcessing(boolean wasAdded) {
+		jdbcValues.finishRowProcessing( this, wasAdded );
 	}
 
 	@Override
@@ -153,6 +187,11 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 	}
 
 	@Override
+	public boolean hasCallbackActions() {
+		return executionContext.hasCallbackActions();
+	}
+
+	@Override
 	public CollectionKey getCollectionKey() {
 		return executionContext.getCollectionKey();
 	}
@@ -168,13 +207,23 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 	}
 
 	@Override
+	public String getEntityUniqueKeyAttributePath() {
+		return executionContext.getEntityUniqueKeyAttributePath();
+	}
+
+	@Override
+	public Object getEntityUniqueKey() {
+		return executionContext.getEntityUniqueKey();
+	}
+
+	@Override
 	public EntityMappingType getRootEntityDescriptor() {
 		return executionContext.getRootEntityDescriptor();
 	}
 
 	@Override
-	public void registerLoadingEntityEntry(EntityKey entityKey, LoadingEntityEntry entry) {
-		executionContext.registerLoadingEntityEntry( entityKey, entry );
+	public void registerLoadingEntityHolder(EntityHolder holder) {
+		executionContext.registerLoadingEntityHolder( holder );
 	}
 
 	@Override
@@ -188,11 +237,7 @@ public class RowProcessingStateStandardImpl extends BaseExecutionContext impleme
 	}
 
 	@Override
-	public Initializer resolveInitializer(NavigablePath path) {
-		return this.initializers.resolveInitializer( path );
-	}
-
-	public boolean hasCollectionInitializers() {
-		return this.initializers.hasCollectionInitializers();
+	public boolean upgradeLocks() {
+		return executionContext.upgradeLocks();
 	}
 }

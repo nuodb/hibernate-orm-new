@@ -8,10 +8,11 @@ package org.hibernate.orm.test.ops;
 
 import java.util.ArrayList;
 import java.util.Collection;
+
+import jakarta.persistence.EntityExistsException;
 import jakarta.persistence.PersistenceException;
 
-import org.hibernate.PersistentObjectException;
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.exception.ConstraintViolationException;
 
 import org.hibernate.testing.orm.junit.DialectFeatureChecks;
@@ -43,7 +44,7 @@ public class CreateTest extends AbstractOperationTestCase {
 					VersionedEntity child = new VersionedEntity( "c1", "child-1" );
 					root.getChildren().add( child );
 					child.setParent( root );
-					session.save( root );
+					session.persist( root );
 				}
 		);
 
@@ -53,7 +54,7 @@ public class CreateTest extends AbstractOperationTestCase {
 
 		scope.inTransaction(
 				session ->
-						session.delete( root )
+						session.remove( root )
 		);
 
 		assertUpdateCount( 0, scope );
@@ -187,9 +188,9 @@ public class CreateTest extends AbstractOperationTestCase {
 						session.persist( dupe );
 						fail( "Expecting failure" );
 					}
-					catch (PersistenceException e) {
+					catch (Exception e) {
 						//verify that an exception is thrown!
-						assertTyping( PersistentObjectException.class, e );
+						assertTyping( EntityExistsException.class, e );
 					}
 				}
 		);
@@ -203,9 +204,9 @@ public class CreateTest extends AbstractOperationTestCase {
 						session.persist( nondupe );
 						fail( "Expecting failure" );
 					}
-					catch (PersistenceException e) {
+					catch (Exception e) {
 						//verify that an exception is thrown!
-						assertTyping( PersistentObjectException.class, e );
+						assertTyping( EntityExistsException.class, e );
 					}
 				}
 		);
@@ -213,7 +214,7 @@ public class CreateTest extends AbstractOperationTestCase {
 
 	@Test
 	@SuppressWarnings("unchecked")
-	@SkipForDialect(dialectClass = AbstractHANADialect.class, reason = " HANA doesn't support tables consisting of only a single auto-generated column")
+	@SkipForDialect(dialectClass = HANADialect.class, reason = " HANA doesn't support tables consisting of only a single auto-generated column")
 	public void testBasic(SessionFactoryScope scope) throws Exception {
 		Employer er = new Employer();
 		Employee ee = new Employee();

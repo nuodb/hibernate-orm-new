@@ -43,6 +43,7 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 
 		settings.put( AvailableSettings.SHOW_SQL, "true" );
 		settings.put( AvailableSettings.FORMAT_SQL, "true" );
+		settings.put( AvailableSettings.PREFER_NATIVE_ENUM_TYPES, "false" );
 	}
 
 	@Test
@@ -63,10 +64,10 @@ public class UnspecifiedEnumTypeTest extends BaseEnversFunctionalTestCase {
 
 		// Revision 2
 		session.getTransaction().begin();
-		entity = (UnspecifiedEnumTypeEntity) session.get( UnspecifiedEnumTypeEntity.class, entity.getId() );
+		entity = session.get( UnspecifiedEnumTypeEntity.class, entity.getId() );
 		entity.setEnum1( UnspecifiedEnumTypeEntity.E1.Y );
 		entity.setEnum2( UnspecifiedEnumTypeEntity.E2.B );
-		session.update( entity );
+		session.merge( entity );
 		session.getTransaction().commit();
 
 		session.close();

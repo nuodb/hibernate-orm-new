@@ -9,17 +9,17 @@ package org.hibernate.mapping;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
-import org.hibernate.boot.Metadata;
 import org.hibernate.boot.model.naming.Identifier;
 import org.hibernate.boot.model.relational.Exportable;
-import org.hibernate.boot.model.relational.SqlStringGenerationContext;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.internal.util.StringHelper;
 
 import static java.util.Collections.unmodifiableList;
 import static java.util.Collections.unmodifiableMap;
+import static java.util.stream.Collectors.toUnmodifiableList;
+import static java.util.stream.Collectors.toUnmodifiableMap;
 import static org.hibernate.internal.util.StringHelper.isNotEmpty;
 import static org.hibernate.internal.util.StringHelper.qualify;
 
@@ -34,64 +34,9 @@ import static org.hibernate.internal.util.StringHelper.qualify;
 public class Index implements Exportable, Serializable {
 	private Identifier name;
 	private Table table;
-	private final java.util.List<Column> columns = new ArrayList<>();
-	private final java.util.Map<Column, String> columnOrderMap = new HashMap<>(  );
-
-	public static String buildSqlDropIndexString(
-			String name,
-			String tableName) {
-		return "drop index " + qualify( tableName, name );
-	}
-
-	public static String buildSqlCreateIndexString(
-			Dialect dialect,
-			String name,
-			String tableName,
-			java.util.List<Column> columns,
-			java.util.Map<Column, String> columnOrderMap,
-			boolean unique) {
-		StringBuilder statement = new StringBuilder( dialect.getCreateIndexString( unique ) )
-				.append( " " )
-				.append( dialect.qualifyIndexName() ? name : StringHelper.unqualify( name ) )
-				.append( " on " )
-				.append( tableName )
-				.append( " (" );
-		boolean first = true;
-		for ( Column column : columns ) {
-			if ( first ) {
-				first = false;
-			}
-			else {
-				statement.append(", ");
-			}
-			statement.append( column.getQuotedName( dialect ) );
-			if ( columnOrderMap.containsKey( column ) ) {
-				statement.append( " " ).append( columnOrderMap.get( column ) );
-			}
-		}
-		statement.append( ")" );
-		statement.append( dialect.getCreateIndexTail( unique, columns ) );
-
-		return statement.toString();
-	}
-
-	public static String buildSqlCreateIndexString(
-			SqlStringGenerationContext context,
-			String name,
-			Table table,
-			java.util.List<Column> columns,
-			java.util.Map<Column, String> columnOrderMap,
-			boolean unique,
-			Metadata metadata) {
-		return buildSqlCreateIndexString(
-				context.getDialect(),
-				name,
-				context.format( table.getQualifiedTableName() ),
-				columns,
-				columnOrderMap,
-				unique
-		);
-	}
+	private boolean unique;
+	private final java.util.List<Selectable> selectables = new ArrayList<>();
+	private final java.util.Map<Selectable, String> selectableOrderMap = new HashMap<>();
 
 	public Table getTable() {
 		return table;
@@ -101,44 +46,55 @@ public class Index implements Exportable, Serializable {
 		this.table = table;
 	}
 
+	public void setUnique(boolean unique) {
+		this.unique = unique;
+	}
+
+	public boolean isUnique() {
+		return unique;
+	}
+
 	public int getColumnSpan() {
-		return columns.size();
+		return selectables.size();
 	}
 
-	@Deprecated
-	public Iterator<Column> getColumnIterator() {
-		return getColumns().iterator();
+	public List<Selectable> getSelectables() {
+		return unmodifiableList( selectables );
 	}
 
+	public Map<Selectable, String> getSelectableOrderMap() {
+		return unmodifiableMap( selectableOrderMap );
+	}
+
+	/**
+	 * @deprecated use {@link #getSelectables()}
+	 */
+	@Deprecated(since = "6.3")
 	public java.util.List<Column> getColumns() {
-		return unmodifiableList( columns );
+		return selectables.stream()
+				.map( s -> (Column) s ).collect( toUnmodifiableList() );
 	}
 
+	/**
+	 * @deprecated use {@link #getSelectableOrderMap()}
+	 */
+	@Deprecated(since = "6.3")
 	public java.util.Map<Column, String> getColumnOrderMap() {
-		return unmodifiableMap( columnOrderMap );
+		return selectableOrderMap.entrySet().stream()
+				.collect( toUnmodifiableMap( e -> (Column) e.getKey(), Map.Entry::getValue ) );
 	}
 
-	public void addColumn(Column column) {
-		if ( !columns.contains( column ) ) {
-			columns.add( column );
+	public void addColumn(Selectable selectable) {
+		if ( !selectables.contains( selectable ) ) {
+			selectables.add( selectable );
 		}
 	}
 
-	public void addColumn(Column column, String order) {
-		addColumn( column );
+	public void addColumn(Selectable selectable, String order) {
+		addColumn( selectable );
 		if ( isNotEmpty( order ) ) {
-			columnOrderMap.put( column, order );
+			selectableOrderMap.put( selectable, order );
 		}
-	}
-
-	public void addColumns(java.util.List<Column> extraColumns) {
-		for ( Column column : extraColumns ) {
-			addColumn( column );
-		}
-	}
-
-	public boolean containsColumn(Column column) {
-		return columns.contains( column );
 	}
 
 	public String getName() {

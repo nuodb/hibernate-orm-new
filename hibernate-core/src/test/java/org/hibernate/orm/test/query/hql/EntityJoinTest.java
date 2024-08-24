@@ -21,14 +21,12 @@ import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.query.SemanticException;
-import org.hibernate.query.hql.HqlTranslator;
+import org.hibernate.query.internal.QueryParameterBindingsImpl;
 import org.hibernate.query.spi.QueryEngine;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.query.spi.QueryParameterBindings;
 import org.hibernate.query.sqm.internal.DomainParameterXref;
 import org.hibernate.query.sqm.sql.SqmTranslation;
-import org.hibernate.query.sqm.sql.SqmTranslator;
-import org.hibernate.query.sqm.sql.SqmTranslatorFactory;
 import org.hibernate.query.sqm.tree.SqmStatement;
 import org.hibernate.query.sqm.tree.select.SqmSelectStatement;
 import org.hibernate.sql.ast.tree.from.LazyTableGroup;
@@ -187,35 +185,37 @@ public class EntityJoinTest {
                             .findEntityDescriptor( Customer.class );
 
                     final QueryEngine queryEngine = factory.getQueryEngine();
-                    final HqlTranslator hqlTranslator = queryEngine.getHqlTranslator();
-                    final SqmTranslatorFactory sqmTranslatorFactory = queryEngine.getSqmTranslatorFactory();
 
-                    final SqmStatement<Object> sqm = hqlTranslator.translate( qry, null );
+                    final SqmStatement<Object> sqm =
+                            queryEngine.getHqlTranslator().translate( qry, null );
 
-                    final SqmTranslator<SelectStatement> selectTranslator = sqmTranslatorFactory.createSelectTranslator(
-                            (SqmSelectStatement<?>) sqm,
-                            QueryOptions.NONE,
-                            DomainParameterXref.empty(),
-                            QueryParameterBindings.NO_PARAM_BINDINGS,
-                            LoadQueryInfluencers.NONE,
-                            factory,
-							true
-					);
-                    final SqmTranslation<SelectStatement> sqmTranslation = selectTranslator.translate();
+                    final SqmTranslation<SelectStatement> sqmTranslation =
+                            queryEngine.getSqmTranslatorFactory()
+                                    .createSelectTranslator(
+                                            (SqmSelectStatement<?>) sqm,
+                                            QueryOptions.NONE,
+                                            DomainParameterXref.EMPTY,
+                                            QueryParameterBindingsImpl.EMPTY,
+                                            new LoadQueryInfluencers( factory ),
+                                            factory,
+                                            true
+                                    )
+                                    .translate();
 
                     final SelectStatement sqlAst = sqmTranslation.getSqlAst();
                     final List<TableGroup> roots = sqlAst.getQuerySpec().getFromClause().getRoots();
                     assertThat( roots.size(), is( 1 ) );
 
                     final TableGroup rootTableGroup = roots.get( 0 );
-                    assertThat( rootTableGroup.getTableGroupJoins().size(), is( 2 ) );
+                    assertThat( rootTableGroup.getTableGroupJoins().size(), is( 1 ) );
+                    assertThat( rootTableGroup.getNestedTableGroupJoins().size(), is( 1 ) );
 
-                    // The first table group is an uninitialized lazy table group for the path in the on clause
-                    final TableGroupJoin firstTableGroupJoin = rootTableGroup.getTableGroupJoins().get( 0 );
-                    assertThat( firstTableGroupJoin.getJoinedGroup(), instanceOf( LazyTableGroup.class ) );
-                    assertThat( ((LazyTableGroup) firstTableGroupJoin.getJoinedGroup()).getUnderlyingTableGroup(), is( CoreMatchers.nullValue() ) );
+                    // An uninitialized lazy table group for the path in the on clause
+                    final TableGroupJoin nestedTableGroupJoin = rootTableGroup.getNestedTableGroupJoins().get( 0 );
+                    assertThat( nestedTableGroupJoin.getJoinedGroup(), instanceOf( LazyTableGroup.class ) );
+                    assertThat( ((LazyTableGroup) nestedTableGroupJoin.getJoinedGroup()).getUnderlyingTableGroup(), is( CoreMatchers.nullValue() ) );
 
-                    final TableGroupJoin tableGroupJoin = rootTableGroup.getTableGroupJoins().get( 1 );
+                    final TableGroupJoin tableGroupJoin = rootTableGroup.getTableGroupJoins().get( 0 );
                     assertThat( tableGroupJoin.getJoinedGroup().getModelPart(), is( customerEntityDescriptor ) );
                 }
         );
@@ -262,7 +262,7 @@ public class EntityJoinTest {
             }
             catch (Exception expected) {
                 assertThat( expected.getCause(), instanceOf( SemanticException.class ) );
-                assertThat( expected.getMessage(), CoreMatchers.containsString( "Entity join did not specify a predicate" ) );
+                assertThat( expected.getMessage(), CoreMatchers.containsString( "Entity join did not specify a join condition" ) );
             }
         } );
     }
@@ -287,11 +287,11 @@ public class EntityJoinTest {
         scope.inTransaction(
                 (session) -> {
                     final Customer customer = new Customer( 1, "Acme" );
-                    session.save( customer );
-                    session.save( new User( 1, "steve", customer ) );
-                    session.save( new User( 2, "jane" ) );
-                    session.save( new FinancialRecord( 1, customer, "steve" ) );
-                    session.save( new FinancialRecord( 2, customer, null ) );
+                    session.persist( customer );
+                    session.persist( new User( 1, "steve", customer ) );
+                    session.persist( new User( 2, "jane" ) );
+                    session.persist( new FinancialRecord( 1, customer, "steve" ) );
+                    session.persist( new FinancialRecord( 2, customer, null ) );
                 }
         );
     }

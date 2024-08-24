@@ -52,7 +52,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 				@Setting(name = AvailableSettings.FORMAT_SQL, value = "false")
 		}
 )
-@RequiresDialect(value = H2Dialect.class, majorVersion = 2, comment = "H2 didn't support SQL arrays before version 2")
+@RequiresDialect(value = H2Dialect.class)
 @JiraKey("HHH-16469")
 public class DepthOneBatchTest {
 
@@ -92,7 +92,7 @@ public class DepthOneBatchTest {
 							"select a1_0.agency_id,a1_0.agency_txt from agency_table a1_0 where a1_0.agency_id=?"
 					);
 					assertThat( executedQueries.get( 1 ).toLowerCase() ).isEqualTo(
-							"select a1_0.agency_id,a1_0.agency_detail from agency_detail_table a1_0 where a1_0.agency_id=?"
+							"select ad1_0.agency_id,ad1_0.agency_detail from agency_detail_table ad1_0 where ad1_0.agency_id=?"
 					);
 
 					assertThat( executedQueries.get( 2 ).toLowerCase() ).isEqualTo(
@@ -104,7 +104,7 @@ public class DepthOneBatchTest {
 					);
 
 					assertThat( executedQueries.get( 4 ).toLowerCase() ).isEqualTo(
-							"select u1_0.group_id,u1_1.user_id,a1_0.agency_id,a1_0.agency_txt,u1_1.user_name from group_user u1_0 join user_table u1_1 on u1_1.user_id=u1_0.user_id left join agency_table a1_0 on a1_0.agency_id=u1_1.agency_id where u1_0.group_id in (select g1_0.group_id from group_table g1_0 where g1_0.agency_id=?)"
+							"select u1_0.group_id,u1_1.user_id,a1_0.agency_id,a1_0.agency_txt,u1_1.user_name from group_user u1_0 join user_table u1_1 on u1_1.user_id=u1_0.user_id left join agency_table a1_0 on a1_0.agency_id=u1_1.agency_id where u1_0.group_id=?"
 					);
 
 				}
@@ -153,7 +153,6 @@ public class DepthOneBatchTest {
 
 		@OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
 		@PrimaryKeyJoinColumn(name = "AGENCY_ID")
-		@BatchSize(size = 2)
 		public AgencyDetail getAgencyDetail() {
 			return agencyDetail;
 		}

@@ -56,7 +56,7 @@ import org.hibernate.mapping.Table;
 import org.hibernate.mapping.UserDefinedType;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.metamodel.spi.RuntimeModelCreationContext;
-import org.hibernate.persister.entity.Lockable;
+import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.persister.entity.mutation.EntityMutationTarget;
 import org.hibernate.procedure.spi.CallableStatementSupport;
 import org.hibernate.query.hql.HqlTranslator;
@@ -64,7 +64,6 @@ import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.query.sqm.CastType;
 import org.hibernate.query.sqm.FetchClauseType;
 import org.hibernate.query.sqm.IntervalType;
-import org.hibernate.query.sqm.NullOrdering;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.TrimSpec;
 import org.hibernate.query.sqm.mutation.internal.temptable.AfterUseAction;
@@ -133,19 +132,19 @@ public class DialectDelegateWrapper extends Dialect {
 		return wrapped;
 	}
 
-	//can't be overriden because of how Dialects get initialized: see constructor of parent
+	//can't be overridden because of how Dialects get initialized: see constructor of parent
 	@Override
 	protected final void checkVersion() {
 		//intentionally empty: this is used by the super constructor (yuk)
 	}
 
-	//can't be overriden because of how Dialects get initialized: see constructor of parent
+	//can't be overridden because of how Dialects get initialized: see constructor of parent
 	@Override
 	protected final void registerDefaultKeywords() {
 		//intentionally empty: this is used by the super constructor (yuk)
 	}
 
-	//can't be overriden because of how Dialects get initialized: see constructor of parent
+	//can't be overridden because of how Dialects get initialized: see constructor of parent
 	@Override
 	protected final void initDefaultProperties() {
 		//intentionally empty: this is used by the super constructor (yuk)
@@ -287,8 +286,8 @@ public class DialectDelegateWrapper extends Dialect {
 	}
 
 	@Override
-	public String trimPattern(TrimSpec specification, char character) {
-		return wrapped.trimPattern( specification, character );
+	public String trimPattern(TrimSpec specification, boolean isWhitespace) {
+		return wrapped.trimPattern( specification, isWhitespace );
 	}
 
 	@Override
@@ -402,13 +401,7 @@ public class DialectDelegateWrapper extends Dialect {
 	}
 
 	@Override
-	@Deprecated(since = "6", forRemoval = true)
-	public boolean isLockTimeoutParameterized() {
-		return wrapped.isLockTimeoutParameterized();
-	}
-
-	@Override
-	public LockingStrategy getLockingStrategy(Lockable lockable, LockMode lockMode) {
+	public LockingStrategy getLockingStrategy(EntityPersister lockable, LockMode lockMode) {
 		return wrapped.getLockingStrategy( lockable, lockMode );
 	}
 
@@ -1038,9 +1031,8 @@ public class DialectDelegateWrapper extends Dialect {
 	}
 
 	@Override
-	@Deprecated(since = "6", forRemoval = true)
-	public boolean supportsParametersInInsertSelect() {
-		return wrapped.supportsParametersInInsertSelect();
+	public boolean useConnectionToCreateLob() {
+		return wrapped.useConnectionToCreateLob();
 	}
 
 	@Override
@@ -1356,12 +1348,6 @@ public class DialectDelegateWrapper extends Dialect {
 	@Override
 	public boolean supportsWait() {
 		return wrapped.supportsWait();
-	}
-
-	@Override
-	@Deprecated(since = "6", forRemoval = true)
-	public String inlineLiteral(String literal) {
-		return wrapped.inlineLiteral( literal );
 	}
 
 	@Override

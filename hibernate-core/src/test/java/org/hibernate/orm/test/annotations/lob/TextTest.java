@@ -25,7 +25,8 @@ import static org.junit.Assert.assertNull;
  *
  * @author Steve Ebersole
  */
-@RequiresDialect({SQLServerDialect.class,SybaseDialect.class})
+@RequiresDialect(SQLServerDialect.class)
+@RequiresDialect(SybaseDialect.class)
 public class TextTest extends BaseCoreFunctionalTestCase {
 
 	@Override
@@ -43,7 +44,7 @@ public class TextTest extends BaseCoreFunctionalTestCase {
 		Session s = openSession();
 		s.beginTransaction();
 		LongStringHolder entity = new LongStringHolder();
-		s.save(entity);
+		s.persist(entity);
 		s.getTransaction().commit();
 		s.close();
 
@@ -103,7 +104,7 @@ public class TextTest extends BaseCoreFunctionalTestCase {
 		assertNull(entity.getLongString());
 		assertNull(entity.getName());
 		assertNull(entity.getWhatEver());
-		s.delete(entity);
+		s.remove(entity);
 		s.getTransaction().commit();
 		s.close();
 	}

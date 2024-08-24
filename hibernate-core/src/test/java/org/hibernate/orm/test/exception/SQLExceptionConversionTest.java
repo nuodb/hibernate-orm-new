@@ -10,7 +10,7 @@ import java.sql.PreparedStatement;
 import java.sql.Types;
 
 import org.hibernate.Session;
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.dialect.TiDBDialect;
 import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.ResultSetReturn;
@@ -44,10 +44,8 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 	}
 
 	@Test
-	@SkipForDialect(
-			value = { AbstractHANADialect.class, TiDBDialect.class},
-			comment = "MySQL (MyISAM) / Hana / TiDB do not support FK violation checking"
-	)
+	@SkipForDialect(value = HANADialect.class, comment = "Hana do not support FK violation checking")
+	@SkipForDialect(value = TiDBDialect.class, comment = "TiDB do not support FK violation checking")
 	public void testIntegrityViolation() {
 		final Session session = openSession();
 		session.beginTransaction();
@@ -58,10 +56,13 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 					// result in a constraint violation
 					PreparedStatement ps = null;
 					try {
-						ps = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().prepareStatement( "INSERT INTO T_MEMBERSHIP (user_id, group_id) VALUES (?, ?)" );
+						final String sql = "INSERT INTO T_MEMBERSHIP (user_id, group_id) VALUES (?, ?)";
+						ps = ((SessionImplementor)session).getJdbcCoordinator()
+								.getStatementPreparer()
+								.prepareStatement( sql );
 						ps.setLong(1, 52134241);    // Non-existent user_id
 						ps.setLong(2, 5342);        // Non-existent group_id
-						((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().executeUpdate( ps );
+						((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().executeUpdate( ps, sql );
 
 						fail("INSERT should have failed");
 					}
@@ -88,8 +89,9 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 					// prepare/execute a query against a non-existent table
 					PreparedStatement ps = null;
 					try {
-						ps = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().prepareStatement( "SELECT user_id, user_name FROM tbl_no_there" );
-						((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( ps );
+						final String sql = "SELECT user_id, user_name FROM tbl_no_there";
+						ps = ((SessionImplementor)session).getJdbcCoordinator().getStatementPreparer().prepareStatement( sql );
+						((SessionImplementor)session).getJdbcCoordinator().getResultSetReturn().extract( ps, sql );
 
 						fail("SQL compilation should have failed");
 					}
@@ -114,7 +116,7 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 
 		final User user = new User();
 		user.setUsername( "Lukasz" );
-		session.save( user );
+		session.persist( user );
 		session.flush();
 
 		session.doWork(
@@ -124,10 +126,12 @@ public class SQLExceptionConversionTest extends BaseCoreFunctionalTestCase {
 					final ResultSetReturn resultSetReturn = jdbcCoordinator.getResultSetReturn();
 					PreparedStatement ps = null;
 					try {
-						ps = statementPreparer.prepareStatement( "UPDATE T_USER SET user_name = ? WHERE user_id = ?" );
-						ps.setNull( 1, Types.VARCHAR ); // Attempt to update user name to NULL (NOT NULL constraint defined).
+						final String sql = "UPDATE T_USER SET user_name = ? WHERE user_id = ?";
+						ps = statementPreparer.prepareStatement( sql );
+						// Attempt to update username to NULL (NOT NULL constraint defined).
+						ps.setNull( 1, Types.VARCHAR );
 						ps.setLong( 2, user.getId() );
-						resultSetReturn.executeUpdate( ps );
+						resultSetReturn.executeUpdate( ps, sql );
 
 						fail( "UPDATE should have failed because of not NULL constraint." );
 					}

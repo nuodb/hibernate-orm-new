@@ -24,6 +24,12 @@ public class CharacterJavaType extends AbstractClassJavaType<Character> implemen
 	public CharacterJavaType() {
 		super( Character.class );
 	}
+
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	@Override
 	public String toString(Character value) {
 		return value.toString();
@@ -43,17 +49,18 @@ public class CharacterJavaType extends AbstractClassJavaType<Character> implemen
 		if ( value == null ) {
 			return null;
 		}
-		if ( Character.class.isAssignableFrom( type ) ) {
+		if ( Character.class.isAssignableFrom( type ) || type == Object.class ) {
 			return (X) value;
 		}
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) value.toString();
 		}
 		if ( Number.class.isAssignableFrom( type ) ) {
-			return (X) Short.valueOf( (short)value.charValue() );
+			return (X) Short.valueOf( (short) value.charValue() );
 		}
 		throw unknownUnwrap( type );
 	}
+
 	@Override
 	public <X> Character wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
@@ -77,7 +84,7 @@ public class CharacterJavaType extends AbstractClassJavaType<Character> implemen
 	}
 
 	@Override
-	public Class getPrimitiveClass() {
+	public Class<?> getPrimitiveClass() {
 		return char.class;
 	}
 

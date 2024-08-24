@@ -9,8 +9,8 @@ package org.hibernate.query.sqm.internal;
 import java.util.List;
 import java.util.Locale;
 
+import org.hibernate.metamodel.model.domain.DiscriminatorSqmPath;
 import org.hibernate.metamodel.model.domain.internal.AnyDiscriminatorSqmPath;
-import org.hibernate.metamodel.model.domain.internal.EntityDiscriminatorSqmPath;
 import org.hibernate.query.QueryLogging;
 import org.hibernate.query.sqm.SemanticQueryWalker;
 import org.hibernate.query.sqm.tree.SqmStatement;
@@ -26,6 +26,7 @@ import org.hibernate.query.sqm.tree.domain.SqmDerivedRoot;
 import org.hibernate.query.sqm.tree.domain.SqmEmbeddedValuedSimplePath;
 import org.hibernate.query.sqm.tree.domain.SqmEntityValuedSimplePath;
 import org.hibernate.query.sqm.tree.domain.SqmFkExpression;
+import org.hibernate.query.sqm.tree.domain.SqmFunctionPath;
 import org.hibernate.query.sqm.tree.domain.SqmIndexedCollectionAccessPath;
 import org.hibernate.query.sqm.tree.domain.SqmMapEntryReference;
 import org.hibernate.query.sqm.tree.domain.SqmElementAggregateFunction;
@@ -33,6 +34,7 @@ import org.hibernate.query.sqm.tree.domain.SqmIndexAggregateFunction;
 import org.hibernate.query.sqm.tree.domain.SqmPluralPartJoin;
 import org.hibernate.query.sqm.tree.domain.SqmPluralValuedSimplePath;
 import org.hibernate.query.sqm.tree.domain.SqmTreatedPath;
+import org.hibernate.query.sqm.tree.expression.AsWrapperSqmExpression;
 import org.hibernate.query.sqm.tree.expression.JpaCriteriaParameter;
 import org.hibernate.query.sqm.tree.expression.SqmAny;
 import org.hibernate.query.sqm.tree.expression.SqmAnyDiscriminatorValue;
@@ -53,7 +55,9 @@ import org.hibernate.query.sqm.tree.expression.SqmExtractUnit;
 import org.hibernate.query.sqm.tree.expression.SqmFieldLiteral;
 import org.hibernate.query.sqm.tree.expression.SqmFormat;
 import org.hibernate.query.sqm.tree.expression.SqmFunction;
+import org.hibernate.query.sqm.tree.expression.SqmHqlNumericLiteral;
 import org.hibernate.query.sqm.tree.expression.SqmLiteral;
+import org.hibernate.query.sqm.tree.expression.SqmLiteralEmbeddableType;
 import org.hibernate.query.sqm.tree.expression.SqmLiteralEntityType;
 import org.hibernate.query.sqm.tree.expression.SqmModifiedSubQueryExpression;
 import org.hibernate.query.sqm.tree.expression.SqmNamedParameter;
@@ -75,8 +79,10 @@ import org.hibernate.query.sqm.tree.from.SqmDerivedJoin;
 import org.hibernate.query.sqm.tree.from.SqmEntityJoin;
 import org.hibernate.query.sqm.tree.from.SqmFrom;
 import org.hibernate.query.sqm.tree.from.SqmFromClause;
-import org.hibernate.query.sqm.tree.from.SqmQualifiedJoin;
+import org.hibernate.query.sqm.tree.from.SqmJoin;
 import org.hibernate.query.sqm.tree.from.SqmRoot;
+import org.hibernate.query.sqm.tree.insert.SqmConflictClause;
+import org.hibernate.query.sqm.tree.insert.SqmConflictUpdateAction;
 import org.hibernate.query.sqm.tree.insert.SqmInsertSelectStatement;
 import org.hibernate.query.sqm.tree.insert.SqmInsertValuesStatement;
 import org.hibernate.query.sqm.tree.insert.SqmValues;
@@ -94,6 +100,7 @@ import org.hibernate.query.sqm.tree.predicate.SqmMemberOfPredicate;
 import org.hibernate.query.sqm.tree.predicate.SqmNegatedPredicate;
 import org.hibernate.query.sqm.tree.predicate.SqmNullnessPredicate;
 import org.hibernate.query.sqm.tree.predicate.SqmPredicate;
+import org.hibernate.query.sqm.tree.predicate.SqmTruthnessPredicate;
 import org.hibernate.query.sqm.tree.predicate.SqmWhereClause;
 import org.hibernate.query.sqm.tree.select.SqmDynamicInstantiation;
 import org.hibernate.query.sqm.tree.select.SqmJpaCompoundSelection;
@@ -328,10 +335,39 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 								"into",
 								() -> statement.getInsertionTargetPaths().forEach( sqmPath -> sqmPath.accept( this ) )
 						);
+						if ( statement.getConflictClause() != null ) {
+							processStanza(
+									"on conflict",
+									() -> statement.getConflictClause().accept( this )
+							);
+						}
 					}
 			);
 		}
 
+		return null;
+	}
+
+	@Override
+	public Object visitConflictClause(SqmConflictClause<?> sqmConflictClause) {
+		if ( sqmConflictClause.getConstraintName() != null ) {
+			logWithIndentation( "[constraintName = %s]", sqmConflictClause.getConstraintName() );
+		}
+		else {
+			processStanza(
+					"constraint attributes",
+					() -> sqmConflictClause.getConstraintPaths().forEach( sqmPath -> sqmPath.accept( this ) )
+			);
+		}
+		final SqmConflictUpdateAction<?> updateAction = sqmConflictClause.getConflictAction();
+		if ( updateAction == null ) {
+			logWithIndentation( "do nothing" );
+		}
+		else {
+			logWithIndentation( "do update " );
+			visitSetClause( updateAction.getSetClause() );
+			visitWhereClause( updateAction.getWhereClause() );
+		}
 		return null;
 	}
 
@@ -567,7 +603,7 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 
 	private boolean inJoinPredicate;
 
-	private void processJoinPredicate(SqmQualifiedJoin<?, ?> joinedFromElement) {
+	private void processJoinPredicate(SqmJoin<?, ?> joinedFromElement) {
 		if ( joinedFromElement.getJoinPredicate() != null ) {
 			boolean oldInJoinPredicate = inJoinPredicate;
 			inJoinPredicate = true;
@@ -689,7 +725,7 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 	}
 
 	@Override
-	public Object visitDiscriminatorPath(EntityDiscriminatorSqmPath sqmPath) {
+	public Object visitDiscriminatorPath(DiscriminatorSqmPath<?> sqmPath) {
 		logWithIndentation( "-> [discriminator-path] - `%s`", sqmPath.getNavigablePath() );
 
 		return null;
@@ -770,6 +806,11 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 
 	@Override
 	public Object visitEntityTypeLiteralExpression(SqmLiteralEntityType expression) {
+		return null;
+	}
+
+	@Override
+	public Object visitEmbeddableTypeLiteralExpression(SqmLiteralEmbeddableType<?> expression) {
 		return null;
 	}
 
@@ -938,6 +979,17 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 	}
 
 	@Override
+	public Object visitIsTruePredicate(SqmTruthnessPredicate predicate) {
+		processStanza(
+				(predicate.isNegated() ? "is-not-" : "is-") + predicate.getBooleanValue(),
+				true,
+				() -> predicate.getExpression().accept( this )
+		);
+
+		return null;
+	}
+
+	@Override
 	public Object visitBetweenPredicate(SqmBetweenPredicate predicate) {
 		processStanza(
 				predicate.isNegated() ? "is-not-between" : "is-between",
@@ -1037,6 +1089,11 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 	}
 
 	@Override
+	public Object visitFunctionPath(SqmFunctionPath<?> functionPath) {
+		return null;
+	}
+
+	@Override
 	public Object visitLiteral(SqmLiteral literal) {
 		return null;
 	}
@@ -1129,7 +1186,17 @@ public class SqmTreePrinter implements SemanticQueryWalker<Object> {
 	}
 
 	@Override
+	public <N extends Number> Object visitHqlNumericLiteral(SqmHqlNumericLiteral<N> numericLiteral) {
+		return null;
+	}
+
+	@Override
 	public Object visitFullyQualifiedClass(Class namedClass) {
+		return null;
+	}
+
+	@Override
+	public Object visitAsWrapperExpression(AsWrapperSqmExpression expression) {
 		return null;
 	}
 

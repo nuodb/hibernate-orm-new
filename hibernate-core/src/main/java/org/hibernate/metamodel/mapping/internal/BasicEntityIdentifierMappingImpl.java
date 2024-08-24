@@ -113,7 +113,7 @@ public class BasicEntityIdentifierMappingImpl implements BasicEntityIdentifierMa
 		propertyAccess = entityPersister.getRepresentationStrategy()
 				.resolvePropertyAccess( bootEntityDescriptor.getIdentifierProperty() );
 
-		idRole = entityPersister.getNavigableRole().append( EntityIdentifierMapping.ROLE_LOCAL_NAME );
+		idRole = entityPersister.getNavigableRole().append( EntityIdentifierMapping.ID_ROLE_NAME );
 		sessionFactory = creationProcess.getCreationContext().getSessionFactory();
 
 		unsavedStrategy = UnsavedValueFactory.getUnsavedIdentifierValue(
@@ -231,7 +231,9 @@ public class BasicEntityIdentifierMappingImpl implements BasicEntityIdentifierMa
 				sqlSelection.getValuesArrayPosition(),
 				resultVariable,
 				entityPersister.getIdentifierMapping().getSingleJdbcMapping(),
-				navigablePath
+				navigablePath,
+				false,
+				!sqlSelection.isVirtual()
 		);
 	}
 
@@ -358,6 +360,11 @@ public class BasicEntityIdentifierMappingImpl implements BasicEntityIdentifierMa
 	}
 
 	@Override
+	public Integer getTemporalPrecision() {
+		return null;
+	}
+
+	@Override
 	public Integer getScale() {
 		return scale;
 	}
@@ -420,10 +427,13 @@ public class BasicEntityIdentifierMappingImpl implements BasicEntityIdentifierMa
 				fetchParent,
 				fetchablePath,
 				this,
+				getJdbcMapping().getValueConverter(),
 				FetchTiming.IMMEDIATE,
+				true,
 				creationState,
 				// if the expression type is different that the expected type coerce the value
-				selectionType != null && selectionType.getSingleJdbcMapping().getJdbcJavaType() != getJdbcMapping().getJdbcJavaType()
+				selectionType != null && selectionType.getSingleJdbcMapping().getJdbcJavaType() != getJdbcMapping().getJdbcJavaType(),
+				!sqlSelection.isVirtual()
 		);
 	}
 

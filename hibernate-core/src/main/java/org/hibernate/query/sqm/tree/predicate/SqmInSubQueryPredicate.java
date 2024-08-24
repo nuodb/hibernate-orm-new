@@ -17,6 +17,8 @@ import org.hibernate.query.sqm.tree.select.SqmSubQuery;
 
 import jakarta.persistence.criteria.Expression;
 
+import static org.hibernate.query.sqm.internal.TypecheckUtil.assertComparable;
+
 /**
  * @author Steve Ebersole
  */
@@ -40,9 +42,11 @@ public class SqmInSubQueryPredicate<T> extends AbstractNegatableSqmPredicate imp
 		this.testExpression = testExpression;
 		this.subQueryExpression = subQueryExpression;
 
+		assertComparable( testExpression, subQueryExpression, nodeBuilder.getSessionFactory() );
+
 		final SqmExpressible<?> expressibleType = QueryHelper.highestPrecedenceType2(
-				testExpression.getNodeType(),
-				subQueryExpression.getNodeType()
+				testExpression.getExpressible(),
+				subQueryExpression.getExpressible()
 		);
 
 		testExpression.applyInferableType( expressibleType );

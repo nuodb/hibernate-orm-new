@@ -28,6 +28,7 @@ import org.hibernate.testing.boot.ExtraJavaServicesClassLoaderService;
 import org.hibernate.testing.boot.ExtraJavaServicesClassLoaderService.JavaServiceDescriptor;
 import org.hibernate.testing.jdbc.SQLStatementInspector;
 import org.hibernate.testing.jdbc.SharedDriverManagerConnectionProviderImpl;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestExecutionExceptionHandler;
@@ -195,17 +196,12 @@ public class ServiceRegistryExtension
 			ssrb.applySetting( PersistentTableStrategy.DROP_ID_TABLES, "true" );
 			ssrb.applySetting( GlobalTemporaryTableMutationStrategy.DROP_ID_TABLES, "true" );
 			ssrb.applySetting( LocalTemporaryTableMutationStrategy.DROP_ID_TABLES, "true" );
-			if ( !ssrb.getSettings().containsKey( Environment.CONNECTION_PROVIDER ) ) {
-				ssrb.applySetting(
-						AvailableSettings.CONNECTION_PROVIDER,
-						SharedDriverManagerConnectionProviderImpl.getInstance()
-				);
-			}
 
 			if ( ssrAnnRef.isPresent() ) {
 				final ServiceRegistry serviceRegistryAnn = ssrAnnRef.get();
 				configureServices( serviceRegistryAnn, ssrb );
 			}
+			ServiceRegistryUtil.applySettings( ssrb.getSettings() );
 
 			return ssrb.build();
 		}
@@ -338,11 +334,12 @@ public class ServiceRegistryExtension
 
 		private StandardServiceRegistry createRegistry() {
 			BootstrapServiceRegistryBuilder bsrb = new BootstrapServiceRegistryBuilder().enableAutoClose();
+			bsrb.applyClassLoader( Thread.currentThread().getContextClassLoader() );
 			ssrProducer.prepareBootstrapRegistryBuilder(bsrb);
 
 			final org.hibernate.boot.registry.BootstrapServiceRegistry bsr = bsrProducer.produceServiceRegistry( bsrb );
 			try {
-				final StandardServiceRegistryBuilder ssrb = new StandardServiceRegistryBuilder( bsr );
+				final StandardServiceRegistryBuilder ssrb = ServiceRegistryUtil.serviceRegistryBuilder( bsr );
 				// we will close it ourselves explicitly.
 				ssrb.disableAutoClose();
 

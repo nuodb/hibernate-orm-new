@@ -8,11 +8,13 @@ package org.hibernate.orm.test.interfaceproxy;
 
 import org.hibernate.Session;
 
+import org.hibernate.community.dialect.AltibaseDialect;
 import org.hibernate.testing.orm.junit.DialectFeatureChecks;
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.RequiresDialectFeature;
 import org.hibernate.testing.orm.junit.SessionFactory;
 import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.hibernate.testing.orm.junit.SkipForDialect;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,6 +36,9 @@ public class InterfaceProxyTest {
 			feature = DialectFeatureChecks.SupportsExpectedLobUsagePattern.class,
 			comment = "database/driver does not support expected LOB usage pattern"
 	)
+
+	@SkipForDialect(dialectClass = AltibaseDialect.class, majorVersion = 7, minorVersion = 1,
+					reason = "Altibase 7.1 lob column cannot be not null")
 	public void testInterfaceProxies(SessionFactoryScope scope) {
 		Document doc = new DocumentImpl();
 		SecureDocument doc2 = new SecureDocumentImpl();
@@ -42,14 +47,14 @@ public class InterfaceProxyTest {
 			try {
 				doc.setName( "Hibernate in Action" );
 				doc.setContent( session.getLobHelper().createBlob( "blah blah blah".getBytes() ) );
-				session.save( doc );
+				session.persist( doc );
 				doc2.setName( "Secret" );
 				doc2.setContent( session.getLobHelper().createBlob( "wxyz wxyz".getBytes() ) );
 				// SybaseASE15Dialect only allows 7-bits in a byte to be inserted into a tinyint
 				// column (0 <= val < 128)
 				doc2.setPermissionBits( (byte) 127 );
 				doc2.setOwner( "gavin" );
-				session.save( doc2 );
+				session.persist( doc2 );
 				session.getTransaction().commit();
 			}
 			finally {

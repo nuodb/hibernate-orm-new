@@ -28,7 +28,6 @@ import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 
 import static org.hibernate.engine.internal.BatchFetchQueueHelper.removeBatchLoadableEntityKey;
 import static org.hibernate.loader.ast.internal.MultiKeyLoadHelper.trimIdBatch;
-import static org.hibernate.loader.ast.internal.MultiKeyLoadLogging.MULTI_KEY_LOAD_DEBUG_ENABLED;
 import static org.hibernate.loader.ast.internal.MultiKeyLoadLogging.MULTI_KEY_LOAD_LOGGER;
 
 /**
@@ -43,6 +42,7 @@ public class EntityBatchLoaderArrayParam<T>
 		implements SqlArrayMultiKeyLoader {
 	private final int domainBatchSize;
 
+	private final LoadQueryInfluencers loadQueryInfluencers;
 	private final BasicEntityIdentifierMapping identifierMapping;
 	private final JdbcMapping arrayJdbcMapping;
 	private final JdbcParameter jdbcParameter;
@@ -64,11 +64,12 @@ public class EntityBatchLoaderArrayParam<T>
 	public EntityBatchLoaderArrayParam(
 			int domainBatchSize,
 			EntityMappingType entityDescriptor,
-			SessionFactoryImplementor sessionFactory) {
-		super( entityDescriptor, sessionFactory );
+			LoadQueryInfluencers loadQueryInfluencers) {
+		super( entityDescriptor, loadQueryInfluencers );
+		this.loadQueryInfluencers = loadQueryInfluencers;
 		this.domainBatchSize = domainBatchSize;
 
-		if ( MULTI_KEY_LOAD_DEBUG_ENABLED ) {
+		if ( MULTI_KEY_LOAD_LOGGER.isDebugEnabled() ) {
 			MULTI_KEY_LOAD_LOGGER.debugf(
 					"Batch fetching enabled for `%s` (entity) using ARRAY strategy : %s",
 					entityDescriptor.getEntityName(),
@@ -90,7 +91,7 @@ public class EntityBatchLoaderArrayParam<T>
 		sqlAst = LoaderSelectBuilder.createSelectBySingleArrayParameter(
 				getLoadable(),
 				identifierMapping,
-				new LoadQueryInfluencers( sessionFactory ),
+				loadQueryInfluencers,
 				LockOptions.NONE,
 				jdbcParameter,
 				sessionFactory
@@ -130,9 +131,16 @@ public class EntityBatchLoaderArrayParam<T>
 			LockOptions lockOptions,
 			Boolean readOnly,
 			SharedSessionContractImplementor session) {
-		if ( MULTI_KEY_LOAD_DEBUG_ENABLED ) {
+		if ( MULTI_KEY_LOAD_LOGGER.isDebugEnabled() ) {
 			MULTI_KEY_LOAD_LOGGER.debugf( "Ids to batch-fetch initialize (`%s#%s`) %s",
 					getLoadable().getEntityName(), id, Arrays.toString(idsToInitialize) );
+		}
+
+		for ( Object initializedId : idsToInitialize ) {
+			if ( initializedId != null ) {
+				// found or not, remove the key from the batch-fetch queue
+				removeBatchLoadableEntityKey( initializedId, getLoadable(), session );
+			}
 		}
 
 		LoaderHelper.loadByArrayParameter(
@@ -148,13 +156,6 @@ public class EntityBatchLoaderArrayParam<T>
 				readOnly,
 				session
 		);
-
-		for ( Object initializedId : idsToInitialize ) {
-			if ( initializedId != null ) {
-				// found or not, remove the key from the batch-fetch queue
-				removeBatchLoadableEntityKey( initializedId, getLoadable(), session );
-			}
-		}
 	}
 
 	@Override

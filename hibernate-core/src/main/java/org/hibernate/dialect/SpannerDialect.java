@@ -34,7 +34,7 @@ import org.hibernate.mapping.Constraint;
 import org.hibernate.mapping.ForeignKey;
 import org.hibernate.mapping.Table;
 import org.hibernate.mapping.UniqueKey;
-import org.hibernate.persister.entity.Lockable;
+import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.SemanticException;
 import org.hibernate.query.sqm.IntervalType;
 import org.hibernate.query.sqm.TemporalUnit;
@@ -479,6 +479,7 @@ public class SpannerDialect extends Dialect {
 		functionFactory.listagg_stringAgg( "string" );
 		functionFactory.inverseDistributionOrderedSetAggregates();
 		functionFactory.hypotheticalOrderedSetAggregates();
+		functionFactory.array_spanner();
 	}
 
 	@Override
@@ -542,7 +543,7 @@ public class SpannerDialect extends Dialect {
 				case YEAR:
 				case QUARTER:
 				case MONTH:
-					throw new SemanticException("illegal unit for timestamp_add(): " + unit);
+					throw new SemanticException("Illegal unit for timestamp_add(): " + unit);
 				default:
 					return "timestamp_add(?3,interval ?2 ?1)";
 			}
@@ -554,7 +555,7 @@ public class SpannerDialect extends Dialect {
 				case MINUTE:
 				case HOUR:
 				case NATIVE:
-					throw new SemanticException("illegal unit for date_add(): " + unit);
+					throw new SemanticException("Illegal unit for date_add(): " + unit);
 				default:
 					return "date_add(?3,interval ?2 ?1)";
 			}
@@ -568,7 +569,7 @@ public class SpannerDialect extends Dialect {
 				case YEAR:
 				case QUARTER:
 				case MONTH:
-					throw new SemanticException("illegal unit for timestamp_diff(): " + unit);
+					throw new SemanticException("Illegal unit for timestamp_diff(): " + unit);
 				default:
 					return "timestamp_diff(?3,?2,?1)";
 			}
@@ -580,7 +581,7 @@ public class SpannerDialect extends Dialect {
 				case MINUTE:
 				case HOUR:
 				case NATIVE:
-					throw new SemanticException("illegal unit for date_diff(): " + unit);
+					throw new SemanticException("Illegal unit for date_diff(): " + unit);
 				default:
 					return "date_diff(?3,?2,?1)";
 			}
@@ -708,7 +709,7 @@ public class SpannerDialect extends Dialect {
 	}
 
 	@Override
-	public LockingStrategy getLockingStrategy(Lockable lockable, LockMode lockMode) {
+	public LockingStrategy getLockingStrategy(EntityPersister lockable, LockMode lockMode) {
 		return LOCKING_STRATEGY;
 	}
 

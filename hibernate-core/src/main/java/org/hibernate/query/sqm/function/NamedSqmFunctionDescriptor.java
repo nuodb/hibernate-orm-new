@@ -6,6 +6,7 @@
  */
 package org.hibernate.query.sqm.function;
 
+import org.hibernate.query.ReturnableType;
 import org.hibernate.query.sqm.produce.function.ArgumentsValidator;
 import org.hibernate.query.sqm.produce.function.FunctionArgumentTypeResolver;
 import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
@@ -117,6 +118,7 @@ public class NamedSqmFunctionDescriptor
 	public void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> translator) {
 		render( sqlAppender, sqlAstArguments, null, Collections.emptyList(), null, null, translator );
 	}
@@ -126,6 +128,7 @@ public class NamedSqmFunctionDescriptor
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> translator) {
 		render( sqlAppender, sqlAstArguments, filter, Collections.emptyList(), null, null, translator );
 	}
@@ -136,6 +139,7 @@ public class NamedSqmFunctionDescriptor
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			List<SortSpecification> withinGroup,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> translator) {
 		render( sqlAppender, sqlAstArguments, filter, withinGroup, null, null, translator );
 	}
@@ -147,6 +151,7 @@ public class NamedSqmFunctionDescriptor
 			Predicate filter,
 			Boolean respectNulls,
 			Boolean fromFirst,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		render( sqlAppender, sqlAstArguments, filter, Collections.emptyList(), respectNulls, fromFirst, walker );
 	}
@@ -201,7 +206,7 @@ public class NamedSqmFunctionDescriptor
 			sqlAppender.appendSql( " within group (order by" );
 			translator.render( withinGroup.get( 0 ), argumentRenderingMode );
 			for ( int i = 1; i < withinGroup.size(); i++ ) {
-				sqlAppender.appendSql( SqlAppender.COMA_SEPARATOR_CHAR );
+				sqlAppender.appendSql( SqlAppender.COMMA_SEPARATOR_CHAR );
 				translator.render( withinGroup.get( 0 ), argumentRenderingMode );
 			}
 			sqlAppender.appendSql( ')' );

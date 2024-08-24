@@ -49,10 +49,10 @@ public class TenantLongIdTest implements SessionFactoryProducer {
     @Override
     public SessionFactoryImplementor produceSessionFactory(MetadataImplementor model) {
         final SessionFactoryBuilder sessionFactoryBuilder = model.getSessionFactoryBuilder();
-        sessionFactoryBuilder.applyCurrentTenantIdentifierResolver( new CurrentTenantIdentifierResolver() {
+        sessionFactoryBuilder.applyCurrentTenantIdentifierResolver( new CurrentTenantIdentifierResolver<Long>() {
             @Override
-            public String resolveCurrentTenantIdentifier() {
-                return currentTenant.toString();
+            public Long resolveCurrentTenantIdentifier() {
+                return currentTenant;
             }
             @Override
             public boolean validateExistingCurrentSessions() {
@@ -79,7 +79,8 @@ public class TenantLongIdTest implements SessionFactoryProducer {
 
         currentTenant = yours;
         scope.inTransaction( session -> {
-            assertNotNull( session.find(Account.class, acc.id) );
+            //HHH-16830 Sessions applies tenantId filter on find()
+            assertNull( session.find(Account.class, acc.id) );
             assertEquals( 0, session.createQuery("from Account").getResultList().size() );
             session.disableFilter(TenantIdBinder.FILTER_NAME);
             assertNotNull( session.find(Account.class, acc.id) );

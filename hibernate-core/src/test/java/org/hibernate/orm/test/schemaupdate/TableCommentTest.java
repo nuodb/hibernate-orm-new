@@ -15,7 +15,7 @@ import java.util.List;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
-import org.hibernate.annotations.Table;
+import jakarta.persistence.Table;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.mapping.EntityMappingType;
@@ -70,11 +70,11 @@ public class TableCommentTest extends BaseNonConfigCoreFunctionalTestCase {
 				}
 			}
 			if ( containsCommentInCreateTableStatement( sqlStatement ) ) {
-				if ( getDialect().supportsCommentOn() && !getDialect().getTableComment( "comment snippet" ).equals( "" ) ) {
-					fail( "Added comment on create table statement when Dialect support create comment on table statement" );
+				if ( getDialect().supportsCommentOn() || getDialect().getTableComment( "comment snippet" ).isEmpty() ) {
+					found = true;
 				}
 				else {
-					found = true;
+					fail( "Generated comment on create table statement, but Dialect does not support it" );
 				}
 			}
 		}
@@ -83,14 +83,12 @@ public class TableCommentTest extends BaseNonConfigCoreFunctionalTestCase {
 	}
 
 	private boolean containsCommentInCreateTableStatement(String sqlStatement) {
-		return sqlStatement.toLowerCase().contains( "create table" ) && sqlStatement.toLowerCase()
-				.contains( getDialect().getTableComment( "comment snippet" )
-								   .toLowerCase() );
+		return sqlStatement.toLowerCase().contains( getDialect().getCreateTableString() )
+				&& sqlStatement.toLowerCase().contains( getDialect().getTableComment( "comment snippet" ).toLowerCase() );
 	}
 
 	@Entity(name = "TableWithComment")
-	@jakarta.persistence.Table(name = "TABLE_WITH_COMMENT")
-	@Table(appliesTo = "TABLE_WITH_COMMENT", comment = "comment snippet")
+	@Table(name = "TABLE_WITH_COMMENT", comment = "comment snippet")
 	public static class TableWithComment {
 
 		@Id

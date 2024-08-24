@@ -7,7 +7,9 @@
 package org.hibernate.boot.model.process.internal;
 
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.lang.reflect.Type;
+import java.util.Locale;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -24,6 +26,7 @@ import org.hibernate.type.AdjustableBasicType;
 import org.hibernate.type.BasicPluralType;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.SerializableType;
+import org.hibernate.type.SqlTypes;
 import org.hibernate.type.descriptor.java.BasicJavaType;
 import org.hibernate.type.descriptor.java.BasicPluralJavaType;
 import org.hibernate.type.descriptor.java.EnumJavaType;
@@ -32,14 +35,19 @@ import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.descriptor.java.MutabilityPlan;
 import org.hibernate.type.descriptor.java.SerializableJavaType;
 import org.hibernate.type.descriptor.java.TemporalJavaType;
+import org.hibernate.type.descriptor.java.spi.JavaTypeRegistry;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.descriptor.jdbc.JdbcTypeIndicators;
 import org.hibernate.type.descriptor.jdbc.ObjectJdbcType;
-import org.hibernate.type.internal.BasicTypeImpl;
+import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
+import org.hibernate.type.internal.ConvertedBasicTypeImpl;
 import org.hibernate.type.spi.TypeConfiguration;
 
+import jakarta.persistence.EnumType;
+import jakarta.persistence.EnumeratedValue;
 import jakarta.persistence.TemporalType;
 
+import static org.hibernate.type.SqlTypes.SMALLINT;
 import static org.hibernate.type.descriptor.java.JavaTypeHelper.isTemporal;
 
 /**
@@ -256,7 +264,7 @@ public class InferredBasicValueResolver {
 
 		if ( jdbcMapping == null ) {
 			throw new MappingException(
-					"Could not determine JavaType nor JdbcType to use" + "" +
+					"Could not determine JavaType nor JdbcType to use" +
 							" for " + ( (BasicValue) stdIndicators ).getResolvedJavaType() +
 							"; table = " + table.getName() +
 							"; column = " + selectable.getText()
@@ -292,11 +300,50 @@ public class InferredBasicValueResolver {
 			JdbcType explicitJdbcType,
 			JdbcTypeIndicators stdIndicators,
 			BootstrapContext bootstrapContext) {
-		final JdbcType jdbcType = explicitJdbcType == null
-				? enumJavaType.getRecommendedJdbcType( stdIndicators )
-				: explicitJdbcType;
-		final BasicTypeImpl<E> basicType = new BasicTypeImpl<>( enumJavaType, jdbcType );
+		final Class<E> enumJavaTypeClass = enumJavaType.getJavaTypeClass();
+		final Field enumeratedValueField = determineEnumeratedValueField( enumJavaTypeClass );
+		if ( enumeratedValueField != null ) {
+			validateEnumeratedValue( enumeratedValueField, stdIndicators );
+		}
+
+		final JdbcType jdbcType;
+		if ( explicitJdbcType != null ) {
+			jdbcType = explicitJdbcType;
+		}
+		else if ( enumeratedValueField != null ) {
+			final JdbcTypeRegistry jdbcTypeRegistry = bootstrapContext.getTypeConfiguration().getJdbcTypeRegistry();
+			final Class<?> fieldType = enumeratedValueField.getType();
+			if ( String.class.equals( fieldType ) ) {
+				jdbcType = jdbcTypeRegistry.getDescriptor( SqlTypes.VARCHAR );
+			}
+			else if ( byte.class.equals( fieldType ) ) {
+				jdbcType = jdbcTypeRegistry.getDescriptor( SqlTypes.TINYINT );
+			}
+			else if ( short.class.equals( fieldType )
+					|| int.class.equals( fieldType ) ) {
+				jdbcType = jdbcTypeRegistry.getDescriptor( SMALLINT );
+			}
+			else {
+				throw new IllegalStateException();
+			}
+		}
+		else {
+			jdbcType = enumJavaType.getRecommendedJdbcType( stdIndicators );
+		}
+
+		final BasicType<E> basicType;
+		if ( enumeratedValueField != null ) {
+			basicType = createEnumeratedValueJdbcMapping( enumeratedValueField, enumJavaType, jdbcType, bootstrapContext );
+		}
+		else {
+			basicType = bootstrapContext.getTypeConfiguration().getBasicTypeRegistry().resolve(
+					enumJavaType,
+					jdbcType
+			);
+		}
+
 		bootstrapContext.registerAdHocBasicType( basicType );
+
 		return new InferredBasicValueResolution<>(
 				basicType,
 				enumJavaType,
@@ -305,6 +352,66 @@ public class InferredBasicValueResolver {
 				basicType,
 				ImmutableMutabilityPlan.instance()
 		);
+	}
+
+	private static <E extends Enum<E>> BasicType<E> createEnumeratedValueJdbcMapping(
+			Field enumeratedValueField,
+			EnumJavaType<E> enumJavaType,
+			JdbcType jdbcType,
+			BootstrapContext bootstrapContext) {
+		final JavaTypeRegistry javaTypeRegistry = bootstrapContext.getTypeConfiguration().getJavaTypeRegistry();
+		final Class<?> fieldType = enumeratedValueField.getType();
+		final JavaType<?> relationalJavaType = javaTypeRegistry.getDescriptor( fieldType );
+		return new ConvertedBasicTypeImpl<>(
+				ConvertedBasicTypeImpl.EXTERNALIZED_PREFIX + enumJavaType.getTypeName(),
+				"EnumeratedValue conversion for " + enumJavaType.getTypeName(),
+				jdbcType,
+				new EnumeratedValueConverter<>( enumJavaType, relationalJavaType, enumeratedValueField )
+		);
+	}
+
+	private static <E extends Enum<E>> Field determineEnumeratedValueField(Class<E> enumJavaTypeClass) {
+		for ( Field field : enumJavaTypeClass.getDeclaredFields() ) {
+			if ( field.isAnnotationPresent( EnumeratedValue.class ) ) {
+				return field;
+			}
+		}
+		return null;
+	}
+
+	private static void validateEnumeratedValue(Field enumeratedValueField, JdbcTypeIndicators stdIndicators) {
+		final Class<?> fieldType = enumeratedValueField.getType();
+		if ( stdIndicators.getEnumeratedType() == EnumType.STRING ) {
+			// JPA says only String is valid here
+			// todo (7.0) : support char/Character as well
+			if ( !String.class.equals( fieldType )
+					&& !char.class.equals( fieldType ) ) {
+				throw new MappingException(
+						String.format(
+								Locale.ROOT,
+								"@EnumeratedValue for EnumType.STRING must be placed on a field whose type is String or char: %s.%s",
+								enumeratedValueField.getDeclaringClass().getName(),
+								enumeratedValueField.getName()
+						)
+				);
+			}
+		}
+		else {
+			assert stdIndicators.getEnumeratedType() == null || stdIndicators.getEnumeratedType() == EnumType.ORDINAL;
+			// JPA says only byte, short, or int are valid here
+			if ( !byte.class.equals( fieldType )
+					&& !short.class.equals( fieldType )
+					&& !int.class.equals( fieldType ) ) {
+				throw new MappingException(
+						String.format(
+								Locale.ROOT,
+								"@EnumeratedValue for EnumType.ORDINAL must be placed on a field whose type is byte, short, or int: %s.%s",
+								enumeratedValueField.getDeclaringClass().getName(),
+								enumeratedValueField.getName()
+						)
+				);
+			}
+		}
 	}
 
 	public static <T> BasicValue.Resolution<T> fromTemporal(
@@ -365,7 +472,8 @@ public class InferredBasicValueResolver {
 				jtd = reflectedJtd.resolveTypeForPrecision( requestedTemporalPrecision, typeConfiguration );
 			}
 			else {
-				jtd = reflectedJtd;
+				// Avoid using the DateJavaType and prefer the JdbcTimestampJavaType
+				jtd = reflectedJtd.resolveTypeForPrecision( reflectedJtd.getPrecision(), typeConfiguration );
 			}
 
 			final BasicType<T> jdbcMapping = typeConfiguration.getBasicTypeRegistry().resolve( jtd, explicitJdbcType );
@@ -394,7 +502,8 @@ public class InferredBasicValueResolver {
 		}
 		else {
 			basicType = typeConfiguration.getBasicTypeRegistry().resolve(
-					reflectedJtd,
+					// Avoid using the DateJavaType and prefer the JdbcTimestampJavaType
+					reflectedJtd.resolveTypeForPrecision( reflectedJtd.getPrecision(), typeConfiguration ),
 					reflectedJtd.getRecommendedJdbcType( stdIndicators )
 			);
 		}

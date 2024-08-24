@@ -31,7 +31,7 @@ import org.hibernate.dialect.sequence.SequenceSupport;
 import org.hibernate.engine.jdbc.dialect.spi.DialectResolutionInfo;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.internal.CoreMessageLogger;
-import org.hibernate.persister.entity.Lockable;
+import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.sqm.IntervalType;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.TrimSpec;
@@ -90,8 +90,6 @@ public class RDMSOS2200Dialect extends Dialect {
 	 */
 	public RDMSOS2200Dialect() {
 		super( SimpleDatabaseVersion.ZERO_VERSION );
-		// Display the dialect version.
-		LOG.rdmsOs2200Dialect();
 	}
 
 	public RDMSOS2200Dialect(DialectResolutionInfo info) {
@@ -394,7 +392,7 @@ public class RDMSOS2200Dialect extends Dialect {
 	}
 
 	@Override
-	public LockingStrategy getLockingStrategy(Lockable lockable, LockMode lockMode) {
+	public LockingStrategy getLockingStrategy(EntityPersister lockable, LockMode lockMode) {
 		// RDMS has no known variation of a "SELECT ... FOR UPDATE" syntax...
 		switch (lockMode) {
 			case PESSIMISTIC_FORCE_INCREMENT:
@@ -431,7 +429,7 @@ public class RDMSOS2200Dialect extends Dialect {
 	}
 
 	@Override
-	public String trimPattern(TrimSpec specification, char character) {
-		return AbstractTransactSQLDialect.replaceLtrimRtrim( specification, character);
+	public String trimPattern(TrimSpec specification, boolean isWhitespace) {
+		return AbstractTransactSQLDialect.replaceLtrimRtrim( specification, isWhitespace );
 	}
 }

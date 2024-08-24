@@ -13,6 +13,7 @@ import java.util.Map;
 import org.hibernate.boot.registry.BootstrapServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceInitiator;
 import org.hibernate.boot.registry.StandardServiceRegistry;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.service.Service;
 import org.hibernate.service.internal.AbstractServiceRegistryImpl;
 import org.hibernate.service.internal.ProvidedService;
@@ -30,6 +31,14 @@ public class StandardServiceRegistryImpl extends AbstractServiceRegistryImpl imp
 	//Access to this field requires synchronization on -this-
 	private Map<String,Object> configurationValues;
 
+	protected StandardServiceRegistryImpl(
+			boolean autoCloseRegistry,
+			BootstrapServiceRegistry bootstrapServiceRegistry,
+			Map<String,Object> configurationValues) {
+		super( bootstrapServiceRegistry, autoCloseRegistry );
+		this.configurationValues = normalize( configurationValues);
+	}
+
 	/**
 	 * Constructs a StandardServiceRegistryImpl.  Should not be instantiated directly; use
 	 * {@link org.hibernate.boot.registry.StandardServiceRegistryBuilder} instead
@@ -41,12 +50,13 @@ public class StandardServiceRegistryImpl extends AbstractServiceRegistryImpl imp
 	 *
 	 * @see org.hibernate.boot.registry.StandardServiceRegistryBuilder
 	 */
-	public StandardServiceRegistryImpl(
+	public static StandardServiceRegistryImpl create(
 			BootstrapServiceRegistry bootstrapServiceRegistry,
 			List<StandardServiceInitiator<?>> serviceInitiators,
 			List<ProvidedService<?>> providedServices,
 			Map<String,Object> configurationValues) {
-		this( true, bootstrapServiceRegistry, serviceInitiators, providedServices, configurationValues );
+
+		return create( true, bootstrapServiceRegistry, serviceInitiators, providedServices, configurationValues );
 	}
 
 	/**
@@ -62,20 +72,21 @@ public class StandardServiceRegistryImpl extends AbstractServiceRegistryImpl imp
 	 *
 	 * @see org.hibernate.boot.registry.StandardServiceRegistryBuilder
 	 */
-	public StandardServiceRegistryImpl(
+	public static StandardServiceRegistryImpl create(
 			boolean autoCloseRegistry,
 			BootstrapServiceRegistry bootstrapServiceRegistry,
 			List<StandardServiceInitiator<?>> serviceInitiators,
 			List<ProvidedService<?>> providedServices,
 			Map<String,Object> configurationValues) {
-		super( bootstrapServiceRegistry, autoCloseRegistry );
 
-		this.configurationValues = configurationValues;
+		StandardServiceRegistryImpl instance = new StandardServiceRegistryImpl( autoCloseRegistry, bootstrapServiceRegistry, configurationValues );
+		instance.initialize();
+		instance.applyServiceRegistrations( serviceInitiators, providedServices );
 
-		applyServiceRegistrations( serviceInitiators, providedServices );
+		return instance;
 	}
 
-	private void applyServiceRegistrations(List<StandardServiceInitiator<?>> serviceInitiators, List<ProvidedService<?>> providedServices) {
+	protected void applyServiceRegistrations(List<StandardServiceInitiator<?>> serviceInitiators, List<ProvidedService<?>> providedServices) {
 		try {
 			// process initiators
 			for ( ServiceInitiator<?> initiator : serviceInitiators ) {
@@ -130,5 +141,39 @@ public class StandardServiceRegistryImpl extends AbstractServiceRegistryImpl imp
 	public synchronized void destroy() {
 		super.destroy();
 		this.configurationValues = null;
+	}
+
+	private static Map<String, Object> normalize(Map<String, Object> configurationValues) {
+		final Object jdbcUrl = configurationValues.get( AvailableSettings.JAKARTA_JDBC_URL );
+		if ( jdbcUrl != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.URL, jdbcUrl );
+		}
+
+		final Object username = configurationValues.get( AvailableSettings.JAKARTA_JDBC_USER );
+		if ( username != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.USER, username );
+		}
+
+		final Object password = configurationValues.get( AvailableSettings.JAKARTA_JDBC_PASSWORD );
+		if ( password != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.PASS, password );
+		}
+
+		final Object driver = configurationValues.get( AvailableSettings.JAKARTA_JDBC_DRIVER );
+		if ( driver != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.DRIVER, driver );
+		}
+
+		final Object nonJtaDatasource = configurationValues.get( AvailableSettings.JAKARTA_NON_JTA_DATASOURCE );
+		if ( nonJtaDatasource != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.DATASOURCE, nonJtaDatasource );
+		}
+
+		final Object jtaDatasource = configurationValues.get( AvailableSettings.JAKARTA_JTA_DATASOURCE );
+		if ( jtaDatasource != null ) {
+			configurationValues.putIfAbsent( AvailableSettings.DATASOURCE, jtaDatasource );
+		}
+
+		return configurationValues;
 	}
 }

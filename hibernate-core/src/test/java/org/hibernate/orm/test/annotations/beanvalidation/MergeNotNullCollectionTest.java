@@ -20,10 +20,13 @@ import jakarta.validation.constraints.NotNull;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 
+import org.hibernate.boot.beanvalidation.ValidationMode;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
+
+import static org.hibernate.cfg.ValidationSettings.JAKARTA_VALIDATION_MODE;
 
 /**
  * @author Ryan Emerson
@@ -39,7 +42,7 @@ public class MergeNotNullCollectionTest extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration cfg) {
 		super.configure( cfg );
-		cfg.setProperty( "jakarta.persistence.validation.mode", "AUTO" );
+		cfg.setProperty( JAKARTA_VALIDATION_MODE, ValidationMode.AUTO );
 	}
 
 	@Test
@@ -63,7 +66,7 @@ public class MergeNotNullCollectionTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		t = s.beginTransaction();
-		s.delete( parent );
+		s.remove( parent );
 		t.commit();
 		s.close();
 	}
@@ -81,7 +84,7 @@ public class MergeNotNullCollectionTest extends BaseCoreFunctionalTestCase {
 
 		s = openSession();
 		t = s.beginTransaction();
-		s.delete( parent );
+		s.remove( parent );
 		t.commit();
 		s.close();
 	}

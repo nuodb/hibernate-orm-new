@@ -6,6 +6,7 @@
  */
 package org.hibernate.metamodel.model.domain.internal;
 
+import org.hibernate.metamodel.model.domain.DomainType;
 import org.hibernate.metamodel.model.domain.SimpleDomainType;
 import org.hibernate.query.ReturnableType;
 import org.hibernate.query.sqm.SqmPathSource;
@@ -15,7 +16,7 @@ import org.hibernate.type.BasicType;
 import org.hibernate.type.descriptor.java.JavaType;
 
 /**
- * SqmPathSource implementation for {@link org.hibernate.annotations.AnyDiscriminator}
+ * {@link SqmPathSource} implementation for {@link org.hibernate.annotations.AnyDiscriminator}
  *
  */
 public class AnyDiscriminatorSqmPathSource<D> extends AbstractSqmPathSource<D>
@@ -38,7 +39,7 @@ public class AnyDiscriminatorSqmPathSource<D> extends AbstractSqmPathSource<D>
 		else {
 			navigablePath = lhs.getNavigablePath().append( intermediatePathSource.getPathName() );
 		}
-		return new AnyDiscriminatorSqmPath( navigablePath, pathModel, lhs, lhs.nodeBuilder() );
+		return new AnyDiscriminatorSqmPath<>( navigablePath, pathModel, lhs, lhs.nodeBuilder() );
 	}
 
 	@Override
@@ -59,6 +60,11 @@ public class AnyDiscriminatorSqmPathSource<D> extends AbstractSqmPathSource<D>
 	@Override
 	public BasicType<D> getSqmPathType() {
 		return (BasicType<D>) super.getSqmPathType();
+	}
+
+	@Override
+	public DomainType<D> getSqmType() {
+		return getSqmPathType();
 	}
 
 	@Override

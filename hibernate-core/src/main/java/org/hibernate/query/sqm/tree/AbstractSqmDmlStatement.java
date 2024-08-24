@@ -13,17 +13,19 @@ import java.util.Set;
 import java.util.function.Function;
 
 import org.hibernate.query.criteria.JpaCteCriteria;
+import org.hibernate.query.criteria.JpaRoot;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SqmQuerySource;
+import org.hibernate.query.sqm.spi.SqmCreationHelper;
+import org.hibernate.query.sqm.tree.cte.SqmCteContainer;
 import org.hibernate.query.sqm.tree.cte.SqmCteStatement;
 import org.hibernate.query.sqm.tree.expression.SqmParameter;
 import org.hibernate.query.sqm.tree.from.SqmRoot;
 import org.hibernate.query.sqm.tree.select.SqmSelectQuery;
-import org.hibernate.query.sqm.tree.select.SqmSelectStatement;
 import org.hibernate.query.sqm.tree.select.SqmSubQuery;
 
 import jakarta.persistence.criteria.AbstractQuery;
-import jakarta.persistence.criteria.CriteriaQuery;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * @author Steve Ebersole
@@ -63,6 +65,16 @@ public abstract class AbstractSqmDmlStatement<E>
 		return cteStatements;
 	}
 
+	protected void putAllCtes(SqmCteContainer cteContainer) {
+		for ( SqmCteStatement<?> cteStatement : cteContainer.getCteStatements() ) {
+			if ( cteStatements.putIfAbsent( cteStatement.getName(), cteStatement ) != null ) {
+				throw new IllegalArgumentException( "A CTE with the label " + cteStatement.getCteTable().getCteName() + " already exists" );
+			}
+		}
+	}
+
+	public abstract void validate(@Nullable String hql);
+
 	@Override
 	public Collection<SqmCteStatement<?>> getCteStatements() {
 		return cteStatements.values();
@@ -85,21 +97,21 @@ public abstract class AbstractSqmDmlStatement<E>
 
 	@Override
 	public <X> JpaCteCriteria<X> with(AbstractQuery<X> criteria) {
-		return withInternal( Long.toString( System.nanoTime() ), criteria );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), criteria );
 	}
 
 	@Override
 	public <X> JpaCteCriteria<X> withRecursiveUnionAll(
 			AbstractQuery<X> baseCriteria,
 			Function<JpaCteCriteria<X>, AbstractQuery<X>> recursiveCriteriaProducer) {
-		return withInternal( Long.toString( System.nanoTime() ), baseCriteria, false, recursiveCriteriaProducer );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), baseCriteria, false, recursiveCriteriaProducer );
 	}
 
 	@Override
 	public <X> JpaCteCriteria<X> withRecursiveUnionDistinct(
 			AbstractQuery<X> baseCriteria,
 			Function<JpaCteCriteria<X>, AbstractQuery<X>> recursiveCriteriaProducer) {
-		return withInternal( Long.toString( System.nanoTime() ), baseCriteria, true, recursiveCriteriaProducer );
+		return withInternal( SqmCreationHelper.acquireUniqueAlias(), baseCriteria, true, recursiveCriteriaProducer );
 	}
 
 	@Override
@@ -176,8 +188,8 @@ public abstract class AbstractSqmDmlStatement<E>
 	}
 
 	@Override
-	public void setTarget(SqmRoot<E> root) {
-		this.target = root;
+	public void setTarget(JpaRoot<E> root) {
+		this.target = (SqmRoot<E>) root;
 	}
 
 	@Override

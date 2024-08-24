@@ -25,6 +25,11 @@ public class CurrencyJavaType extends AbstractClassJavaType<Currency> {
 	}
 
 	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
+	@Override
 	public String toString(Currency value) {
 		return value.getCurrencyCode();
 	}
@@ -39,6 +44,9 @@ public class CurrencyJavaType extends AbstractClassJavaType<Currency> {
 		if ( value == null ) {
 			return null;
 		}
+		if ( Currency.class.isAssignableFrom( type ) ) {
+			return (X) value;
+		}
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) value.getCurrencyCode();
 		}
@@ -50,6 +58,9 @@ public class CurrencyJavaType extends AbstractClassJavaType<Currency> {
 		if ( value == null ) {
 			return null;
 		}
+		if ( value instanceof Currency ) {
+			return (Currency) value;
+		}
 		if (value instanceof String) {
 			return Currency.getInstance( (String) value );
 		}
@@ -59,16 +70,5 @@ public class CurrencyJavaType extends AbstractClassJavaType<Currency> {
 	@Override
 	public long getDefaultSqlLength(Dialect dialect, JdbcType jdbcType) {
 		return 3;
-	}
-
-	@Override
-	public boolean isWider(JavaType<?> javaType) {
-		// This is necessary to allow comparing/assigning a currency attribute against a literal of the JdbcType
-		switch ( javaType.getJavaType().getTypeName() ) {
-			case "java.lang.String":
-				return true;
-			default:
-				return false;
-		}
 	}
 }

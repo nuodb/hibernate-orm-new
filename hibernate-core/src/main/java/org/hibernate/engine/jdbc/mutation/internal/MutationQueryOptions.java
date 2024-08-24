@@ -8,6 +8,7 @@ package org.hibernate.engine.jdbc.mutation.internal;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import org.hibernate.FlushMode;
 import org.hibernate.LockOptions;
@@ -62,6 +63,11 @@ public class MutationQueryOptions implements QueryOptions {
 	}
 
 	@Override
+	public Boolean getQueryPlanCachingEnabled() {
+		return null;
+	}
+
+	@Override
 	public CacheRetrieveMode getCacheRetrieveMode() {
 		return null;
 	}
@@ -93,6 +99,16 @@ public class MutationQueryOptions implements QueryOptions {
 
 	@Override
 	public Integer getFetchSize() {
+		return null;
+	}
+
+	@Override
+	public Set<String> getEnabledFetchProfiles() {
+		return null;
+	}
+
+	@Override
+	public Set<String> getDisabledFetchProfiles() {
 		return null;
 	}
 

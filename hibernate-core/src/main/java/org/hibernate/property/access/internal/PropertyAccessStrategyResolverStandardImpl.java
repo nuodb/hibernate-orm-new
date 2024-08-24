@@ -15,8 +15,6 @@ import org.hibernate.property.access.spi.PropertyAccessStrategy;
 import org.hibernate.property.access.spi.PropertyAccessStrategyResolver;
 import org.hibernate.service.ServiceRegistry;
 
-import jakarta.persistence.AccessType;
-
 import static org.hibernate.engine.internal.ManagedTypeHelper.isManagedType;
 
 /**
@@ -79,7 +77,7 @@ public class PropertyAccessStrategyResolverStandardImpl implements PropertyAcces
 			if ( serviceRegistry == null ) {
 				throw new HibernateException( "ServiceRegistry not yet injected; PropertyAccessStrategyResolver not ready for use." );
 			}
-			strategySelectorService = serviceRegistry.getService( StrategySelector.class );
+			strategySelectorService = serviceRegistry.requireService( StrategySelector.class );
 		}
 		return strategySelectorService;
 	}

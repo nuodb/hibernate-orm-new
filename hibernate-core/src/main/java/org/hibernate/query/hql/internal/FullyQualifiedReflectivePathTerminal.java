@@ -6,13 +6,13 @@
  */
 package org.hibernate.query.hql.internal;
 
-import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Function;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
 import org.hibernate.metamodel.model.domain.EntityDomainType;
@@ -22,6 +22,7 @@ import org.hibernate.query.hql.spi.SqmCreationState;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SqmExpressible;
 import org.hibernate.query.sqm.SemanticQueryWalker;
+import org.hibernate.query.sqm.spi.SqmCreationContext;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.expression.SqmEnumLiteral;
 import org.hibernate.query.sqm.tree.expression.SqmExpression;
@@ -32,6 +33,11 @@ import org.hibernate.type.descriptor.java.EnumJavaType;
 import org.hibernate.type.descriptor.java.JavaType;
 
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import org.hibernate.type.descriptor.java.spi.JavaTypeRegistry;
 
 /**
  * @author Steve Ebersole
@@ -39,10 +45,10 @@ import jakarta.persistence.criteria.Expression;
 public class FullyQualifiedReflectivePathTerminal
 		extends FullyQualifiedReflectivePath
 		implements SqmExpression {
-	private final SqmExpressible expressibleType;
+	private final @Nullable SqmExpressible<?> expressibleType;
 	private final SqmCreationState creationState;
 
-	private final Function<SemanticQueryWalker,?> handler;
+	private final Function<SemanticQueryWalker<?>,?> handler;
 
 	public FullyQualifiedReflectivePathTerminal(
 			FullyQualifiedReflectivePathSource pathSource,
@@ -62,25 +68,26 @@ public class FullyQualifiedReflectivePathTerminal
 		return this;
 	}
 
-	@SuppressWarnings("unchecked")
-	private Function<SemanticQueryWalker, ?> resolveTerminalSemantic() {
+	private Function<SemanticQueryWalker<?>, ?> resolveTerminalSemantic() {
 		return semanticQueryWalker -> {
-			final ClassLoaderService cls = creationState.getCreationContext().getServiceRegistry().getService( ClassLoaderService.class );
+			final SqmCreationContext creationContext = creationState.getCreationContext();
+			final ClassLoaderService cls =
+					creationContext.getServiceRegistry().requireService( ClassLoaderService.class );
 			final String fullPath = getFullPath();
 
 			// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 			// See if it is an entity-type literal
 
-			final EntityDomainType<?> entityDescriptor = creationState.getCreationContext().getJpaMetamodel().entity( fullPath );
+			final EntityDomainType<?> entityDescriptor = creationContext.getJpaMetamodel().entity( fullPath );
 			if ( entityDescriptor != null ) {
-				return new SqmLiteralEntityType( entityDescriptor, creationState.getCreationContext().getNodeBuilder() );
+				return new SqmLiteralEntityType<>( entityDescriptor, creationContext.getNodeBuilder() );
 			}
 
 			// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 			// See if it is a Class FQN
 
 			try {
-				final Class namedClass = cls.classForName( fullPath );
+				final Class<?> namedClass = cls.classForName( fullPath );
 				if ( namedClass != null ) {
 					return semanticQueryWalker.visitFullyQualifiedClass( namedClass );
 				}
@@ -88,50 +95,51 @@ public class FullyQualifiedReflectivePathTerminal
 			catch (ClassLoadingException ignore) {
 			}
 
-
 			// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 			// Check the parent path as a Class FQN, meaning the terminal is a field or
 			// 		enum-value
 
 			final String parentFullPath = getParent().getFullPath();
 			try {
-				final Class namedClass = cls.classForName( parentFullPath );
+				final Class<?> namedClass = cls.classForName( parentFullPath );
 				if ( namedClass != null ) {
-					if ( namedClass.isEnum() ) {
-						return new SqmEnumLiteral(
-								Enum.valueOf( namedClass, getLocalName() ),
-								(EnumJavaType) creationState.getCreationContext().getJpaMetamodel().getTypeConfiguration().getJavaTypeRegistry().resolveDescriptor(
-										namedClass,
-										() -> new EnumJavaType( namedClass )
-								),
-								getLocalName(),
-								nodeBuilder()
-						);
-					}
-					else {
-						final Field field = namedClass.getField( getLocalName() );
-						return new SqmFieldLiteral(
-								field,
-								creationState.getCreationContext().getJpaMetamodel().getTypeConfiguration().getJavaTypeRegistry().resolveDescriptor(
-										namedClass,
-										() -> new EnumJavaType( namedClass )
-								),
-								nodeBuilder()
-						);
-					}
+					return createEnumOrFieldLiteral( namedClass );
 				}
 			}
 			catch (ClassLoadingException | NoSuchFieldException ignore) {
 			}
 
 			throw new HqlInterpretationException( "Unsure how to handle semantic path terminal - " + fullPath );
-
 		};
+	}
 
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	private SqmExpression createEnumOrFieldLiteral(Class namedClass) throws NoSuchFieldException {
+		if ( namedClass.isEnum() ) {
+			return new SqmEnumLiteral(
+					Enum.valueOf( namedClass, getLocalName() ),
+					(EnumJavaType) javaTypeRegistry()
+							.resolveDescriptor( namedClass, () -> new EnumJavaType( namedClass ) ),
+					getLocalName(),
+					nodeBuilder()
+			);
+		}
+		else {
+			return new SqmFieldLiteral(
+					namedClass.getField( getLocalName() ),
+					javaTypeRegistry()
+							.resolveDescriptor( namedClass, () -> new EnumJavaType( namedClass ) ),
+					nodeBuilder()
+			);
+		}
+	}
+
+	private JavaTypeRegistry javaTypeRegistry() {
+		return creationState.getCreationContext().getTypeConfiguration().getJavaTypeRegistry();
 	}
 
 	@Override
-	public SqmExpressible getNodeType() {
+	public @Nullable SqmExpressible<?> getNodeType() {
 		return expressibleType;
 	}
 
@@ -141,13 +149,13 @@ public class FullyQualifiedReflectivePathTerminal
 	}
 
 	@Override
-	public JavaType getJavaTypeDescriptor() {
-		return expressibleType.getExpressibleJavaType();
+	public JavaType<?> getJavaTypeDescriptor() {
+		return expressibleType == null ? null : expressibleType.getExpressibleJavaType();
 	}
 
 
 	@Override
-	public void applyInferableType(SqmExpressible type) {
+	public void applyInferableType(@Nullable SqmExpressible type) {
 	}
 
 	@Override
@@ -193,7 +201,7 @@ public class FullyQualifiedReflectivePathTerminal
 	}
 
 	@Override
-	public SqmExpression as(Class type) {
+	public SqmExpression<?> as(Class type) {
 		return null;
 	}
 
@@ -204,6 +212,31 @@ public class FullyQualifiedReflectivePathTerminal
 
 	@Override
 	public SqmPredicate isNotNull() {
+		return null;
+	}
+
+	@Override
+	public SqmPredicate equalTo(Expression that) {
+		return null;
+	}
+
+	@Override
+	public SqmPredicate equalTo(Object that) {
+		return null;
+	}
+
+	@Override
+	public Predicate notEqualTo(Expression value) {
+		return null;
+	}
+
+	@Override
+	public Predicate notEqualTo(Object value) {
+		return null;
+	}
+
+	@Override
+	public SqmExpression cast(Class type) {
 		return null;
 	}
 
@@ -233,7 +266,7 @@ public class FullyQualifiedReflectivePathTerminal
 	}
 
 	@Override
-	public JpaSelection alias(String name) {
+	public JpaSelection<?> alias(String name) {
 		return null;
 	}
 

@@ -24,7 +24,7 @@ import org.hibernate.Hibernate;
 import org.hibernate.QueryException;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.Environment;
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.MySQLDialect;
 import org.hibernate.orm.test.sql.hand.Dimension;
@@ -82,21 +82,21 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class NativeSQLQueriesTest {
 
 	protected String getOrganizationFetchJoinEmploymentSQL() {
-		return "SELECT org.ORGID as {org.id}, " +
-				"        org.NAME as {org.name}, " +
-				"        emp.EMPLOYER as {emp.key}, " +
-				"        emp.EMPID as {emp.element}, " +
+		return "SELECT org.orgid as {org.id}, " +
+				"        org.name as {org.name}, " +
+				"        emp.employer as {emp.key}, " +
+				"        emp.empid as {emp.element}, " +
 				"        {emp.element.*}  " +
 				"FROM ORGANIZATION org " +
-				"    LEFT OUTER JOIN EMPLOYMENT emp ON org.ORGID = emp.EMPLOYER";
+				"    LEFT OUTER JOIN EMPLOYMENT emp ON org.orgid = emp.employer";
 	}
 
 	protected String getOrganizationJoinEmploymentSQL() {
-		return "SELECT org.ORGID as {org.id}, " +
-				"        org.NAME as {org.name}, " +
+		return "SELECT org.orgid as {org.id}, " +
+				"        org.name as {org.name}, " +
 				"        {emp.*}  " +
 				"FROM ORGANIZATION org " +
-				"    LEFT OUTER JOIN EMPLOYMENT emp ON org.ORGID = emp.EMPLOYER";
+				"    LEFT OUTER JOIN EMPLOYMENT emp ON org.orgid = emp.employer";
 	}
 
 	protected String getEmploymentSQL() {
@@ -104,28 +104,28 @@ public class NativeSQLQueriesTest {
 	}
 
 	protected String getEmploymentSQLMixedScalarEntity() {
-		return "SELECT e.*, e.EMPLOYER as employerid  FROM EMPLOYMENT e" ;
+		return "SELECT e.*, e.employer as employerid  FROM EMPLOYMENT e" ;
 	}
 
 	protected String getOrgEmpRegionSQL() {
-		return "select {org.*}, {emp.*}, emp.REGIONCODE " +
+		return "select {org.*}, {emp.*}, emp.region_code " +
 				"from ORGANIZATION org " +
-				"     left outer join EMPLOYMENT emp on org.ORGID = emp.EMPLOYER";
+				"     left outer join EMPLOYMENT emp on org.orgid = emp.employer";
 	}
 
 	protected String getOrgEmpPersonSQL() {
 		return "select {org.*}, {emp.*}, {pers.*} " +
 				"from ORGANIZATION org " +
-				"    join EMPLOYMENT emp on org.ORGID = emp.EMPLOYER " +
-				"    join PERSON pers on pers.PERID = emp.EMPLOYEE ";
+				"    join EMPLOYMENT emp on org.orgid = emp.employer " +
+				"    join PERSON pers on pers.perid = emp.employee ";
 	}
 
 	protected String getDescriptionsSQL() {
-		return "select DESCRIPTION from TEXT_HOLDER";
+		return "select description from TEXT_HOLDER";
 	}
 
 	protected String getPhotosSQL() {
-		return "select PHOTO from IMAGE_HOLDER";
+		return "select photo from IMAGE_HOLDER";
 	}
 
 	@Test
@@ -176,7 +176,7 @@ public class NativeSQLQueriesTest {
 					assertEquals( 1, session.getSessionFactory().getStatistics().getEntityInsertCount() );
 
 					// clean up
-					session.delete( jboss );
+					session.remove( jboss );
 				}
 		);
 	}
@@ -200,7 +200,7 @@ public class NativeSQLQueriesTest {
 					List l = session.createNativeQuery( getOrgEmpRegionSQL() )
 							.addEntity("org", Organization.class)
 							.addJoin("emp", "org.employments")
-							.addScalar("regionCode", StandardBasicTypes.STRING )
+							.addScalar("region_code", StandardBasicTypes.STRING )
 							.list();
 					assertEquals( 2, l.size() );
 
@@ -217,7 +217,7 @@ public class NativeSQLQueriesTest {
 				session -> {
 					List l = session.createNativeQuery( "select {org.*}, {emp.*} " +
 																"from ORGANIZATION org " +
-																"     left outer join EMPLOYMENT emp on org.ORGID = emp.EMPLOYER, ORGANIZATION org2" )
+																"     left outer join EMPLOYMENT emp on org.orgid = emp.employer, ORGANIZATION org2" )
 							.addEntity("org", Organization.class)
 							.addJoin("emp", "org.employments")
 							.setResultListTransformer( new ResultListTransformer() {
@@ -240,10 +240,10 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					session.delete(emp);
-					session.delete(gavin);
-					session.delete(ifa);
-					session.delete(jboss);
+					session.remove(emp);
+					session.remove(gavin);
+					session.remove(ifa);
+					session.remove(jboss);
 				}
 		);
 	}
@@ -269,10 +269,10 @@ public class NativeSQLQueriesTest {
 					l = session.createNativeQuery( getOrgEmpPersonSQL(), "org-emp-person" ).list();
 					assertEquals( 1, l.size() );
 
-					session.delete(emp);
-					session.delete(gavin);
-					session.delete(ifa);
-					session.delete(jboss);
+					session.remove(emp);
+					session.remove(gavin);
+					session.remove(ifa);
+					session.remove(jboss);
 				}
 		);
 	}
@@ -298,10 +298,10 @@ public class NativeSQLQueriesTest {
 					l = session.createNativeQuery( getOrgEmpPersonSQL(), "org-emp-person", Object[].class ).list();
 					assertEquals( 1, l.size() );
 
-					session.delete(emp);
-					session.delete(gavin);
-					session.delete(ifa);
-					session.delete(jboss);
+					session.remove(emp);
+					session.remove(gavin);
+					session.remove(ifa);
+					session.remove(jboss);
 				}
 		);
 	}
@@ -311,8 +311,15 @@ public class NativeSQLQueriesTest {
 		Organization ifa = new Organization( "IFA" );
 		Organization jboss = new Organization( "JBoss" );
 
-		Object idIfa = scope.fromTransaction( session -> session.save( ifa ) );
-		Object idJBoss = scope.fromTransaction( session -> session.save( jboss ) );
+		Object idIfa = scope.fromTransaction( session -> {
+			session.persist( ifa );
+			return ifa.getId();
+		} );
+		Object idJBoss = scope.fromTransaction( session -> {
+			session.persist( jboss );
+			return jboss.getId();
+
+		} );
 
 		scope.inTransaction(
 				session -> {
@@ -324,7 +331,7 @@ public class NativeSQLQueriesTest {
 					Map m = (Map) result.get(0);
 					assertEquals( 2, result.size() );
 					assertEquals( 1, m.size() );
-					assertTrue( m.containsKey("NAME") );
+					assertTrue( m.containsKey("name") );
 				}
 		);
 
@@ -370,8 +377,8 @@ public class NativeSQLQueriesTest {
 					assertEquals( o[1], "JBoss" );
 					assertEquals( o[0], idJBoss );
 
-					session.delete( ifa );
-					session.delete( jboss );
+					session.remove( ifa );
+					session.remove( jboss );
 				}
 		);
 	}
@@ -386,10 +393,10 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					Object orgId = session.save(jboss);
-					Object orgId2 = session.save(ifa);
-					session.save(gavin);
-					session.save(emp);
+					session.persist(jboss);
+					session.persist(ifa);
+					session.persist(gavin);
+					session.persist(emp);
 				}
 		);
 
@@ -450,10 +457,10 @@ public class NativeSQLQueriesTest {
 					assertEquals(2, objs.length);
 					Employment emp2 = (Employment) objs[0];
 					Person _gavin = (Person) objs[1];
-					session.delete(emp2);
-					session.delete(jboss);
-					session.delete(_gavin);
-					session.delete(ifa);
+					session.remove(emp2);
+					session.remove(jboss);
+					session.remove(_gavin);
+					session.remove(ifa);
 				}
 		);
 	}
@@ -482,9 +489,9 @@ public class NativeSQLQueriesTest {
 					order.setProduct( product );
 					order.setPerson( person );
 
-					session.save( product );
-					session.save( order);
-					session.save( person );
+					session.persist( product );
+					session.persist( order);
+					session.persist( person );
 				}
 		);
 
@@ -537,10 +544,10 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					Object orgId = session.save(jboss);
-					Object orgId2 = session.save(ifa);
-					session.save(gavin);
-					session.save(emp);
+					session.persist(jboss);
+					session.persist(ifa);
+					session.persist(gavin);
+					session.persist(emp);
 				}
 		);
 
@@ -581,7 +588,7 @@ public class NativeSQLQueriesTest {
 					m = (Map) list.get(0);
 					assertTrue(m.containsKey("EMPID"));
 					assertTrue(m.containsKey("AMOUNT"));
-					assertTrue(m.containsKey("ENDDATE"));
+					assertTrue(m.containsKey("END_DATE"));
 					assertEquals(8, m.size());
 
 					list = session.createNativeQuery( getEmploymentSQLMixedScalarEntity() ).addScalar( "employerid" ).addEntity( Employment.class ).list();
@@ -630,20 +637,20 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					session.delete(emp2);
+					session.remove(emp2);
 
-					session.delete(jboss);
-					session.delete(gavin);
-					session.delete(ifa);
+					session.remove(jboss);
+					session.remove(gavin);
+					session.remove(ifa);
 				}
 		);
 
 		scope.inTransaction(
 				session -> {
 					Dimension dim = new Dimension( 3, 30 );
-					session.save( dim );
+					session.persist( dim );
 					List list = session.createNativeQuery( "select d_len * d_width as surface, d_len * d_width * 10 as volume from Dimension" ).list();
-					session.delete( dim );
+					session.remove( dim );
 				}
 		);
 
@@ -655,7 +662,7 @@ public class NativeSQLQueriesTest {
 					enterprise.setSpeed( 50d );
 					Dimension d = new Dimension(45, 10);
 					enterprise.setDimensions( d );
-					session.save( enterprise );
+					session.persist( enterprise );
 					session.flush();
 					Object[] result = (Object[]) session.getNamedQuery( "spaceship" ).uniqueResult();
 					assertEquals( 3, result.length, "expecting 3 result values" );
@@ -663,7 +670,7 @@ public class NativeSQLQueriesTest {
 					assertTrue(50d == enterprise.getSpeed() );
 					assertTrue( 450d == extractDoubleValue( result[1] ) );
 					assertTrue( 4500d == extractDoubleValue( result[2] ) );
-					session.delete( enterprise );
+					session.remove( enterprise );
 				}
 		);
 	}
@@ -677,27 +684,27 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					Object jbossId = session.save( jboss );
-					session.save( me );
-					session.save( emp );
+					session.persist( jboss );
+					session.persist( me );
+					session.persist( emp );
 				}
 		);
 
 		scope.inTransaction(
 				session -> {
 					String sql =
-							"SELECT org.ORGID 		as orgid," +
-									"       org.NAME 		as name," +
-									"       emp.EMPID 		as empid," +
-									"       emp.EMPLOYEE 	as employee," +
-									"       emp.EMPLOYER 	as employer," +
-									"       emp.STARTDATE 	as startDate," +
-									"       emp.ENDDATE 	as endDate," +
-									"       emp.REGIONCODE 	as regionCode," +
-									"       emp.AMOUNT 		as AMOUNT," +
-									"       emp.CURRENCY 	as CURRENCY" +
+							"SELECT org.orgid 		as orgid," +
+									"       org.name 		as name," +
+									"       emp.empid 		as empid," +
+									"       emp.employee 	as employee," +
+									"       emp.employer 	as employer," +
+									"       emp.start_date 	as start_date," +
+									"       emp.end_date 	as end_date," +
+									"       emp.region_code 	as region_code," +
+									"       emp.amount 		as amount," +
+									"       emp.currency 	as currency" +
 									" FROM 	ORGANIZATION org" +
-									"    LEFT OUTER JOIN EMPLOYMENT emp ON org.ORGID = emp.EMPLOYER";
+									"    LEFT OUTER JOIN EMPLOYMENT emp ON org.orgid = emp.employer";
 
 					// as a control, lets apply an existing rs mapping
 					NativeQuery sqlQuery = session.createNativeQuery( sql, "org-description" );
@@ -740,9 +747,9 @@ public class NativeSQLQueriesTest {
 
 		scope.inTransaction(
 				session -> {
-					session.delete( emp );
-					session.delete( jboss );
-					session.delete( me );
+					session.remove( emp );
+					session.remove( jboss );
+					session.remove( me );
 				}
 		);
 	}
@@ -759,7 +766,7 @@ public class NativeSQLQueriesTest {
 					session.flush();
 					session.clear();
 
-					List l = session.createNativeQuery( "select name, id, flength, name as scalarName from Speech", "speech" ).list();
+					List l = session.createNativeQuery( "select name, id, flength, name as scalar_name from Speech", "speech" ).list();
 					assertEquals( l.size(), 1 );
 
 					t.rollback();
@@ -827,11 +834,11 @@ public class NativeSQLQueriesTest {
 					hibernate.getPersons().remove( gavin );
 					hibernate.getPersons().remove( max );
 
-					session.delete( seam );
-					session.delete( hibernate );
-					session.delete( gavin );
-					session.delete( max );
-					session.delete( pete );
+					session.remove( seam );
+					session.remove( hibernate );
+					session.remove( gavin );
+					session.remove( max );
+					session.remove( pete );
 				}
 		);
 	}
@@ -863,7 +870,7 @@ public class NativeSQLQueriesTest {
 						}
 					}
 					assertEquals( description, descriptionRead );
-					session.delete( holder );
+					session.remove( holder );
 				}
 		);
 	}
@@ -895,7 +902,7 @@ public class NativeSQLQueriesTest {
 						}
 					}
 					assertTrue( Arrays.equals( photo, photoRead ) );
-					session.delete( holder );
+					session.remove( holder );
 				}
 		);
 	}
@@ -927,7 +934,7 @@ public class NativeSQLQueriesTest {
 							.setResultTransformer( Transformers.aliasToBean( HashMap.class ) )
 							.uniqueResult();
 					assertEquals( "Gavin", result.get( "NAME" ) == null ? result.get( "name" ) : result.get( "NAME" ) );
-					session.delete( gavin );
+					session.remove( gavin );
 				}
 		);
 	}

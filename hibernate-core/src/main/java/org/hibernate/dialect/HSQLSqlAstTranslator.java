@@ -11,22 +11,26 @@ import java.util.function.Consumer;
 
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.mapping.JdbcMappingContainer;
-import org.hibernate.query.sqm.BinaryArithmeticOperator;
+import org.hibernate.query.IllegalQueryOperationException;
 import org.hibernate.query.sqm.ComparisonOperator;
+import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.SqlAstNodeRenderingMode;
 import org.hibernate.sql.ast.spi.AbstractSqlAstTranslator;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.Statement;
-import org.hibernate.sql.ast.tree.expression.BinaryArithmeticExpression;
 import org.hibernate.sql.ast.tree.expression.CaseSearchedExpression;
 import org.hibernate.sql.ast.tree.expression.CaseSimpleExpression;
 import org.hibernate.sql.ast.tree.expression.Expression;
 import org.hibernate.sql.ast.tree.expression.Literal;
 import org.hibernate.sql.ast.tree.expression.SqlTuple;
 import org.hibernate.sql.ast.tree.expression.Summarization;
+import org.hibernate.sql.ast.tree.from.NamedTableReference;
+import org.hibernate.sql.ast.tree.insert.ConflictClause;
+import org.hibernate.sql.ast.tree.insert.InsertSelectStatement;
 import org.hibernate.sql.ast.tree.predicate.BooleanExpressionPredicate;
 import org.hibernate.sql.ast.tree.predicate.InArrayPredicate;
 import org.hibernate.sql.ast.tree.select.QueryPart;
+import org.hibernate.sql.ast.tree.update.UpdateStatement;
 import org.hibernate.sql.exec.spi.JdbcOperation;
 import org.hibernate.type.descriptor.jdbc.ArrayJdbcType;
 
@@ -39,6 +43,44 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 
 	public HSQLSqlAstTranslator(SessionFactoryImplementor sessionFactory, Statement statement) {
 		super( sessionFactory, statement );
+	}
+
+	@Override
+	protected void visitInsertStatementOnly(InsertSelectStatement statement) {
+		if ( statement.getConflictClause() == null || statement.getConflictClause().isDoNothing() ) {
+			// Render plain insert statement and possibly run into unique constraint violation
+			super.visitInsertStatementOnly( statement );
+		}
+		else {
+			visitInsertStatementEmulateMerge( statement );
+		}
+	}
+
+	@Override
+	protected void visitUpdateStatementOnly(UpdateStatement statement) {
+		if ( hasNonTrivialFromClause( statement.getFromClause() ) ) {
+			visitUpdateStatementEmulateMerge( statement );
+		}
+		else {
+			super.visitUpdateStatementOnly( statement );
+		}
+	}
+
+	@Override
+	protected void renderDmlTargetTableExpression(NamedTableReference tableReference) {
+		super.renderDmlTargetTableExpression( tableReference );
+		if ( getClauseStack().getCurrent() != Clause.INSERT ) {
+			renderTableReferenceIdentificationVariable( tableReference );
+		}
+	}
+
+	@Override
+	protected void visitConflictClause(ConflictClause conflictClause) {
+		if ( conflictClause != null ) {
+			if ( conflictClause.isDoUpdate() && conflictClause.getConstraintName() != null ) {
+				throw new IllegalQueryOperationException( "Insert conflict 'do update' clause with constraint name is not supported" );
+			}
+		}
 	}
 
 	@Override
@@ -108,8 +150,7 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 	protected void visitAnsiCaseSearchedExpression(
 			CaseSearchedExpression expression,
 			Consumer<Expression> resultRenderer) {
-		if ( getParameterRenderingMode() == SqlAstNodeRenderingMode.DEFAULT && areAllResultsParameters( expression )
-				|| areAllResultsPlainParametersOrLiterals( expression ) ) {
+		if ( areAllResultsPlainParametersOrStringLiterals( expression ) ) {
 			final List<CaseSearchedExpression.WhenFragment> whenFragments = expression.getWhenFragments();
 			final Expression firstResult = whenFragments.get( 0 ).getResult();
 			super.visitAnsiCaseSearchedExpression(
@@ -133,8 +174,7 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 	protected void visitAnsiCaseSimpleExpression(
 			CaseSimpleExpression expression,
 			Consumer<Expression> resultRenderer) {
-		if ( getParameterRenderingMode() == SqlAstNodeRenderingMode.DEFAULT && areAllResultsParameters( expression )
-				|| areAllResultsPlainParametersOrLiterals( expression ) ) {
+		if ( areAllResultsPlainParametersOrStringLiterals( expression ) ) {
 			final List<CaseSimpleExpression.WhenFragment> whenFragments = expression.getWhenFragments();
 			final Expression firstResult = whenFragments.get( 0 ).getResult();
 			super.visitAnsiCaseSimpleExpression(
@@ -154,11 +194,11 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 		}
 	}
 
-	protected boolean areAllResultsPlainParametersOrLiterals(CaseSearchedExpression caseSearchedExpression) {
+	protected boolean areAllResultsPlainParametersOrStringLiterals(CaseSearchedExpression caseSearchedExpression) {
 		final List<CaseSearchedExpression.WhenFragment> whenFragments = caseSearchedExpression.getWhenFragments();
 		final Expression firstResult = whenFragments.get( 0 ).getResult();
 		if ( isParameter( firstResult ) && getParameterRenderingMode() == SqlAstNodeRenderingMode.DEFAULT
-				|| isLiteral( firstResult ) ) {
+				|| isStringLiteral( firstResult ) ) {
 			for ( int i = 1; i < whenFragments.size(); i++ ) {
 				final Expression result = whenFragments.get( i ).getResult();
 				if ( isParameter( result ) ) {
@@ -166,7 +206,7 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 						return false;
 					}
 				}
-				else if ( !isLiteral( result ) ) {
+				else if ( !isStringLiteral( result ) ) {
 					return false;
 				}
 			}
@@ -175,11 +215,11 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 		return false;
 	}
 
-	protected boolean areAllResultsPlainParametersOrLiterals(CaseSimpleExpression caseSimpleExpression) {
+	protected boolean areAllResultsPlainParametersOrStringLiterals(CaseSimpleExpression caseSimpleExpression) {
 		final List<CaseSimpleExpression.WhenFragment> whenFragments = caseSimpleExpression.getWhenFragments();
 		final Expression firstResult = whenFragments.get( 0 ).getResult();
 		if ( isParameter( firstResult ) && getParameterRenderingMode() == SqlAstNodeRenderingMode.DEFAULT
-				|| isLiteral( firstResult ) ) {
+				|| isStringLiteral( firstResult ) ) {
 			for ( int i = 1; i < whenFragments.size(); i++ ) {
 				final Expression result = whenFragments.get( i ).getResult();
 				if ( isParameter( result ) ) {
@@ -187,11 +227,18 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 						return false;
 					}
 				}
-				else if ( !isLiteral( result ) ) {
+				else if ( !isStringLiteral( result ) ) {
 					return false;
 				}
 			}
 			return true;
+		}
+		return false;
+	}
+
+	private boolean isStringLiteral( Expression expression ) {
+		if ( expression instanceof Literal ) {
+			return ( (Literal) expression ).getJdbcMapping().getJdbcType().isStringLike();
 		}
 		return false;
 	}
@@ -214,7 +261,12 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 
 	@Override
 	protected void renderSelectExpression(Expression expression) {
-		renderSelectExpressionWithCastedOrInlinedPlainParameters( expression );
+		if ( isInSubquery() && expression instanceof Literal ) {
+			renderCasted( expression );
+		}
+		else {
+			renderSelectExpressionWithCastedOrInlinedPlainParameters( expression );
+		}
 	}
 
 	@Override
@@ -242,12 +294,11 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 				}
 				else {
 					// HSQL does not like parameters in the distinct from predicate
-					render( lhs, SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
-					appendSql( operator.sqlText() );
-					render( rhs, SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
+					renderComparisonEmulateIntersect( lhs, operator, rhs );
 				}
 				break;
 			default:
+				// HSQL has a broken 'is distinct from' operator
 				renderComparisonStandard( lhs, operator, rhs );
 				break;
 		}
@@ -285,13 +336,8 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 	}
 
 	@Override
-	protected String getFromDual() {
-		return " from (values(0))";
-	}
-
-	@Override
 	protected String getFromDualForSelectOnly() {
-		return getFromDual();
+		return " from " + getDual();
 	}
 
 	private boolean supportsOffsetFetchClause() {
@@ -299,22 +345,8 @@ public class HSQLSqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 	}
 
 	@Override
-	public void visitBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression) {
-		final BinaryArithmeticOperator operator = arithmeticExpression.getOperator();
-		if ( operator == BinaryArithmeticOperator.MODULO ) {
-			append( "mod" );
-			appendSql( OPEN_PARENTHESIS );
-			arithmeticExpression.getLeftHandOperand().accept( this );
-			appendSql( ',' );
-			arithmeticExpression.getRightHandOperand().accept( this );
-			appendSql( CLOSE_PARENTHESIS );
-		}
-		else {
-			appendSql( OPEN_PARENTHESIS );
-			render( arithmeticExpression.getLeftHandOperand(), SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
-			appendSql( arithmeticExpression.getOperator().getOperatorSqlTextString() );
-			render( arithmeticExpression.getRightHandOperand(), SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
-			appendSql( CLOSE_PARENTHESIS );
-		}
+	protected void visitArithmeticOperand(Expression expression) {
+		render( expression, SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
 	}
+
 }

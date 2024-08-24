@@ -7,11 +7,12 @@
 package org.hibernate.metamodel.model.domain.internal;
 
 import org.hibernate.metamodel.model.domain.BasicDomainType;
+import org.hibernate.metamodel.model.domain.DomainType;
 import org.hibernate.query.ReturnableType;
+import org.hibernate.query.sqm.TerminalPathException;
 import org.hibernate.query.sqm.SqmPathSource;
 import org.hibernate.query.sqm.tree.domain.SqmBasicValuedSimplePath;
 import org.hibernate.query.sqm.tree.domain.SqmPath;
-import org.hibernate.spi.NavigablePath;
 import org.hibernate.type.descriptor.java.JavaType;
 
 /**
@@ -37,26 +38,25 @@ public class BasicSqmPathSource<J>
 
 	@Override
 	public BasicDomainType<J> getSqmPathType() {
-		//noinspection unchecked
 		return (BasicDomainType<J>) super.getSqmPathType();
 	}
 
 	@Override
+	public DomainType<J> getSqmType() {
+		return getSqmPathType();
+	}
+
+	@Override
 	public SqmPathSource<?> findSubPathSource(String name) {
-		throw new IllegalStateException( "Basic paths cannot be dereferenced" );
+		String path = pathModel.getPathName();
+		String pathDesc = path==null || path.startsWith("{") ? " " : " '" + pathModel.getPathName() + "' ";
+		throw new TerminalPathException( "Terminal path" + pathDesc + "has no attribute '" + name + "'" );
 	}
 
 	@Override
 	public SqmPath<J> createSqmPath(SqmPath<?> lhs, SqmPathSource<?> intermediatePathSource) {
-		final NavigablePath navigablePath;
-		if ( intermediatePathSource == null ) {
-			navigablePath = lhs.getNavigablePath().append( getPathName() );
-		}
-		else {
-			navigablePath = lhs.getNavigablePath().append( intermediatePathSource.getPathName() ).append( getPathName() );
-		}
 		return new SqmBasicValuedSimplePath<>(
-				navigablePath,
+				PathHelper.append( lhs, this, intermediatePathSource ),
 				pathModel,
 				lhs,
 				lhs.nodeBuilder()

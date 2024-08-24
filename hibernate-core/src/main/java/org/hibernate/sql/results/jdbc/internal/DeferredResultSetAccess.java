@@ -20,16 +20,21 @@ import org.hibernate.dialect.pagination.NoopLimitHandler;
 import org.hibernate.engine.jdbc.spi.SqlStatementLogger;
 import org.hibernate.engine.spi.SessionEventListenerManager;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.event.spi.EventManager;
+import org.hibernate.event.spi.HibernateMonitoringEvent;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.query.spi.Limit;
 import org.hibernate.query.spi.QueryOptions;
+import org.hibernate.resource.jdbc.spi.JdbcSessionContext;
 import org.hibernate.resource.jdbc.spi.LogicalConnectionImplementor;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.exec.spi.JdbcLockStrategy;
 import org.hibernate.sql.exec.spi.JdbcOperationQuerySelect;
 import org.hibernate.sql.exec.spi.JdbcParameterBinder;
 import org.hibernate.sql.exec.spi.JdbcParameterBindings;
+import org.hibernate.sql.exec.spi.JdbcSelectExecutor;
 
 /**
  * @author Steve Ebersole
@@ -42,12 +47,13 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 	private final JdbcOperationQuerySelect jdbcSelect;
 	private final JdbcParameterBindings jdbcParameterBindings;
 	private final ExecutionContext executionContext;
-	private final Function<String, PreparedStatement> statementCreator;
+	private final JdbcSelectExecutor.StatementCreator statementCreator;
 	private final SqlStatementLogger sqlStatementLogger;
 	private final String finalSql;
 	private final Limit limit;
 	private final LimitHandler limitHandler;
 	private final boolean usesFollowOnLocking;
+	private final int resultCountEstimate;
 
 	private PreparedStatement preparedStatement;
 	private ResultSet resultSet;
@@ -56,13 +62,15 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 			JdbcOperationQuerySelect jdbcSelect,
 			JdbcParameterBindings jdbcParameterBindings,
 			ExecutionContext executionContext,
-			Function<String, PreparedStatement> statementCreator) {
+			JdbcSelectExecutor.StatementCreator statementCreator,
+			int resultCountEstimate) {
 		super( executionContext.getSession() );
 		this.jdbcParameterBindings = jdbcParameterBindings;
 		this.executionContext = executionContext;
 		this.jdbcSelect = jdbcSelect;
 		this.statementCreator = statementCreator;
 		this.sqlStatementLogger = executionContext.getSession().getJdbcServices().getSqlStatementLogger();
+		this.resultCountEstimate = resultCountEstimate;
 
 		final QueryOptions queryOptions = executionContext.getQueryOptions();
 		if ( queryOptions == null ) {
@@ -220,32 +228,35 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 	private void executeQuery() {
 		final LogicalConnectionImplementor logicalConnection = getPersistenceContext().getJdbcCoordinator().getLogicalConnection();
 
+		final SharedSessionContractImplementor session = executionContext.getSession();
 		try {
 			LOG.tracef( "Executing query to retrieve ResultSet : %s", finalSql );
 			// prepare the query
-			preparedStatement = statementCreator.apply( finalSql );
+			preparedStatement = statementCreator.createStatement( executionContext, finalSql );
 
 			bindParameters( preparedStatement );
 
-			final SessionEventListenerManager eventListenerManager = executionContext.getSession()
+			final SessionEventListenerManager eventListenerManager = session
 					.getEventListenerManager();
 
 			long executeStartNanos = 0;
-			if ( this.sqlStatementLogger.getLogSlowQuery() > 0 ) {
+			if ( sqlStatementLogger.getLogSlowQuery() > 0 ) {
 				executeStartNanos = System.nanoTime();
 			}
+			final EventManager eventManager = session.getEventManager();
+			final HibernateMonitoringEvent jdbcPreparedStatementExecutionEvent = eventManager.beginJdbcPreparedStatementExecutionEvent();
 			try {
 				eventListenerManager.jdbcExecuteStatementStart();
 				resultSet = wrapResultSet( preparedStatement.executeQuery() );
 			}
 			finally {
+				eventManager.completeJdbcPreparedStatementExecutionEvent( jdbcPreparedStatementExecutionEvent, finalSql );
 				eventListenerManager.jdbcExecuteStatementEnd();
-				sqlStatementLogger.logSlowQuery( preparedStatement, executeStartNanos );
+				sqlStatementLogger.logSlowQuery( finalSql, executeStartNanos, context() );
 			}
 
 			skipRows( resultSet );
 			logicalConnection.getResourceRegistry().register( resultSet, preparedStatement );
-
 		}
 		catch (SQLException e) {
 			try {
@@ -254,14 +265,15 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 			catch (RuntimeException e2) {
 				e.addSuppressed( e2 );
 			}
-			throw executionContext.getSession().getJdbcServices().getSqlExceptionHelper().convert(
+			throw session.getJdbcServices().getSqlExceptionHelper().convert(
 					e,
 					"JDBC exception executing SQL [" + finalSql + "]"
 			);
 		}
-		finally {
-			logicalConnection.afterStatement();
-		}
+	}
+
+	private JdbcSessionContext context() {
+		return executionContext.getSession().getJdbcCoordinator().getJdbcSessionOwner().getJdbcSessionContext();
 	}
 
 	protected void skipRows(ResultSet resultSet) throws SQLException {
@@ -312,20 +324,32 @@ public class DeferredResultSetAccess extends AbstractResultSetAccess {
 
 	@Override
 	public void release() {
+		final LogicalConnectionImplementor logicalConnection = getPersistenceContext().getJdbcCoordinator()
+				.getLogicalConnection();
 		if ( resultSet != null ) {
-			getPersistenceContext().getJdbcCoordinator()
-					.getLogicalConnection()
-					.getResourceRegistry()
-					.release( resultSet, preparedStatement );
+			logicalConnection.getResourceRegistry().release( resultSet, preparedStatement );
 			resultSet = null;
 		}
 
 		if ( preparedStatement != null ) {
-			getPersistenceContext().getJdbcCoordinator()
-					.getLogicalConnection()
-					.getResourceRegistry()
-					.release( preparedStatement );
+			logicalConnection.getResourceRegistry().release( preparedStatement );
 			preparedStatement = null;
 		}
+
+		logicalConnection.afterStatement();
+	}
+
+	@Override
+	public int getResultCountEstimate() {
+		if ( limit != null && limit.getMaxRows() != null ) {
+			return limit.getMaxRows();
+		}
+		if ( jdbcSelect.getLimitParameter() != null ) {
+			return (int) jdbcParameterBindings.getBinding( jdbcSelect.getLimitParameter() ).getBindValue();
+		}
+		if ( resultCountEstimate > 0 ) {
+			return resultCountEstimate;
+		}
+		return super.getResultCountEstimate();
 	}
 }

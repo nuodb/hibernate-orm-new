@@ -21,7 +21,7 @@ import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.CockroachDialect;
-import org.hibernate.dialect.DerbyDialect;
+import org.hibernate.community.dialect.DerbyDialect;
 import org.hibernate.dialect.H2Dialect;
 import org.hibernate.dialect.HSQLDialect;
 import org.hibernate.dialect.SybaseASEDialect;
@@ -32,6 +32,7 @@ import org.hibernate.testing.TestForIssue;
 import org.hibernate.testing.orm.junit.BaseUnitTest;
 import org.hibernate.testing.orm.junit.DialectContext;
 import org.hibernate.testing.orm.junit.SkipForDialect;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 
 import org.hibernate.tool.schema.Action;
 
@@ -54,11 +55,11 @@ public class RefreshUpdatedDataTest {
 	@BeforeEach
 	@SuppressWarnings("unused")
 	public void acquireResources() {
-		final StandardServiceRegistryBuilder ssrb = new StandardServiceRegistryBuilder()
+		final StandardServiceRegistryBuilder ssrb = ServiceRegistryUtil.serviceRegistryBuilder()
 				.configure( "hibernate-config/hibernate.cfg.xml" );
 
 		if ( H2Dialect.class.equals( DialectContext.getDialect().getClass() ) ) {
-			ssrb.applySetting( AvailableSettings.URL, "jdbc:h2:mem:db-mvcc" );
+			ssrb.applySetting( AvailableSettings.URL, "jdbc:h2:mem:db-mvcc;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE" );
 		}
 		ssrb.applySetting( AvailableSettings.GENERATE_STATISTICS, "true" );
 
@@ -189,10 +190,10 @@ public class RefreshUpdatedDataTest {
 		inTransaction(
 				sessionFactory,
 				s -> {
-					s.delete( s.getReference( ReadWriteCacheableItem.class, 1L ) );
-					s.delete( s.getReference( ReadWriteVersionedCacheableItem.class, 1L ) );
-					s.delete( s.getReference( NonStrictReadWriteCacheableItem.class, 1L ) );
-					s.delete( s.getReference( NonStrictReadWriteVersionedCacheableItem.class, 1L ) );
+					s.remove( s.getReference( ReadWriteCacheableItem.class, 1L ) );
+					s.remove( s.getReference( ReadWriteVersionedCacheableItem.class, 1L ) );
+					s.remove( s.getReference( NonStrictReadWriteCacheableItem.class, 1L ) );
+					s.remove( s.getReference( NonStrictReadWriteVersionedCacheableItem.class, 1L ) );
 				}
 		);
 	}

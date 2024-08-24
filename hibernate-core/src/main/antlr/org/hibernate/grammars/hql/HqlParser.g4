@@ -55,14 +55,14 @@ targetEntity
  * A 'delete' statement
  */
 deleteStatement
-	: DELETE FROM? targetEntity whereClause?
+	: DELETE FROM? entityWithJoins whereClause?
 	;
 
 /**
  * An 'update' statement
  */
 updateStatement
-	: UPDATE VERSIONED? targetEntity setClause whereClause?
+	: UPDATE VERSIONED? entityWithJoins setClause whereClause?
 	;
 
 /**
@@ -83,7 +83,7 @@ assignment
  * An 'insert' statement
  */
 insertStatement
-	: INSERT INTO? targetEntity targetFields (queryExpression | valuesList)
+	: INSERT INTO? targetEntity targetFields (queryExpression | valuesList) conflictClause?
 	;
 
 /**
@@ -105,6 +105,23 @@ valuesList
  */
 values
 	: LEFT_PAREN expressionOrPredicate (COMMA expressionOrPredicate)* RIGHT_PAREN
+	;
+
+/**
+ * a 'conflict' clause in an 'insert' statement
+ */
+conflictClause
+	: ON CONFLICT conflictTarget? DO conflictAction
+	;
+
+conflictTarget
+	: ON CONSTRAINT identifier
+	| LEFT_PAREN simplePath (COMMA simplePath)* RIGHT_PAREN
+	;
+
+conflictAction
+	: NOTHING
+	| UPDATE setClause whereClause?
 	;
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -152,6 +169,7 @@ queryExpression
 orderedQuery
 	: query queryOrder?										# QuerySpecExpression
 	| LEFT_PAREN queryExpression RIGHT_PAREN queryOrder?	# NestedQueryExpression
+	| queryOrder											# QueryOrderExpression
 	;
 
 /**
@@ -180,6 +198,7 @@ query
 // TODO: add with clause
 	: selectClause fromClause? whereClause? (groupByClause havingClause?)?
 	| fromClause whereClause? (groupByClause havingClause?)? selectClause?
+	| whereClause
 	;
 
 
@@ -411,12 +430,19 @@ pathContinuation
  *		* VALUE( path )
  * 		* KEY( path )
  * 		* path[ selector ]
+ * 		* ARRAY_GET( embeddableArrayPath, index ).path
+ * 		* COALESCE( array1, array2 )[ selector ].path
  */
 syntacticDomainPath
 	: treatedNavigablePath
 	| collectionValueNavigablePath
 	| mapKeyNavigablePath
 	| simplePath indexedPathAccessFragment
+	| simplePath slicedPathAccessFragment
+	| toOneFkReference
+	| function pathContinuation
+	| function indexedPathAccessFragment pathContinuation?
+	| function slicedPathAccessFragment
 	;
 
 /**
@@ -437,6 +463,13 @@ generalPathFragment
  */
 indexedPathAccessFragment
 	: LEFT_BRACKET expression RIGHT_BRACKET (DOT generalPathFragment)?
+	;
+
+/**
+ * The slice operator to obtain elements between the lower and upper bound.
+ */
+slicedPathAccessFragment
+	: LEFT_BRACKET expression COLON expression RIGHT_BRACKET
 	;
 
 /**
@@ -575,15 +608,25 @@ limitClause
  * An 'offset' of the first query result to return
  */
 offsetClause
-	: OFFSET parameterOrIntegerLiteral (ROW | ROWS)?
+	: OFFSET parameterOrIntegerLiteral
+	  (ROW | ROWS)?   // no semantics
 	;
 
 /**
  * A much more complex syntax for limits
  */
 fetchClause
-	: FETCH (FIRST | NEXT) (parameterOrIntegerLiteral | parameterOrNumberLiteral PERCENT) (ROW | ROWS) (ONLY | WITH TIES)
+	: FETCH
+	  (FIRST | NEXT)  // no semantics
+      fetchCountOrPercent
+	  (ROW | ROWS)    // no semantics
+	  (ONLY | WITH TIES)
 	;
+
+fetchCountOrPercent
+    : parameterOrIntegerLiteral
+    | parameterOrNumberLiteral PERCENT
+    ;
 
 /**
  * An parameterizable integer literal
@@ -599,6 +642,7 @@ parameterOrIntegerLiteral
 parameterOrNumberLiteral
 	: parameter
 	| INTEGER_LITERAL
+	| LONG_LITERAL
 	| FLOAT_LITERAL
 	| DOUBLE_LITERAL
 	;
@@ -622,13 +666,19 @@ predicate
 	: LEFT_PAREN predicate RIGHT_PAREN											# GroupedPredicate
 	| expression IS NOT? NULL													# IsNullPredicate
 	| expression IS NOT? EMPTY													# IsEmptyPredicate
+	| expression IS NOT? TRUE													# IsTruePredicate
+	| expression IS NOT? FALSE													# IsFalsePredicate
+	| expression IS NOT? DISTINCT FROM expression								# IsDistinctFromPredicate
+	| expression NOT? MEMBER OF? path											# MemberOfPredicate
 	| expression NOT? IN inList													# InPredicate
 	| expression NOT? BETWEEN expression AND expression							# BetweenPredicate
 	| expression NOT? (LIKE | ILIKE) expression likeEscape?						# LikePredicate
+	| expression NOT? CONTAINS expression										# ContainsPredicate
+	| expression NOT? INCLUDES expression										# IncludesPredicate
+	| expression NOT? INTERSECTS expression										# IntersectsPredicate
 	| expression comparisonOperator expression									# ComparisonPredicate
 	| EXISTS collectionQuantifier LEFT_PAREN simplePath RIGHT_PAREN				# ExistsCollectionPartPredicate
 	| EXISTS expression															# ExistsPredicate
-	| expression NOT? MEMBER OF? path											# MemberOfPredicate
 	| NOT predicate																# NegatedPredicate
 	| predicate AND predicate													# AndPredicate
 	| predicate OR predicate													# OrPredicate
@@ -645,8 +695,6 @@ comparisonOperator
 	| GREATER_EQUAL
 	| LESS
 	| LESS_EQUAL
-	| IS DISTINCT FROM
-	| IS NOT DISTINCT FROM
 	;
 
 /**
@@ -659,6 +707,7 @@ inList
 	| LEFT_PAREN (expressionOrPredicate (COMMA expressionOrPredicate)*)? RIGHT_PAREN# ExplicitTupleInList
 	| LEFT_PAREN subquery RIGHT_PAREN												# SubqueryInList
 	| parameter 																	# ParamInList
+	| expression 																	# ArrayInList
 	;
 
 /**
@@ -701,7 +750,6 @@ primaryExpression
 	| entityIdReference									# EntityIdExpression
 	| entityVersionReference							# EntityVersionExpression
 	| entityNaturalIdReference							# EntityNaturalIdExpression
-	| toOneFkReference									# ToOneFkExpression
 	| syntacticDomainPath pathContinuation?				# SyntacticPathExpression
 	| function											# FunctionExpression
 	| generalPathFragment								# GeneralPathExpression
@@ -854,6 +902,7 @@ literal
 	| numericLiteral
 	| binaryLiteral
 	| temporalLiteral
+	| arrayLiteral
 	| generalizedLiteral
 	;
 
@@ -993,7 +1042,7 @@ month: INTEGER_LITERAL;
 day: INTEGER_LITERAL;
 hour: INTEGER_LITERAL;
 minute: INTEGER_LITERAL;
-second: INTEGER_LITERAL | FLOAT_LITERAL;
+second: INTEGER_LITERAL | DOUBLE_LITERAL;
 zoneId
 	: IDENTIFIER (SLASH IDENTIFIER)?
 	| STRING_LITERAL;
@@ -1026,6 +1075,13 @@ genericTemporalLiteralText
 /**
  * A generic format for specifying literal values of arbitary types
  */
+arrayLiteral
+	: LEFT_BRACKET (expression (COMMA expression)*)? RIGHT_BRACKET
+	;
+
+/**
+ * A generic format for specifying literal values of arbitary types
+ */
 generalizedLiteral
 	: LEFT_BRACE generalizedLiteralType COLON generalizedLiteralText RIGHT_BRACE
 	;
@@ -1052,6 +1108,7 @@ function
 	| collectionAggregateFunction
 	| collectionFunctionMisuse
 	| jpaNonstandardFunction
+	| columnFunction
 	| genericFunction
 	;
 
@@ -1059,7 +1116,7 @@ function
  * A syntax for calling user-defined or native database functions, required by JPQL
  */
 jpaNonstandardFunction
-	: FUNCTION LEFT_PAREN jpaNonstandardFunctionName (COMMA genericFunctionArguments)? RIGHT_PAREN
+	: FUNCTION LEFT_PAREN jpaNonstandardFunctionName (AS castTarget)? (COMMA genericFunctionArguments)? RIGHT_PAREN
 	;
 
 /**
@@ -1067,7 +1124,12 @@ jpaNonstandardFunction
  */
 jpaNonstandardFunctionName
 	: STRING_LITERAL
+	| identifier
 	;
+
+columnFunction
+    : COLUMN LEFT_PAREN path DOT jpaNonstandardFunctionName (AS castTarget)? RIGHT_PAREN
+    ;
 
 /**
  * Any function invocation that follows the regular syntax
@@ -1343,6 +1405,7 @@ trimSpecification
 
 trimCharacter
 	: STRING_LITERAL
+	| parameter
 	;
 
 /**
@@ -1586,6 +1649,10 @@ rollup
 	| CASE
 	| CAST
 	| COLLATE
+	| COLUMN
+	| CONFLICT
+	| CONSTRAINT
+	| CONTAINS
 	| COUNT
 	| CROSS
 	| CUBE
@@ -1603,6 +1670,7 @@ rollup
 	| DEPTH
 	| DESC
 	| DISTINCT
+	| DO
 	| ELEMENT
 	| ELEMENTS
 	| ELSE
@@ -1620,6 +1688,7 @@ rollup
 	| FETCH
 	| FILTER
 	| FIRST
+	| FK
 	| FOLLOWING
 	| FOR
 	| FORMAT
@@ -1635,11 +1704,13 @@ rollup
 	| ILIKE
 	| IN
 	| INDEX
+	| INCLUDES
 	| INDICES
 //	| INNER
 	| INSERT
 	| INSTANT
 	| INTERSECT
+	| INTERSECTS
 	| INTO
 	| IS
 	| JOIN
@@ -1676,6 +1747,7 @@ rollup
 	| NEXT
 	| NO
 	| NOT
+	| NOTHING
 	| NULLS
 	| OBJECT
 	| OF

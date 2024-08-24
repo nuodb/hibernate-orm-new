@@ -41,7 +41,7 @@ public final class DialectContext {
 		final Constructor<? extends Dialect> constructor;
 		try {
 			@SuppressWarnings("unchecked")
-			final Class<? extends Dialect> dialectClass = ReflectHelper.classForName( dialectName );
+			final Class<? extends Dialect> dialectClass = (Class<? extends Dialect>) ReflectHelper.classForName( dialectName );
 			constructor = dialectClass.getConstructor( DialectResolutionInfo.class );
 		}
 		catch (ClassNotFoundException cnfe) {
@@ -61,6 +61,15 @@ public final class DialectContext {
 			throw new HibernateException( "Could not instantiate given JDBC driver class: " + dialectName, e );
 		}
 		try ( Connection connection = driver.connect( jdbcUrl, props ) ) {
+//			if ( jdbcUrl.startsWith( "jdbc:derby:" ) ) {
+//				// Unfortunately we may only configure this once
+//				try ( Statement s = connection.createStatement() ) {
+//					s.execute( "CALL SYSCS_UTIL.SYSCS_SET_DATABASE_PROPERTY(\'derby.locks.waitTimeout\', \'10\')" );
+//					if ( !connection.getAutoCommit() ) {
+//						connection.commit();
+//					}
+//				}
+//			}
 			dialect = constructor.newInstance( new DatabaseMetaDataDialectResolutionInfoAdapter( connection.getMetaData() ) );
 		}
 		catch (SQLException sqle) {

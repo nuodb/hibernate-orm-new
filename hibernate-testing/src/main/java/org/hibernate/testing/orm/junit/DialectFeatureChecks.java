@@ -10,10 +10,10 @@ import java.sql.Types;
 
 import org.hibernate.boot.model.TruthValue;
 import org.hibernate.community.dialect.FirebirdDialect;
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.dialect.CockroachDialect;
 import org.hibernate.dialect.DB2Dialect;
-import org.hibernate.dialect.DerbyDialect;
+import org.hibernate.community.dialect.DerbyDialect;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.DialectDelegateWrapper;
 import org.hibernate.dialect.H2Dialect;
@@ -27,11 +27,12 @@ import org.hibernate.dialect.SQLServerDialect;
 import org.hibernate.dialect.SpannerDialect;
 import org.hibernate.dialect.SybaseDialect;
 import org.hibernate.dialect.SybaseDriverKind;
-import org.hibernate.dialect.TimeZoneSupport;
 import org.hibernate.dialect.TiDBDialect;
+import org.hibernate.dialect.TimeZoneSupport;
+import org.hibernate.mapping.AggregateColumn;
+import org.hibernate.mapping.Column;
 import org.hibernate.query.sqm.FetchClauseType;
 import org.hibernate.sql.ast.spi.StringBuilderSqlAppender;
-import org.hibernate.tool.schema.extract.spi.ColumnTypeInformation;
 import org.hibernate.type.SqlTypes;
 
 /**
@@ -137,12 +138,6 @@ abstract public class DialectFeatureChecks {
 		}
 	}
 
-	public static class SupportsParametersInInsertSelectCheck implements DialectFeatureCheck {
-		public boolean apply(Dialect dialect) {
-			return dialect.supportsParametersInInsertSelect();
-		}
-	}
-
 	public static class HasSelfReferentialForeignKeyBugCheck implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			return dialect.hasSelfReferentialForeignKeyBug();
@@ -152,10 +147,10 @@ abstract public class DialectFeatureChecks {
 	public static class SupportsRowValueConstructorSyntaxCheck implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
-			return dialect instanceof AbstractHANADialect
-					|| dialect instanceof CockroachDialect
-					|| dialect instanceof MySQLDialect
-					|| dialect instanceof PostgreSQLDialect;
+			return dialect instanceof HANADialect
+				|| dialect instanceof CockroachDialect
+				|| dialect instanceof MySQLDialect
+				|| dialect instanceof PostgreSQLDialect;
 		}
 	}
 
@@ -258,12 +253,12 @@ abstract public class DialectFeatureChecks {
 		public boolean apply(Dialect dialect) {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
 			return dialect instanceof DB2Dialect
-					|| dialect instanceof OracleDialect
-					|| dialect instanceof PostgreSQLDialect
-					|| dialect instanceof SQLServerDialect
-					|| dialect instanceof DerbyDialect
-					|| dialect instanceof MySQLDialect && !(dialect instanceof TiDBDialect)
-					|| dialect instanceof MariaDBDialect;
+				|| dialect instanceof OracleDialect
+				|| dialect instanceof PostgreSQLDialect
+				|| dialect instanceof SQLServerDialect
+				|| dialect instanceof DerbyDialect
+				|| dialect instanceof MySQLDialect && !(dialect instanceof TiDBDialect)
+				|| dialect instanceof MariaDBDialect;
 		}
 	}
 
@@ -271,9 +266,9 @@ abstract public class DialectFeatureChecks {
 		public boolean apply(Dialect dialect) {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
 			return dialect instanceof DB2Dialect
-					|| dialect instanceof OracleDialect
-					|| dialect instanceof PostgreSQLDialect
-					|| dialect instanceof SQLServerDialect;
+				|| dialect instanceof OracleDialect
+				|| dialect instanceof PostgreSQLDialect
+				|| dialect instanceof SQLServerDialect;
 		}
 	}
 
@@ -292,7 +287,7 @@ abstract public class DialectFeatureChecks {
 	public static class SupportsWithTies implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			return dialect.supportsFetchClause( FetchClauseType.ROWS_WITH_TIES )
-					|| dialect.supportsWindowFunctions();
+				|| dialect.supportsWindowFunctions();
 		}
 	}
 
@@ -373,7 +368,7 @@ abstract public class DialectFeatureChecks {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
 			return dialect.supportsOrderByInSubquery()
 					// For some reason, HANA doesn't support order by in correlated subqueries...
-					&& !( dialect instanceof AbstractHANADialect );
+					&& !( dialect instanceof HANADialect );
 		}
 	}
 
@@ -408,7 +403,7 @@ abstract public class DialectFeatureChecks {
 					|| dialect instanceof HSQLDialect
 					|| dialect instanceof MySQLDialect
 					|| dialect instanceof PostgreSQLDialect
-					|| dialect instanceof AbstractHANADialect
+					|| dialect instanceof HANADialect
 					|| dialect instanceof CockroachDialect
 					|| dialect instanceof DB2Dialect
 					|| dialect instanceof OracleDialect
@@ -420,28 +415,28 @@ abstract public class DialectFeatureChecks {
 	public static class SupportsInverseDistributionFunctions implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
-			return dialect instanceof H2Dialect && dialect.getVersion().isSameOrAfter( 1, 4, 200 )
-					|| dialect instanceof PostgreSQLDialect
-					|| dialect instanceof AbstractHANADialect
-					|| dialect instanceof CockroachDialect
-					|| dialect instanceof DB2Dialect && ( (DB2Dialect) dialect ).getDB2Version().isSameOrAfter( 11 )
-					|| dialect instanceof OracleDialect
-					|| dialect instanceof SpannerDialect
-					|| dialect instanceof SQLServerDialect;
+			return dialect instanceof H2Dialect
+				|| dialect instanceof PostgreSQLDialect
+				|| dialect instanceof HANADialect
+				|| dialect instanceof CockroachDialect
+				|| dialect instanceof DB2Dialect && ( (DB2Dialect) dialect ).getDB2Version().isSameOrAfter( 11 )
+				|| dialect instanceof OracleDialect
+				|| dialect instanceof SpannerDialect
+				|| dialect instanceof SQLServerDialect;
 		}
 	}
 
 	public static class SupportsHypotheticalSetFunctions implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			dialect = DialectDelegateWrapper.extractRealDialect( dialect );
-			return dialect instanceof H2Dialect && dialect.getVersion().isSameOrAfter( 1, 4, 200 )
-					|| dialect instanceof PostgreSQLDialect
-					|| dialect instanceof AbstractHANADialect
-					|| dialect instanceof CockroachDialect
-					|| dialect instanceof DB2Dialect && ( (DB2Dialect) dialect ).getDB2Version().isSameOrAfter( 11 )
-					|| dialect instanceof OracleDialect
-					|| dialect instanceof SpannerDialect
-					|| dialect instanceof SQLServerDialect;
+			return dialect instanceof H2Dialect
+				|| dialect instanceof PostgreSQLDialect
+				|| dialect instanceof HANADialect
+				|| dialect instanceof CockroachDialect
+				|| dialect instanceof DB2Dialect && ( (DB2Dialect) dialect ).getDB2Version().isSameOrAfter( 11 )
+				|| dialect instanceof OracleDialect
+				|| dialect instanceof SpannerDialect
+				|| dialect instanceof SQLServerDialect;
 		}
 	}
 
@@ -522,7 +517,7 @@ abstract public class DialectFeatureChecks {
 						"",
 						"",
 						"",
-						new ColumnTypeInformation() {
+						new AggregateColumn(new Column(), null) {
 							@Override
 							public TruthValue getNullable() {
 								return TruthValue.UNKNOWN;
@@ -547,7 +542,7 @@ abstract public class DialectFeatureChecks {
 							public int getDecimalDigits() {
 								return 0;
 							}
-						}, new ColumnTypeInformation() {
+						}, new Column() {
 							@Override
 							public TruthValue getNullable() {
 								return TruthValue.UNKNOWN;
@@ -590,7 +585,7 @@ abstract public class DialectFeatureChecks {
 						"",
 						"",
 						"",
-						new ColumnTypeInformation() {
+						new AggregateColumn(new Column(), null) {
 							@Override
 							public TruthValue getNullable() {
 								return TruthValue.UNKNOWN;
@@ -615,7 +610,7 @@ abstract public class DialectFeatureChecks {
 							public int getDecimalDigits() {
 								return 0;
 							}
-						}, new ColumnTypeInformation() {
+						}, new Column() {
 							@Override
 							public TruthValue getNullable() {
 								return TruthValue.UNKNOWN;
@@ -670,6 +665,38 @@ abstract public class DialectFeatureChecks {
 	public static class SupportsCommentOn implements DialectFeatureCheck {
 		public boolean apply(Dialect dialect) {
 			return dialect.supportsCommentOn();
+		}
+	}
+
+	public static class SupportsStandardArrays implements DialectFeatureCheck {
+		public boolean apply(Dialect dialect) {
+			return dialect.supportsStandardArrays();
+		}
+	}
+
+	public static class SupportsStructuralArrays implements DialectFeatureCheck {
+		public boolean apply(Dialect dialect) {
+			return dialect.getPreferredSqlTypeCodeForArray() != SqlTypes.VARBINARY;
+		}
+	}
+
+	public static class SupportsUpsertOrMerge implements DialectFeatureCheck {
+		public boolean apply(Dialect dialect) {
+			return !( dialect instanceof DerbyDialect );
+		}
+	}
+
+	public static class SupportsCaseInsensitiveLike implements DialectFeatureCheck {
+		@Override
+		public boolean apply(Dialect dialect) {
+			return dialect.supportsCaseInsensitiveLike();
+		}
+	}
+
+	public static class SupportsNClob implements DialectFeatureCheck {
+		@Override
+		public boolean apply(Dialect dialect) {
+			return dialect.getNationalizationSupport() == NationalizationSupport.EXPLICIT;
 		}
 	}
 }

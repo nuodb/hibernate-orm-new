@@ -115,30 +115,30 @@ public class WrapVisitor extends ProxyVisitor {
 							&& ((LazyAttributeLoadingInterceptor)attributeInterceptor).isAttributeLoaded( persister.getAttributeMapping().getAttributeName() ) ) {
 						final EntityEntry entry = persistenceContext.getEntry( entity );
 						if ( entry.isExistsInDatabase() ) {
-							final AbstractEntityPersister entityDescriptor =
-									(AbstractEntityPersister) persister.getOwnerEntityPersister();
-							final Object key = entityDescriptor.getCollectionKey(
+							final Object key = AbstractEntityPersister.getCollectionKey(
 									persister,
 									entity,
 									entry,
 									session
 							);
-							PersistentCollection<?> collectionInstance = persistenceContext.getCollection(
-									new CollectionKey( persister, key )
-							);
-
-							if ( collectionInstance == null ) {
-								// the collection has not been initialized and new collection values have been assigned,
-								// we need to be sure to delete all the collection elements before inserting the new ones
-								collectionInstance = persister.getCollectionSemantics().instantiateWrapper(
-										key,
-										persister,
-										session
+							if ( key != null ) {
+								PersistentCollection<?> collectionInstance = persistenceContext.getCollection(
+										new CollectionKey( persister, key )
 								);
-								persistenceContext.addUninitializedCollection( persister, collectionInstance, key );
-								final CollectionEntry collectionEntry = persistenceContext.getCollectionEntry(
-										collectionInstance );
-								collectionEntry.setDoremove( true );
+
+								if ( collectionInstance == null ) {
+									// the collection has not been initialized and new collection values have been assigned,
+									// we need to be sure to delete all the collection elements before inserting the new ones
+									collectionInstance = persister.getCollectionSemantics().instantiateWrapper(
+											key,
+											persister,
+											session
+									);
+									persistenceContext.addUninitializedCollection( persister, collectionInstance, key );
+									final CollectionEntry collectionEntry =
+											persistenceContext.getCollectionEntry( collectionInstance );
+									collectionEntry.setDoremove( true );
+								}
 							}
 						}
 					}

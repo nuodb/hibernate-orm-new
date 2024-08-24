@@ -18,6 +18,8 @@ import org.hibernate.service.spi.ServiceRegistryImplementor;
 
 import org.jboss.logging.Logger;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * Standard initiator for the standard {@link JtaPlatform}
  *
@@ -34,17 +36,19 @@ public class JtaPlatformInitiator implements StandardServiceInitiator<JtaPlatfor
 	}
 
 	@Override
-	public JtaPlatform initiateService(Map<String, Object> configurationValues, ServiceRegistryImplementor registry) {
+	public @Nullable JtaPlatform initiateService(Map<String, Object> configurationValues, ServiceRegistryImplementor registry) {
 		final Object setting = configurationValues.get( AvailableSettings.JTA_PLATFORM );
-		JtaPlatform platform = registry.getService( StrategySelector.class ).resolveStrategy( JtaPlatform.class, setting );
+		JtaPlatform platform = registry.requireService( StrategySelector.class )
+				.resolveStrategy( JtaPlatform.class, setting );
 
 		if ( platform == null ) {
 			LOG.debug( "No JtaPlatform was specified, checking resolver" );
-			platform = registry.getService( JtaPlatformResolver.class ).resolveJtaPlatform( configurationValues, registry );
+			platform = registry.requireService( JtaPlatformResolver.class )
+					.resolveJtaPlatform( configurationValues, registry );
 		}
 
 		if ( platform == null ) {
-			LOG.debug( "No JtaPlatform was specified, checking resolver" );
+			LOG.debug( "No JtaPlatform was specified, checking fallback provider" );
 			platform = getFallbackProvider( configurationValues, registry );
 		}
 
@@ -57,7 +61,7 @@ public class JtaPlatformInitiator implements StandardServiceInitiator<JtaPlatfor
 		return platform;
 	}
 
-	protected JtaPlatform getFallbackProvider(Map<?,?> configurationValues, ServiceRegistryImplementor registry) {
+	protected @Nullable JtaPlatform getFallbackProvider(Map<?,?> configurationValues, ServiceRegistryImplementor registry) {
 		return null;
 	}
 }

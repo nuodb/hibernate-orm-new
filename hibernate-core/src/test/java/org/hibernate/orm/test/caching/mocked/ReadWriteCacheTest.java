@@ -13,13 +13,14 @@ import jakarta.persistence.Cacheable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
-import org.hibernate.EmptyInterceptor;
+import org.hibernate.Interceptor;
 import org.hibernate.Session;
 import org.hibernate.Transaction;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.cfg.Configuration;
 
 import org.hibernate.dialect.CockroachDialect;
+import org.hibernate.community.dialect.DerbyDialect;
 import org.hibernate.dialect.HSQLDialect;
 import org.hibernate.dialect.SybaseASEDialect;
 
@@ -67,6 +68,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@SkipForDialect(value = CockroachDialect.class, comment = "CockroachDB uses SERIALIZABLE isolation, and does not support this")
 	@SkipForDialect(value = HSQLDialect.class, comment = "HSQLDB seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
+	@SkipForDialect(value = DerbyDialect.class, comment = "HSQLDB seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
 	@SkipForDialect(value = SybaseASEDialect.class, comment = "Sybase seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
 	public void testDelete() throws InterruptedException {
 		bookId = 1L;
@@ -78,7 +80,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 		doInHibernate( this::sessionFactory, session -> {
 			log.info( "Delete Book" );
 			Book book = session.get( Book.class, bookId );
-			session.delete( book );
+			session.remove( book );
 			interceptTransaction.set( true );
 		} );
 
@@ -146,6 +148,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 	@Test
 	@SkipForDialect(value = CockroachDialect.class, comment = "CockroachDB uses SERIALIZABLE isolation, and does not support this")
 	@SkipForDialect(value = HSQLDialect.class, comment = "HSQLDB seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
+	@SkipForDialect(value = DerbyDialect.class, comment = "HSQLDB seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
 	@SkipForDialect(value = SybaseASEDialect.class, comment = "Sybase seems to block on acquiring a SHARE lock when a different TX upgraded a SHARE to EXCLUSIVE lock, maybe the upgrade caused a table lock?")
 	public void testUpdate() throws InterruptedException {
 		bookId = 4L;
@@ -158,7 +161,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 			log.info( "Update Book" );
 			Book book = session.get( Book.class, bookId );
 			book.setTitle( UPDATED_TITLE );
-			session.save( book );
+			session.persist( book );
 			interceptTransaction.set( true );
 		} );
 
@@ -248,7 +251,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 		Book book = new Book();
 		book.setId( bookId );
 		book.setTitle( ORIGINAL_TITLE );
-		session.save( book );
+		session.persist( book );
 	}
 
 	private Consumer<Configuration> getCacheConfig() {
@@ -293,7 +296,7 @@ public class ReadWriteCacheTest extends BaseCoreFunctionalTestCase {
 		}
 	}
 
-	private final class TransactionInterceptor extends EmptyInterceptor {
+	private final class TransactionInterceptor implements Interceptor {
 		@Override
 		public void beforeTransactionCompletion(Transaction tx) {
 			if ( interceptTransaction.get() ) {

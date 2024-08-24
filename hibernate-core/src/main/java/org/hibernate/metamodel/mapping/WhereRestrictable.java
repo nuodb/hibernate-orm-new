@@ -13,14 +13,20 @@ import org.hibernate.sql.ast.tree.from.TableGroup;
 import org.hibernate.sql.ast.tree.predicate.Predicate;
 
 /**
- * Things which can have {@link org.hibernate.annotations.Where}
+ * Things which can have {@link org.hibernate.annotations.SQLRestriction}
  * declarations - entities and collections
  *
  * @see FilterRestrictable
  */
 public interface WhereRestrictable {
+
 	/**
-	 * Apply the {@link org.hibernate.annotations.Where} restrictions
+	 * Does this restrictable have a where restriction?
+	 */
+	boolean hasWhereRestrictions();
+
+	/**
+	 * Apply the {@link org.hibernate.annotations.SQLRestriction} restrictions
 	 */
 	void applyWhereRestrictions(
 			Consumer<Predicate> predicateConsumer,

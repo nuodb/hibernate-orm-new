@@ -103,6 +103,10 @@ final class PersistentAttributeTransformer implements AsmVisitorWrapper.ForDecla
 		this.enhancedFields = enhancedFields;
 	}
 
+	public AnnotatedFieldDescription[] getEnhancedFields() {
+		return enhancedFields;
+	}
+
 	public static PersistentAttributeTransformer collectPersistentFields(
 			TypeDescription managedCtClass,
 			ByteBuddyEnhancementContext enhancementContext,
@@ -257,7 +261,7 @@ final class PersistentAttributeTransformer implements AsmVisitorWrapper.ForDecla
 			builder = builder
 					.defineMethod(
 							EnhancerConstants.PERSISTENT_FIELD_READER_PREFIX + enhancedField.getName(),
-							enhancedField.getType().asErasure(),
+							enhancedField.asDefined().getType().asErasure(),
 							Visibility.PUBLIC
 					)
 					.intercept( fieldReader( enhancedField ) );
@@ -276,8 +280,7 @@ final class PersistentAttributeTransformer implements AsmVisitorWrapper.ForDecla
 
 			if ( !compositeOwner
 					&& !enhancementContext.isMappedSuperclassClass( managedCtClass )
-					&& enhancedField.hasAnnotation( Embedded.class )
-					&& enhancementContext.isCompositeClass( enhancedField.getType().asErasure() )
+					&& enhancementContext.isCompositeField( enhancedField )
 					&& enhancementContext.doDirtyCheckingInline( managedCtClass ) ) {
 				compositeOwner = true;
 			}
@@ -370,10 +373,10 @@ final class PersistentAttributeTransformer implements AsmVisitorWrapper.ForDecla
 					Opcodes.INVOKESPECIAL,
 					managedCtClass.getSuperClass().asErasure().getInternalName(),
 					EnhancerConstants.PERSISTENT_FIELD_READER_PREFIX + persistentField.getName(),
-					Type.getMethodDescriptor( Type.getType( persistentField.getType().asErasure().getDescriptor() ) ),
+					Type.getMethodDescriptor( Type.getType( persistentField.asDefined().getType().asErasure().getDescriptor() ) ),
 					false
 			);
-			methodVisitor.visitInsn( Type.getType( persistentField.getType().asErasure().getDescriptor() ).getOpcode( Opcodes.IRETURN ) );
+			methodVisitor.visitInsn( Type.getType( persistentField.asDefined().getType().asErasure().getDescriptor() ).getOpcode( Opcodes.IRETURN ) );
 			return new Size( persistentField.getType().getStackSize().getSize(), instrumentedMethod.getStackSize() );
 		}
 	}

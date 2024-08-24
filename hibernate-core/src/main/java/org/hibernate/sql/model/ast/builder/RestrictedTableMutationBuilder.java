@@ -7,7 +7,6 @@
 package org.hibernate.sql.model.ast.builder;
 
 import org.hibernate.metamodel.mapping.JdbcMapping;
-import org.hibernate.metamodel.mapping.SelectableConsumer;
 import org.hibernate.metamodel.mapping.SelectableMapping;
 import org.hibernate.metamodel.mapping.SelectableMappings;
 import org.hibernate.sql.model.MutationOperation;
@@ -100,6 +99,8 @@ public interface RestrictedTableMutationBuilder<O extends MutationOperation, M e
 	 * Add restriction based on non-version optimistically-locked column
 	 */
 	void addOptimisticLockRestriction(String columnName, String columnWriteFragment, JdbcMapping jdbcMapping);
+
+	void addLiteralRestriction(String columnName, String sqlLiteralText, JdbcMapping jdbcMapping);
 
 	ColumnValueBindingList getKeyRestrictionBindings();
 

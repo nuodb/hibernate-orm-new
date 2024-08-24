@@ -9,17 +9,17 @@ package org.hibernate.orm.test.bytecode.enhancement.join;
 import java.util.List;
 
 import org.hibernate.Session;
-import org.hibernate.annotations.LazyToOne;
-import org.hibernate.annotations.LazyToOneOption;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.cfg.Configuration;
 
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.hibernate.testing.bytecode.enhancement.extension.BytecodeEnhanced;
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.ServiceRegistry;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.hibernate.testing.orm.junit.Setting;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -33,29 +33,30 @@ import jakarta.persistence.criteria.JoinType;
 
 import static org.hibernate.Hibernate.isInitialized;
 import static org.hibernate.Hibernate.isPropertyInitialized;
-import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@TestForIssue( jiraKey = "HHH-3949" )
-@RunWith( BytecodeEnhancerRunner.class )
-public class HHH3949Test extends BaseCoreFunctionalTestCase {
+@SuppressWarnings("JUnitMalformedDeclaration")
+@JiraKey( "HHH-3949" )
+@DomainModel(
+        annotatedClasses = {
+             HHH3949Test.Person.class, HHH3949Test.Vehicle.class
+        }
+)
+@ServiceRegistry(
+        settings = {
+                @Setting( name = AvailableSettings.USE_SECOND_LEVEL_CACHE, value = "false" ),
+                @Setting( name = AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, value = "true" ),
+                // see HHH-3949 for further details ^^^^^
+        }
+)
+@SessionFactory
+@BytecodeEnhanced
+public class HHH3949Test {
 
-    @Override
-    public Class<?>[] getAnnotatedClasses() {
-        return new Class<?>[]{Person.class, Vehicle.class};
-    }
-
-    @Override
-    protected void configure(Configuration configuration) {
-        configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, "false" );
-        configuration.setProperty( AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, "true" );
-        // see HHH-3949 for further details ^^^^^
-    }
-
-    @Before
-    public void prepare() {
-        doInHibernate( this::sessionFactory, s -> {
+    @BeforeEach
+    public void prepare(SessionFactoryScope scope) {
+        scope.inTransaction( s -> {
 
             // it is important that the data associations remain as follows:
             //		* Johnny <-> Volkswagen Golf
@@ -68,38 +69,38 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
             Person person1 = new Person( "Johnny" );
             Person person2 = new Person( "Ricky" );
             Person person3 = new Person( "Rosy" );
-            s.save( person1 );
-            s.save( person2 );
-            s.save( person3 );
+            s.persist( person1 );
+            s.persist( person2 );
+            s.persist( person3 );
 
             Vehicle vehicle1 = new Vehicle( "Volkswagen Golf" );
             vehicle1.setDriver( person1 );
-            s.save( vehicle1 );
+            s.persist( vehicle1 );
 
             Vehicle vehicle2 = new Vehicle( "Subaru Impreza" );
             vehicle2.setDriver( person2 );
             person2.setVehicle( vehicle2 );
-            s.save( vehicle2 );
+            s.persist( vehicle2 );
 
             Vehicle vehicle3 = new Vehicle( "Renault Truck" );
-            s.save( vehicle3 );
+            s.persist( vehicle3 );
         } );
     }
 
     @Test
-    public void test1() {
-        performQueryAndVerifyPersonResults( "from Person p left join fetch p.vehicle" );
+    public void test1(SessionFactoryScope scope) {
+        performQueryAndVerifyPersonResults( scope, "from Person p left join fetch p.vehicle" );
     }
 
     @Test
-    public void test2() {
-        performQueryAndVerifyVehicleResults( "from Vehicle v left join fetch v.driver" );
+    public void test2(SessionFactoryScope scope) {
+        performQueryAndVerifyVehicleResults( scope, "from Vehicle v left join fetch v.driver" );
     }
 
     @Test
     @SuppressWarnings( "unchecked" )
-    public void test3() {
-        doInHibernate( this::sessionFactory, s -> {
+    public void test3(SessionFactoryScope scope) {
+        scope.inTransaction( s -> {
             CriteriaBuilder criteriaBuilder = s.getCriteriaBuilder();
             CriteriaQuery<Person> criteria = criteriaBuilder.createQuery( Person.class );
             criteria.from( Person.class ).fetch( "vehicle", JoinType.LEFT );
@@ -116,10 +117,10 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
 
     @Test
     @SuppressWarnings( "unchecked" )
-    public void test4() {
+    public void test4(SessionFactoryScope scope) {
         List<Vehicle> vehicles;
 
-        try ( Session s = openSession() ) {
+        try ( Session s = scope.getSessionFactory().openSession() ) {
             CriteriaBuilder criteriaBuilder = s.getCriteriaBuilder();
             CriteriaQuery<Vehicle> criteria = criteriaBuilder.createQuery( Vehicle.class );
             criteria.from( Vehicle.class ).fetch( "driver", JoinType.LEFT );
@@ -138,9 +139,9 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
     // --- //
 
     @SuppressWarnings( "unchecked" )
-    private void performQueryAndVerifyPersonResults(String query) {
+    private void performQueryAndVerifyPersonResults(SessionFactoryScope scope, String query) {
         List<Person> persons;
-        try ( Session s = openSession() ) {
+        try ( Session s = scope.getSessionFactory().openSession() ) {
             persons = (List<Person>) s.createQuery( query ).list();
         }
         for ( Person person : persons ) {
@@ -159,9 +160,9 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
     }
 
     @SuppressWarnings( "unchecked" )
-    private void performQueryAndVerifyVehicleResults(String query) {
+    private void performQueryAndVerifyVehicleResults(SessionFactoryScope scope, String query) {
         List<Vehicle> vehicles;
-        try ( Session s = openSession() ) {
+        try ( Session s = scope.getSessionFactory().openSession() ) {
             vehicles = (List<Vehicle>) s.createQuery( query ).list();
         }
         for ( Vehicle vehicle : vehicles ) {
@@ -189,7 +190,7 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
 
     @Entity( name = "Person" )
     @Table( name = "PERSON" )
-    private static class Person {
+    static class Person {
 
         @Id
         @GeneratedValue
@@ -198,7 +199,6 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
         String name;
 
         @OneToOne( optional = true, mappedBy = "driver", fetch = FetchType.LAZY )
-        @LazyToOne( LazyToOneOption.NO_PROXY )
         Vehicle vehicle;
 
         Person() {
@@ -219,7 +219,7 @@ public class HHH3949Test extends BaseCoreFunctionalTestCase {
 
     @Entity( name = "Vehicle" )
     @Table( name = "VEHICLE" )
-    private static class Vehicle {
+    static class Vehicle {
 
         @Id
         @GeneratedValue

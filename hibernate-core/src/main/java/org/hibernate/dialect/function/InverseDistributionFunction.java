@@ -8,6 +8,7 @@ package org.hibernate.dialect.function;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.hibernate.metamodel.mapping.BasicValuedMapping;
 import org.hibernate.metamodel.mapping.JdbcMappingContainer;
@@ -60,8 +61,7 @@ public class InverseDistributionFunction extends AbstractSqmSelfRenderingFunctio
 			SqmPredicate filter,
 			SqmOrderByClause withinGroupClause,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return new SelfRenderingInverseDistributionFunction<>(
 				arguments,
 				filter,
@@ -75,8 +75,9 @@ public class InverseDistributionFunction extends AbstractSqmSelfRenderingFunctio
 	public void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
-		render( sqlAppender, sqlAstArguments, null, Collections.emptyList(), walker );
+		render( sqlAppender, sqlAstArguments, null, Collections.emptyList(), returnType, walker );
 	}
 
 	@Override
@@ -84,8 +85,9 @@ public class InverseDistributionFunction extends AbstractSqmSelfRenderingFunctio
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
-		render( sqlAppender, sqlAstArguments, filter, Collections.emptyList(), walker );
+		render( sqlAppender, sqlAstArguments, filter, Collections.emptyList(), returnType, walker );
 	}
 
 	@Override
@@ -94,6 +96,7 @@ public class InverseDistributionFunction extends AbstractSqmSelfRenderingFunctio
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			List<SortSpecification> withinGroup,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> translator) {
 		if ( filter != null && !translator.supportsFilterClause() ) {
 			throw new IllegalArgumentException( "Can't emulate filter clause for inverse distribution function [" + getName() + "]" );
@@ -150,22 +153,26 @@ public class InverseDistributionFunction extends AbstractSqmSelfRenderingFunctio
 			);
 			if ( withinGroupClause == null ) {
 				throw new SemanticException("Inverse distribution function '" + getFunctionName()
-						+ "' must specify WITHIN GROUP");
+						+ "' must specify 'WITHIN GROUP'");
 			}
 		}
 
 		@Override
-		protected ReturnableType<?> resolveResultType(TypeConfiguration typeConfiguration) {
+		protected ReturnableType<?> determineResultType(
+				SqmToSqlAstConverter converter,
+				TypeConfiguration typeConfiguration) {
 			return (ReturnableType<?>)
 					getWithinGroup().getSortSpecifications().get( 0 )
 							.getSortExpression()
-							.getExpressible();
+							.getExpressible()
+							.getSqmType();
 		}
 
 		@Override
 		protected MappingModelExpressible<?> getMappingModelExpressible(
 				SqmToSqlAstConverter walker,
-				ReturnableType<?> resultType) {
+				ReturnableType<?> resultType,
+				List<SqlAstNode> arguments) {
 			MappingModelExpressible<?> mapping;
 			if ( resultType instanceof MappingModelExpressible) {
 				// here we have a BasicType, which can be cast

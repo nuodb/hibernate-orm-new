@@ -10,7 +10,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import org.hibernate.dialect.DerbyDialect;
+import org.hibernate.community.dialect.DerbyDialect;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.spi.SessionImplementor;
 import org.hibernate.exception.GenericJDBCException;
@@ -32,7 +32,7 @@ public class SequenceValueExtractor {
 		final PreparedStatement query = sessionImpl.getJdbcCoordinator()
 				.getStatementPreparer()
 				.prepareStatement( queryString );
-		try ( final ResultSet resultSet = sessionImpl.getJdbcCoordinator().getResultSetReturn().extract( query ) ) {
+		try ( final ResultSet resultSet = sessionImpl.getJdbcCoordinator().getResultSetReturn().extract( query, queryString ) ) {
 			resultSet.next();
 			long value = resultSet.getLong( 1 );
 			if ( dialect instanceof DerbyDialect ) {

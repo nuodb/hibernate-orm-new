@@ -30,10 +30,17 @@ public class LongJavaType extends AbstractClassJavaType<Long>
 	public LongJavaType() {
 		super( Long.class );
 	}
+
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	@Override
 	public String toString(Long value) {
 		return value == null ? null : value.toString();
 	}
+
 	@Override
 	public Long fromString(CharSequence string) {
 		return Long.valueOf( string.toString() );
@@ -45,7 +52,7 @@ public class LongJavaType extends AbstractClassJavaType<Long>
 		if ( value == null ) {
 			return null;
 		}
-		if ( Long.class.isAssignableFrom( type ) ) {
+		if ( Long.class.isAssignableFrom( type ) || type == Object.class ) {
 			return (X) value;
 		}
 		if ( Byte.class.isAssignableFrom( type ) ) {
@@ -94,7 +101,7 @@ public class LongJavaType extends AbstractClassJavaType<Long>
 
 	@Override
 	public boolean isWider(JavaType<?> javaType) {
-		switch ( javaType.getJavaType().getTypeName() ) {
+		switch ( javaType.getTypeName() ) {
 			case "byte":
 			case "java.lang.Byte":
 			case "short":
@@ -162,7 +169,7 @@ public class LongJavaType extends AbstractClassJavaType<Long>
 	}
 
 	@Override
-	public Class getPrimitiveClass() {
+	public Class<?> getPrimitiveClass() {
 		return long.class;
 	}
 
@@ -209,7 +216,9 @@ public class LongJavaType extends AbstractClassJavaType<Long>
 	@Override
 	public Long seed(
 			Long length,
-			Integer precision, Integer scale, SharedSessionContractImplementor session) {
+			Integer precision,
+			Integer scale,
+			SharedSessionContractImplementor session) {
 		return ZERO;
 	}
 

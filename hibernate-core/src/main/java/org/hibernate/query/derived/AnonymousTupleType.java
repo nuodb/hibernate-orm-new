@@ -117,13 +117,7 @@ public class AnonymousTupleType<T> implements TupleType<T>, DomainType<T>, Retur
 		if ( domainType instanceof EntityDomainType<?> ) {
 			final EntityDomainType<?> entityDomainType = (EntityDomainType<?>) domainType;
 			final SingularPersistentAttribute<?, ?> idAttribute = entityDomainType.findIdAttribute();
-			final String idPath;
-			if ( idAttribute == null ) {
-				idPath = componentName;
-			}
-			else {
-				idPath = componentName + "_" + idAttribute.getName();
-			}
+			final String idPath = idAttribute == null ? componentName : componentName + "_" + idAttribute.getName();
 			addColumnNames( columnNames, entityDomainType.getIdentifierDescriptor().getSqmPathType(), idPath );
 		}
 		else if ( domainType instanceof ManagedDomainType<?> ) {
@@ -214,7 +208,7 @@ public class AnonymousTupleType<T> implements TupleType<T>, DomainType<T>, Retur
 		else {
 			return new AnonymousTupleSimpleSqmPathSource<>(
 					name,
-					(DomainType<? extends Object>) component.getExpressible(),
+					component.getExpressible().getSqmType(),
 					BindableType.SINGULAR_ATTRIBUTE
 			);
 		}
@@ -242,7 +236,12 @@ public class AnonymousTupleType<T> implements TupleType<T>, DomainType<T>, Retur
 	}
 
 	@Override
-	public DomainType<?> getSqmPathType() {
+	public DomainType<T> getSqmPathType() {
+		return this;
+	}
+
+	@Override
+	public DomainType<T> getSqmType() {
 		return this;
 	}
 

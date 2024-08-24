@@ -7,6 +7,7 @@
 package org.hibernate.metamodel.model.domain.internal;
 
 import org.hibernate.metamodel.mapping.EntityMappingType;
+import org.hibernate.metamodel.model.domain.DiscriminatorSqmPath;
 import org.hibernate.metamodel.model.domain.EntityDomainType;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SemanticQueryWalker;
@@ -18,12 +19,12 @@ import org.hibernate.query.sqm.tree.expression.SqmLiteralEntityType;
 import org.hibernate.spi.NavigablePath;
 
 /**
- * SqmPath specialization for an entity discriminator
+ * {@link SqmPath} specialization for an entity discriminator
  *
  * @author Steve Ebersole
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
-public class EntityDiscriminatorSqmPath extends AbstractSqmPath implements org.hibernate.metamodel.model.domain.DiscriminatorSqmPath {
+public class EntityDiscriminatorSqmPath<T> extends AbstractSqmPath<T> implements DiscriminatorSqmPath<T> {
 	private final EntityDomainType entityDomainType;
 	private final EntityMappingType entityDescriptor;
 
@@ -48,8 +49,8 @@ public class EntityDiscriminatorSqmPath extends AbstractSqmPath implements org.h
 	}
 
 	@Override
-	public DiscriminatorSqmPathSource getExpressible() {
-		return (DiscriminatorSqmPathSource) getNodeType();
+	public EntityDiscriminatorSqmPathSource getExpressible() {
+		return (EntityDiscriminatorSqmPathSource) getNodeType();
 	}
 
 	@Override

@@ -29,16 +29,18 @@ import org.hibernate.sql.results.graph.basic.BasicFetch;
  * @author Steve Ebersole
  */
 public interface EntityDiscriminatorMapping extends DiscriminatorMapping, FetchOptions {
-	String ROLE_NAME = "{discriminator}";
-	String LEGACY_HQL_ROLE_NAME = "class";
+
+	String DISCRIMINATOR_ROLE_NAME = "{discriminator}";
+	String LEGACY_DISCRIMINATOR_NAME = "class";
 
 	static boolean matchesRoleName(String name) {
-		return ROLE_NAME.equals( name ) || LEGACY_HQL_ROLE_NAME.equals( name );
+		return DISCRIMINATOR_ROLE_NAME.equals( name )
+			|| LEGACY_DISCRIMINATOR_NAME.equalsIgnoreCase( name );
 	}
 
 	@Override
 	default String getPartName() {
-		return ROLE_NAME;
+		return DISCRIMINATOR_ROLE_NAME;
 	}
 
 	@Override
@@ -55,34 +57,6 @@ public interface EntityDiscriminatorMapping extends DiscriminatorMapping, FetchO
 	default int getFetchableKey() {
 		return -2;
 	}
-
-	/**
-	 * Retrieve the details for a particular discriminator value.
-	 *
-	 * Returns {@code null} if there is no match.
-	 */
-	DiscriminatorValueDetails resolveDiscriminatorValue(Object value);
-
-	/**
-	 * Create the appropriate SQL expression for this discriminator
-	 *
-	 * @param jdbcMappingToUse The JDBC mapping to use.  This allows opting between
-	 * the "domain result type" (aka Class) and the "underlying type" (Integer, String, etc)
-	 */
-	Expression resolveSqlExpression(
-			NavigablePath navigablePath,
-			JdbcMapping jdbcMappingToUse,
-			TableGroup tableGroup,
-			SqlAstCreationState creationState);
-
-	@Override
-	BasicFetch<?> generateFetch(
-			FetchParent fetchParent,
-			NavigablePath fetchablePath,
-			FetchTiming fetchTiming,
-			boolean selected,
-			String resultVariable,
-			DomainResultCreationState creationState);
 
 	@Override
 	default FetchOptions getMappedFetchOptions() {

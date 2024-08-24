@@ -9,20 +9,24 @@ package org.hibernate.sql.results.jdbc.internal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.BitSet;
 
+import org.hibernate.JDBCException;
+import org.hibernate.QueryTimeoutException;
 import org.hibernate.cache.spi.QueryKey;
 import org.hibernate.cache.spi.QueryResultsCache;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.exception.DataException;
+import org.hibernate.exception.LockTimeoutException;
+import org.hibernate.query.spi.Limit;
 import org.hibernate.query.spi.QueryOptions;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.exec.ExecutionException;
 import org.hibernate.sql.exec.spi.ExecutionContext;
 import org.hibernate.sql.results.caching.QueryCachePutManager;
-import org.hibernate.sql.results.caching.internal.QueryCachePutManagerDisabledImpl;
 import org.hibernate.sql.results.caching.internal.QueryCachePutManagerEnabledImpl;
 import org.hibernate.sql.results.jdbc.spi.JdbcValuesMapping;
-import org.hibernate.sql.results.jdbc.spi.JdbcValuesMetadata;
 import org.hibernate.sql.results.jdbc.spi.RowProcessingState;
 
 /**
@@ -32,28 +36,90 @@ import org.hibernate.sql.results.jdbc.spi.RowProcessingState;
  */
 public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
+	private final QueryCachePutManager queryCachePutManager;
+	private final ResultSet resultSet;
 	private final ResultSetAccess resultSetAccess;
 	private final JdbcValuesMapping valuesMapping;
 	private final ExecutionContext executionContext;
+	private final boolean usesFollowOnLocking;
+	private final int resultCountEstimate;
 
 	private final SqlSelection[] sqlSelections;
+	private final BitSet initializedIndexes;
 	private final Object[] currentRowJdbcValues;
+	private final int[] valueIndexesToCacheIndexes;
+	// Is only meaningful if valueIndexesToCacheIndexes is not null
+	// Contains the size of the row to cache, or if the value is negative,
+	// represents the inverted index of the single value to cache
+	private final int rowToCacheSize;
+	private int resultCount;
 
 	public JdbcValuesResultSetImpl(
 			ResultSetAccess resultSetAccess,
 			QueryKey queryCacheKey,
 			String queryIdentifier,
 			QueryOptions queryOptions,
+			boolean usesFollowOnLocking,
 			JdbcValuesMapping valuesMapping,
-			JdbcValuesMetadata metadataForCache,
+			CachedJdbcValuesMetadata metadataForCache,
 			ExecutionContext executionContext) {
-		super( resolveQueryCachePutManager( executionContext, queryOptions, queryCacheKey, queryIdentifier, metadataForCache ) );
+		this.queryCachePutManager = resolveQueryCachePutManager(
+				executionContext,
+				queryOptions,
+				queryCacheKey,
+				queryIdentifier,
+				metadataForCache
+		);
 		this.resultSetAccess = resultSetAccess;
+		this.resultSet = resultSetAccess.getResultSet();
 		this.valuesMapping = valuesMapping;
 		this.executionContext = executionContext;
+		this.usesFollowOnLocking = usesFollowOnLocking;
+		this.resultCountEstimate = determineResultCountEstimate( resultSetAccess, queryOptions, executionContext );
 
-		this.sqlSelections = valuesMapping.getSqlSelections().toArray( new SqlSelection[0] );
-		this.currentRowJdbcValues = new Object[ valuesMapping.getRowSize() ];
+		final int rowSize = valuesMapping.getRowSize();
+		this.sqlSelections = new SqlSelection[rowSize];
+		for ( SqlSelection selection : valuesMapping.getSqlSelections() ) {
+			this.sqlSelections[selection.getValuesArrayPosition()] = selection;
+		}
+		this.initializedIndexes = new BitSet( rowSize );
+		this.currentRowJdbcValues = new Object[rowSize];
+		if ( queryCachePutManager == null ) {
+			this.valueIndexesToCacheIndexes = null;
+			this.rowToCacheSize = -1;
+		}
+		else {
+			this.valueIndexesToCacheIndexes = valuesMapping.getValueIndexesToCacheIndexes();
+			final int rowToCacheSize = valuesMapping.getRowToCacheSize();
+			assert rowToCacheSize > 0;
+			int cacheIndex = rowToCacheSize;
+			if ( rowToCacheSize == 1 ) {
+				// Special case. Set the rowToCacheSize to the inverted index of the single element to cache
+				for ( int i = 0; i < valueIndexesToCacheIndexes.length; i++ ) {
+					if ( valueIndexesToCacheIndexes[i] != -1 ) {
+						cacheIndex = -i;
+						break;
+					}
+				}
+			}
+			this.rowToCacheSize = cacheIndex;
+		}
+	}
+
+	private int determineResultCountEstimate(
+			ResultSetAccess resultSetAccess,
+			QueryOptions queryOptions,
+			ExecutionContext executionContext) {
+		final Limit limit = queryOptions.getLimit();
+		if ( limit != null && limit.getMaxRows() != null ) {
+			return limit.getMaxRows();
+		}
+
+		final int resultCountEstimate = resultSetAccess.getResultCountEstimate();
+		if ( resultCountEstimate > 0 ) {
+			return resultCountEstimate;
+		}
+		return -1;
 	}
 
 	private static QueryCachePutManager resolveQueryCachePutManager(
@@ -61,7 +127,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 			QueryOptions queryOptions,
 			QueryKey queryCacheKey,
 			String queryIdentifier,
-			JdbcValuesMetadata metadataForCache) {
+			CachedJdbcValuesMetadata metadataForCache) {
 		if ( queryCacheKey != null ) {
 			final SessionFactoryImplementor factory = executionContext.getSession().getFactory();
 			final QueryResultsCache queryCache = factory.getCache()
@@ -75,7 +141,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 			);
 		}
 		else {
-			return QueryCachePutManagerDisabledImpl.INSTANCE;
+			return null;
 		}
 	}
 
@@ -96,7 +162,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean scrollRows(final int numberOfRows) {
 		try {
-			return resultSetAccess.getResultSet().relative( numberOfRows );
+			return resultSet.relative( numberOfRows );
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (scroll) ResultSet position", e );
@@ -106,7 +172,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public int getPosition() {
 		try {
-			return resultSetAccess.getResultSet().getRow() - 1;
+			return resultSet.getRow() - 1;
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error calling ResultSet#getRow", e );
@@ -120,7 +186,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean advanceToPosition(final int position) {
 		try {
-			return resultSetAccess.getResultSet().absolute( position );
+			return resultSet.absolute( position );
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (scroll) ResultSet position", e );
@@ -130,7 +196,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public boolean isBeforeFirst(RowProcessingState rowProcessingState) {
 		try {
-			return resultSetAccess.getResultSet().isBeforeFirst();
+			return resultSet.isBeforeFirst();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error calling ResultSet#isBeforeFirst()", e );
@@ -140,7 +206,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public void beforeFirst(RowProcessingState rowProcessingState) {
 		try {
-			resultSetAccess.getResultSet().beforeFirst();
+			resultSet.beforeFirst();
 			Arrays.fill( currentRowJdbcValues, null );
 		}
 		catch (SQLException e) {
@@ -151,7 +217,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public boolean isFirst(RowProcessingState rowProcessingState) {
 		try {
-			return resultSetAccess.getResultSet().isFirst();
+			return resultSet.isFirst();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error calling ResultSet#isFirst()", e );
@@ -166,7 +232,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public boolean isAfterLast(RowProcessingState rowProcessingState) {
 		try {
-			return resultSetAccess.getResultSet().isAfterLast();
+			return resultSet.isAfterLast();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error calling ResultSet#isAfterLast()", e );
@@ -176,7 +242,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public void afterLast(RowProcessingState rowProcessingState) {
 		try {
-			resultSetAccess.getResultSet().afterLast();
+			resultSet.afterLast();
 			Arrays.fill( currentRowJdbcValues, null );
 		}
 		catch (SQLException e) {
@@ -187,7 +253,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	@Override
 	public boolean isLast(RowProcessingState rowProcessingState) {
 		try {
-			return resultSetAccess.getResultSet().isLast();
+			return resultSet.isLast();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error calling ResultSet#isLast()", e );
@@ -201,7 +267,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean advanceNext() {
 		try {
-			return resultSetAccess.getResultSet().next();
+			return resultSet.next();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (next) ResultSet position", e );
@@ -210,7 +276,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean advanceToLast() {
 		try {
-			return resultSetAccess.getResultSet().last();
+			return resultSet.last();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (last) ResultSet position", e );
@@ -219,7 +285,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean advanceToFirst() {
 		try {
-			return resultSetAccess.getResultSet().first();
+			return resultSet.first();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (first) ResultSet position", e );
@@ -228,7 +294,7 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 
 	private boolean advancePrevious() {
 		try {
-			return resultSetAccess.getResultSet().previous();
+			return resultSet.previous();
 		}
 		catch (SQLException e) {
 			throw makeExecutionException( "Error advancing (previous) ResultSet position", e );
@@ -245,24 +311,83 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 	}
 
 	private ExecutionException makeExecutionException(String message, SQLException cause) {
-		return new ExecutionException(
-				message + " [" + cause.getMessage() + "]",
-				executionContext.getSession().getJdbcServices().getSqlExceptionHelper().convert(
-						cause,
-						message
-				)
+		final JDBCException jdbcException = executionContext.getSession().getJdbcServices().getSqlExceptionHelper().convert(
+				cause,
+				message
 		);
+		if ( jdbcException instanceof QueryTimeoutException
+				|| jdbcException instanceof DataException
+				|| jdbcException instanceof LockTimeoutException ) {
+			// So far, the exception helper threw these exceptions more or less directly during conversion,
+			// so to retain the same behavior, we throw that directly now as well instead of wrapping it
+			throw jdbcException;
+		}
+		return new ExecutionException( message + " [" + cause.getMessage() + "]", jdbcException );
 	}
 
-	private void readCurrentRowValues() {
-		final ResultSet resultSet = resultSetAccess.getResultSet();
-		final SharedSessionContractImplementor session = executionContext.getSession();
-		for ( final SqlSelection sqlSelection : sqlSelections ) {
+	public void readCurrentRowValues() {
+		initializedIndexes.clear();
+	}
+
+	@Override
+	public final void finishUp(SharedSessionContractImplementor session) {
+		if ( queryCachePutManager != null ) {
+			queryCachePutManager.finishUp( resultCount, session );
+		}
+		resultSetAccess.release();
+	}
+
+	@Override
+	public JdbcValuesMapping getValuesMapping() {
+		return valuesMapping;
+	}
+
+	@Override
+	public boolean usesFollowOnLocking() {
+		return usesFollowOnLocking;
+	}
+
+	@Override
+	public void finishRowProcessing(RowProcessingState rowProcessingState, boolean wasAdded) {
+		if ( queryCachePutManager != null ) {
+			if ( wasAdded ) {
+				resultCount++;
+			}
+			final Object objectToCache;
+			if ( valueIndexesToCacheIndexes == null ) {
+				objectToCache = Arrays.copyOf( currentRowJdbcValues, currentRowJdbcValues.length );
+			}
+			else if ( rowToCacheSize < 1 ) {
+				if ( !wasAdded ) {
+					// skip adding duplicate objects
+					return;
+				}
+				objectToCache = currentRowJdbcValues[-rowToCacheSize];
+			}
+			else {
+				final Object[] rowToCache = new Object[rowToCacheSize];
+				for ( int i = 0; i < currentRowJdbcValues.length; i++ ) {
+					final int cacheIndex = valueIndexesToCacheIndexes[i];
+					if ( cacheIndex != -1 ) {
+						rowToCache[cacheIndex] = initializedIndexes.get( i ) ? currentRowJdbcValues[i] : null;
+					}
+				}
+				objectToCache = rowToCache;
+			}
+			queryCachePutManager.registerJdbcRow( objectToCache );
+		}
+	}
+
+	@Override
+	public Object getCurrentRowValue(int valueIndex) {
+		if ( !initializedIndexes.get( valueIndex ) ) {
+			initializedIndexes.set( valueIndex );
+			final SqlSelection sqlSelection = sqlSelections[valueIndex];
 			try {
-				currentRowJdbcValues[ sqlSelection.getValuesArrayPosition() ] = sqlSelection.getJdbcValueExtractor().extract(
+				currentRowJdbcValues[valueIndex] = sqlSelection.getJdbcValueExtractor().extract(
 						resultSet,
 						sqlSelection.getJdbcResultSetIndex(),
-						session
+						executionContext.getSession()
 				);
 			}
 			catch ( SQLException e ) {
@@ -273,30 +398,21 @@ public class JdbcValuesResultSetImpl extends AbstractJdbcValues {
 				);
 			}
 		}
-	}
-
-	@Override
-	protected void release() {
-		resultSetAccess.release();
-	}
-
-	@Override
-	public JdbcValuesMapping getValuesMapping() {
-		return valuesMapping;
-	}
-
-	@Override
-	public Object[] getCurrentRowValuesArray() {
-		return currentRowJdbcValues;
+		return currentRowJdbcValues[valueIndex];
 	}
 
 	@Override
 	public void setFetchSize(int fetchSize) {
 		try {
-			resultSetAccess.getResultSet().setFetchSize( fetchSize );
+			resultSet.setFetchSize( fetchSize );
 		}
 		catch ( SQLException e ) {
 			throw makeExecutionException( "Error calling ResultSet.setFetchSize()", e );
 		}
+	}
+
+	@Override
+	public int getResultCountEstimate() {
+		return resultCountEstimate;
 	}
 }

@@ -7,6 +7,7 @@
 package org.hibernate.dialect;
 
 import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.temporal.ChronoField;
@@ -16,6 +17,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
 
+import org.hibernate.Length;
 import org.hibernate.LockMode;
 import org.hibernate.LockOptions;
 import org.hibernate.QueryTimeoutException;
@@ -32,14 +34,14 @@ import org.hibernate.dialect.function.SqlServerConvertTruncFunction;
 import org.hibernate.dialect.identity.IdentityColumnSupport;
 import org.hibernate.dialect.identity.SQLServerIdentityColumnSupport;
 import org.hibernate.dialect.pagination.LimitHandler;
-import org.hibernate.dialect.pagination.SQLServer2005LimitHandler;
 import org.hibernate.dialect.pagination.SQLServer2012LimitHandler;
-import org.hibernate.dialect.sequence.NoSequenceSupport;
 import org.hibernate.dialect.sequence.SQLServer16SequenceSupport;
 import org.hibernate.dialect.sequence.SQLServerSequenceSupport;
 import org.hibernate.dialect.sequence.SequenceSupport;
 import org.hibernate.dialect.unique.AlterTableUniqueIndexDelegate;
 import org.hibernate.dialect.unique.UniqueDelegate;
+import org.hibernate.engine.jdbc.Size;
+import org.hibernate.engine.jdbc.dialect.spi.BasicSQLExceptionConverter;
 import org.hibernate.engine.jdbc.dialect.spi.DialectResolutionInfo;
 import org.hibernate.engine.jdbc.env.spi.IdentifierCaseStrategy;
 import org.hibernate.engine.jdbc.env.spi.IdentifierHelper;
@@ -49,9 +51,16 @@ import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.hibernate.exception.LockTimeoutException;
 import org.hibernate.exception.spi.SQLExceptionConversionDelegate;
+import org.hibernate.exception.spi.TemplatedViolatedConstraintNameExtractor;
+import org.hibernate.exception.spi.ViolatedConstraintNameExtractor;
 import org.hibernate.internal.util.JdbcExceptionHelper;
+import org.hibernate.internal.util.config.ConfigurationHelper;
+import org.hibernate.internal.util.StringHelper;
+import org.hibernate.mapping.CheckConstraint;
 import org.hibernate.mapping.Column;
 import org.hibernate.persister.entity.mutation.EntityMutationTarget;
+import org.hibernate.procedure.internal.SQLServerCallableStatementSupport;
+import org.hibernate.procedure.spi.CallableStatementSupport;
 import org.hibernate.query.sqm.CastType;
 import org.hibernate.query.sqm.FetchClauseType;
 import org.hibernate.query.sqm.IntervalType;
@@ -72,6 +81,7 @@ import org.hibernate.tool.schema.spi.Exporter;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.BasicTypeRegistry;
 import org.hibernate.type.StandardBasicTypes;
+import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.descriptor.java.PrimitiveByteArrayJavaType;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.descriptor.jdbc.TimestampUtcAsJdbcTimestampJdbcType;
@@ -84,6 +94,8 @@ import org.hibernate.type.descriptor.sql.spi.DdlTypeRegistry;
 
 import jakarta.persistence.TemporalType;
 
+import static org.hibernate.cfg.DialectSpecificSettings.SQL_SERVER_COMPATIBILITY_LEVEL;
+import static org.hibernate.exception.spi.TemplatedViolatedConstraintNameExtractor.extractUsingTemplate;
 import static org.hibernate.query.sqm.TemporalUnit.NANOSECOND;
 import static org.hibernate.query.sqm.produce.function.FunctionParameterType.INTEGER;
 import static org.hibernate.type.SqlTypes.BLOB;
@@ -117,7 +129,7 @@ import static org.hibernate.type.descriptor.DateTimeUtils.appendAsTimestampWithM
  * @author Gavin King
  */
 public class SQLServerDialect extends AbstractTransactSQLDialect {
-	private final static DatabaseVersion MINIMUM_VERSION = DatabaseVersion.make( 10, 0 );
+	private final static DatabaseVersion MINIMUM_VERSION = DatabaseVersion.make( 11, 0 );
 
 	/**
 	 * NOTE : 2100 is the documented limit supposedly - but in my testing, sending
@@ -133,6 +145,31 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 	private final StandardSequenceExporter exporter;
 	private final UniqueDelegate uniqueDelegate = new AlterTableUniqueIndexDelegate(this);
 
+	private final SizeStrategy sizeStrategy = new SizeStrategyImpl() {
+		@Override
+		public Size resolveSize(
+				JdbcType jdbcType,
+				JavaType<?> javaType,
+				Integer precision,
+				Integer scale,
+				Long length) {
+			switch ( jdbcType.getDdlTypeCode() ) {
+				case BLOB:
+				case CLOB:
+				case NCLOB:
+					return super.resolveSize(
+							jdbcType,
+							javaType,
+							precision,
+							scale,
+							length == null ? getDefaultLobLength() : length
+					);
+				default:
+					return super.resolveSize( jdbcType, javaType, precision, scale, length );
+			}
+		}
+	};
+
 	public SQLServerDialect() {
 		this( MINIMUM_VERSION );
 	}
@@ -143,12 +180,40 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 	}
 
 	public SQLServerDialect(DialectResolutionInfo info) {
-		super(info);
-		exporter = createSequenceExporter(info);
+		this( determineDatabaseVersion( info ) );
+		registerKeywords( info );
+	}
+
+	private static DatabaseVersion determineDatabaseVersion(DialectResolutionInfo info) {
+		final Integer compatibilityLevel = getCompatibilityLevel( info );
+		if ( compatibilityLevel != null ) {
+			final int majorVersion = compatibilityLevel / 10;
+			final int minorVersion = compatibilityLevel % 10;
+			return DatabaseVersion.make( majorVersion, minorVersion );
+		}
+		return info.makeCopyOrDefault( MINIMUM_VERSION );
+	}
+
+	private static Integer getCompatibilityLevel(DialectResolutionInfo info) {
+		final DatabaseMetaData databaseMetaData = info.getDatabaseMetadata();
+		if ( databaseMetaData != null ) {
+			try ( java.sql.Statement statement = databaseMetaData.getConnection().createStatement() ) {
+				final ResultSet rs = statement.executeQuery( "SELECT compatibility_level FROM sys.databases where name = db_name();" );
+				if ( rs.next() ) {
+					return rs.getInt( 1 );
+				}
+			}
+			catch (SQLException e) {
+				throw BasicSQLExceptionConverter.INSTANCE.convert( e );
+			}
+		}
+
+		// default to the dialect-specific configuration setting
+		return ConfigurationHelper.getInteger( SQL_SERVER_COMPATIBILITY_LEVEL, info.getConfigurationValues() );
 	}
 
 	private StandardSequenceExporter createSequenceExporter(DatabaseVersion version) {
-		return version.isSameOrAfter(11) ? new SqlServerSequenceExporter(this) : null;
+		return new SqlServerSequenceExporter(this);
 	}
 
 	@Override
@@ -270,7 +335,7 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 		// this is essentially the only legal length for
 		// a "lob" in SQL Server, i.e. the value of MAX
 		// (caveat: for NVARCHAR it is half this value)
-		return 2_147_483_647;
+		return Length.LONG32;
 	}
 
 	@Override
@@ -314,7 +379,8 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 						"count_big",
 						"+",
 						"varchar(max)",
-						false
+						true,
+						"varbinary(max)"
 				)
 		);
 
@@ -332,49 +398,48 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 		functionFactory.stddevPopSamp_stdevp();
 		functionFactory.varPopSamp_varp();
 
-		if ( getVersion().isSameOrAfter( 11 ) ) {
-			functionContributions.getFunctionRegistry().register(
-					"format",
-					new SQLServerFormatEmulation( functionContributions.getTypeConfiguration() )
-			);
+		functionContributions.getFunctionRegistry().register(
+				"format",
+				new SQLServerFormatEmulation( functionContributions.getTypeConfiguration() )
+		);
 
-			//actually translate() was added in 2017 but
-			//it's not worth adding a new dialect for that!
-			functionFactory.translate();
+		//actually translate() was added in 2017 but
+		//it's not worth adding a new dialect for that!
+		functionFactory.translate();
 
-			functionFactory.median_percentileCont( true );
+		functionFactory.median_percentileCont( true );
 
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datefromparts" )
-					.setInvariantType( dateType )
-					.setExactArgumentCount( 3 )
-					.setParameterTypes(INTEGER)
-					.register();
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "timefromparts" )
-					.setInvariantType( timeType )
-					.setExactArgumentCount( 5 )
-					.setParameterTypes(INTEGER)
-					.register();
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "smalldatetimefromparts" )
-					.setInvariantType( timestampType )
-					.setExactArgumentCount( 5 )
-					.setParameterTypes(INTEGER)
-					.register();
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetimefromparts" )
-					.setInvariantType( timestampType )
-					.setExactArgumentCount( 7 )
-					.setParameterTypes(INTEGER)
-					.register();
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetime2fromparts" )
-					.setInvariantType( timestampType )
-					.setExactArgumentCount( 8 )
-					.setParameterTypes(INTEGER)
-					.register();
-			functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetimeoffsetfromparts" )
-					.setInvariantType( timestampType )
-					.setExactArgumentCount( 10 )
-					.setParameterTypes(INTEGER)
-					.register();
-		}
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datefromparts" )
+				.setInvariantType( dateType )
+				.setExactArgumentCount( 3 )
+				.setParameterTypes(INTEGER)
+				.register();
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "timefromparts" )
+				.setInvariantType( timeType )
+				.setExactArgumentCount( 5 )
+				.setParameterTypes(INTEGER)
+				.register();
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "smalldatetimefromparts" )
+				.setInvariantType( timestampType )
+				.setExactArgumentCount( 5 )
+				.setParameterTypes(INTEGER)
+				.register();
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetimefromparts" )
+				.setInvariantType( timestampType )
+				.setExactArgumentCount( 7 )
+				.setParameterTypes(INTEGER)
+				.register();
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetime2fromparts" )
+				.setInvariantType( timestampType )
+				.setExactArgumentCount( 8 )
+				.setParameterTypes(INTEGER)
+				.register();
+		functionContributions.getFunctionRegistry().namedDescriptorBuilder( "datetimeoffsetfromparts" )
+				.setInvariantType( timestampType )
+				.setExactArgumentCount( 10 )
+				.setParameterTypes(INTEGER)
+				.register();
+
 		functionFactory.windowFunctions();
 		functionFactory.inverseDistributionOrderedSetAggregates_windowEmulation();
 		functionFactory.hypotheticalOrderedSetAggregates_windowEmulation();
@@ -396,25 +461,25 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 	}
 
 	@Override
-	public String trimPattern(TrimSpec specification, char character) {
+	public String trimPattern(TrimSpec specification, boolean isWhitespace) {
 		if ( getVersion().isSameOrAfter( 16 ) ) {
 			switch ( specification ) {
 				case BOTH:
-					return character == ' '
+					return isWhitespace
 							? "trim(?1)"
-							: "trim('" + character + "' from ?1)";
+							: "trim(?2 from ?1)";
 				case LEADING:
-					return character == ' '
+					return isWhitespace
 							? "ltrim(?1)"
-							: "ltrim(?1,'" + character + "')";
+							: "ltrim(?1,?2)";
 				case TRAILING:
-					return character == ' '
+					return isWhitespace
 							? "rtrim(?1)"
-							: "rtrim(?1,'" + character + "')";
+							: "rtrim(?1,?2)";
 			}
 			throw new UnsupportedOperationException( "Unsupported specification: " + specification );
 		}
-		return super.trimPattern( specification, character );
+		return super.trimPattern( specification, isWhitespace );
 	}
 
 	@Override
@@ -426,6 +491,11 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 				return new SQLServerSqlAstTranslator<>( sessionFactory, statement );
 			}
 		};
+	}
+
+	@Override
+	public SizeStrategy getSizeStrategy() {
+		return sizeStrategy;
 	}
 
 	@Override
@@ -485,14 +555,7 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public LimitHandler getLimitHandler() {
-		if ( getVersion().isSameOrAfter( 11 ) ) {
-			return SQLServer2012LimitHandler.INSTANCE;
-		}
-		else {
-			//this is a stateful class, don't cache
-			//it in the Dialect!
-			return new SQLServer2005LimitHandler();
-		}
+		return SQLServer2012LimitHandler.INSTANCE;
 	}
 
 	@Override
@@ -641,10 +704,7 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public SequenceSupport getSequenceSupport() {
-		if ( getVersion().isBefore( 11 ) ) {
-			return NoSequenceSupport.INSTANCE;
-		}
-		else if ( getVersion().isSameOrAfter( 16 ) ) {
+		if ( getVersion().isSameOrAfter( 16 ) ) {
 			return SQLServer16SequenceSupport.INSTANCE;
 		}
 		else {
@@ -654,23 +714,16 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public String getQuerySequencesString() {
-		return getVersion().isBefore( 11 )
-				? super.getQuerySequencesString() //null
-				// The upper-case name should work on both case-sensitive
-				// and case-insensitive collations.
-				: "select * from INFORMATION_SCHEMA.SEQUENCES";
+		// The upper-case name should work on both case-sensitive and case-insensitive collations.
+		return "select * from INFORMATION_SCHEMA.SEQUENCES";
 	}
 
 	@Override
 	public String getQueryHintString(String sql, String hints) {
-		if ( getVersion().isBefore( 11 ) ) {
-			return super.getQueryHintString( sql, hints );
-		}
-
 		final StringBuilder buffer = new StringBuilder(
 				sql.length() + hints.length() + 12
 		);
-		final int pos = sql.indexOf( ";" );
+		final int pos = sql.indexOf( ';' );
 		if ( pos > -1 ) {
 			buffer.append( sql, 0, pos );
 		}
@@ -713,7 +766,28 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public boolean supportsFetchClause(FetchClauseType type) {
-		return getVersion().isSameOrAfter( 11 );
+		return true;
+	}
+
+	@Override
+	public ViolatedConstraintNameExtractor getViolatedConstraintNameExtractor() {
+		return new TemplatedViolatedConstraintNameExtractor(
+				sqle -> {
+					switch ( JdbcExceptionHelper.extractErrorCode( sqle ) ) {
+						case 2627:
+						case 2601:
+							String message = sqle.getMessage();
+							if ( message.contains("unique index ") ) {
+								return extractUsingTemplate( "unique index '", "'", message);
+							}
+							else {
+								return extractUsingTemplate( "'", "'", message);
+							}
+						default:
+							return null;
+					}
+				}
+		);
 	}
 
 	@Override
@@ -721,49 +795,42 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 		return (sqlException, message, sql) -> {
 			final String sqlState = JdbcExceptionHelper.extractSqlState( sqlException );
 			if ( "HY008".equals( sqlState ) ) {
-				throw new QueryTimeoutException( message, sqlException, sql );
+				return new QueryTimeoutException( message, sqlException, sql );
 			}
 
 			final int errorCode = JdbcExceptionHelper.extractErrorCode( sqlException );
 			switch ( errorCode ) {
 				case 1222:
-					throw new LockTimeoutException( message, sqlException, sql );
+					return new LockTimeoutException( message, sqlException, sql );
 				case 2627:
 				case 2601:
-					throw new ConstraintViolationException( message, sqlException, sql );
+					return new ConstraintViolationException(
+							message,
+							sqlException,
+							sql,
+							ConstraintViolationException.ConstraintKind.UNIQUE,
+							getViolatedConstraintNameExtractor().extractConstraintName( sqlException )
+					);
 				default:
 					return null;
 			}
 		};
 	}
 
-	/**
-	 * SQL server supports up to 7 decimal digits of
-	 * fractional second precision in a datetime2,
-	 * but since its duration arithmetic functions
-	 * try to fit durations into an int,
-	 * which is impossible with such high precision,
-	 * so default to generating {@code datetime2(3)}
-	 * columns.
-	 */
 	@Override
 	public int getDefaultTimestampPrecision() {
-		return 6; //microseconds!
+		return 7;
 	}
 
 	/**
-	 * SQL server supports up to 7 decimal digits of
-	 * fractional second precision in {@code datetime2},
-	 * but unfortunately its duration arithmetic
-	 * functions have a nasty habit of overflowing.
-	 * So to give ourselves a little extra headroom,
-	 * we will use {@code microsecond} as the native
-	 * unit of precision (but even then we have to
-	 * use tricks when calling {@code dateadd()}).
+	 * Even though SQL Server only supports 1/10th microsecond precision,
+	 * we use nanosecond as the "native" precision for datetime arithmetic
+	 * since it simplifies calculations.
 	 */
 	@Override
 	public long getFractionalSecondPrecisionInNanos() {
-		return 1_000; //microseconds!
+//		return 100; // 1/10th microsecond
+		return 1;
 	}
 
 	@Override
@@ -780,7 +847,7 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 //				return "(datepart(second,?2)*1000000000+datepart(nanosecond,?2))";
 			case SECOND:
 				//this should evaluate to a floating point type
-				return "(datepart(second,?2)+datepart(nanosecond,?2)/1e9)";
+				return "(datepart(second,?2)+datepart(nanosecond,?2)/1000000000)";
 			case EPOCH:
 				return "datediff_big(second, '1970-01-01', ?2)";
 			default:
@@ -795,14 +862,14 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 		// there's no dateadd_big()) so here we need to use two
 		// calls to dateadd() to add a whole duration
 		switch (unit) {
-			case NANOSECOND:
-				//Java Durations are usually the only thing
-				//we find expressed in nanosecond precision,
-				//and they can easily be very large
-				return "dateadd(nanosecond,?2%1000000000,dateadd(second,?2/1000000000,?3))";
+			case NANOSECOND: //use nanosecond as the "native" precision
 			case NATIVE:
-				//microsecond is the "native" precision
-				return "dateadd(microsecond,?2%1000000,dateadd(second,?2/1000000,?3))";
+				return "dateadd(nanosecond,?2%1000000000,dateadd(second,?2/1000000000,?3))";
+//			case NATIVE:
+//				// we could in principle use 1/10th microsecond as the "native" precision
+//				return "dateadd(nanosecond,?2%10000000,dateadd(second,?2/10000000,?3))";
+			case SECOND:
+				return "dateadd(nanosecond,cast(?2*1e9 as bigint)%1000000000,dateadd(second,?2,?3))";
 			default:
 				return "dateadd(?1,?2,?3)";
 		}
@@ -811,8 +878,8 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 	@Override
 	public String timestampdiffPattern(TemporalUnit unit, TemporalType fromTemporalType, TemporalType toTemporalType) {
 		if ( unit == TemporalUnit.NATIVE ) {
-			//use microsecond as the "native" precision
-			return "datediff_big(microsecond,?2,?3)";
+			//use nanosecond as the "native" precision
+			return "datediff_big(nanosecond,?2,?3)";
 		}
 		else {
 			//datediff() returns an int, and can easily
@@ -826,9 +893,9 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 
 	@Override
 	public String translateDurationField(TemporalUnit unit) {
-		//use microsecond as the "native" precision
+		//use nanosecond as the "native" precision
 		if ( unit == TemporalUnit.NATIVE ) {
-			return "microsecond";
+			return "nanosecond";
 		}
 		else {
 			return super.translateDurationField( unit );
@@ -1081,12 +1148,6 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 	}
 
 	@Override
-	public boolean supportsNamedParameters(DatabaseMetaData databaseMetaData) {
-		// Not sure if it's a JDBC driver issue, but it doesn't work
-		return false;
-	}
-
-	@Override
 	public String generatedAs(String generatedAs) {
 		return " as (" + generatedAs + ") persisted";
 	}
@@ -1117,5 +1178,37 @@ public class SQLServerDialect extends AbstractTransactSQLDialect {
 			SessionFactoryImplementor factory) {
 		final SQLServerSqlAstTranslator<JdbcOperation> translator = new SQLServerSqlAstTranslator<>( factory, optionalTableUpdate );
 		return translator.createMergeOperation( optionalTableUpdate );
+	}
+
+	@Override
+	public DmlTargetColumnQualifierSupport getDmlTargetColumnQualifierSupport() {
+		return DmlTargetColumnQualifierSupport.TABLE_ALIAS;
+	}
+
+	@Override
+	public boolean supportsFromClauseInUpdate() {
+		return true;
+	}
+
+	@Override
+	public CallableStatementSupport getCallableStatementSupport() {
+		return SQLServerCallableStatementSupport.INSTANCE;
+	}
+
+	@Override
+	public String getCheckConstraintString(CheckConstraint checkConstraint) {
+		final String constraintName = checkConstraint.getName();
+		return constraintName == null
+				?
+				" check " + getCheckConstraintOptions( checkConstraint ) + "(" + checkConstraint.getConstraint() + ")"
+				:
+				" constraint " + constraintName + " check " + getCheckConstraintOptions( checkConstraint ) + "(" + checkConstraint.getConstraint() + ")";
+	}
+
+	private String getCheckConstraintOptions(CheckConstraint checkConstraint) {
+		if ( StringHelper.isNotEmpty( checkConstraint.getOptions() ) ) {
+			return checkConstraint.getOptions() + " ";
+		}
+		return "";
 	}
 }

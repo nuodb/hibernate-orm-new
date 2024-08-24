@@ -42,7 +42,7 @@ public class DB2iDialect extends DB2Dialect {
 	final static DatabaseVersion DB2_LUW_VERSION = DB2Dialect.MINIMUM_VERSION;
 
 	public DB2iDialect(DialectResolutionInfo info) {
-		this( info.makeCopy() );
+		this( info.makeCopyOrDefault( MINIMUM_VERSION ) );
 		registerKeywords( info );
 	}
 
@@ -88,8 +88,19 @@ public class DB2iDialect extends DB2Dialect {
 	}
 
 	@Override
+	public boolean supportsIfExistsBeforeTableName() {
+		return false;
+	}
+
+	@Override
 	public boolean supportsDistinctFromPredicate() {
 		return true;
+	}
+
+	@Override
+	public boolean supportsUpdateReturning() {
+		// Only supported for insert statements on DB2 for i: https://www.ibm.com/docs/en/i/7.1?topic=clause-table-reference
+		return false;
 	}
 
 	/**
@@ -132,16 +143,6 @@ public class DB2iDialect extends DB2Dialect {
 	}
 
 	@Override
-	public boolean supportsLateral() {
-		return true;
-	}
-
-	@Override
-	public boolean supportsRecursiveCTE() {
-		return true;
-	}
-
-	@Override
 	public SqlAstTranslatorFactory getSqlAstTranslatorFactory() {
 		return new StandardSqlAstTranslatorFactory() {
 			@Override
@@ -158,7 +159,7 @@ public class DB2iDialect extends DB2Dialect {
 
 	@Override
 	public String rowId(String rowId) {
-		return rowId.isEmpty() ? "rowid_" : rowId;
+		return rowId == null || rowId.isEmpty() ? "rowid_" : rowId;
 	}
 
 	@Override

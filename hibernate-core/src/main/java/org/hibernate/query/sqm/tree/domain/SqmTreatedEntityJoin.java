@@ -10,17 +10,17 @@ import org.hibernate.metamodel.model.domain.EntityDomainType;
 import org.hibernate.query.sqm.SqmPathSource;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.from.SqmEntityJoin;
-import org.hibernate.query.sqm.tree.from.SqmJoin;
+import org.hibernate.spi.NavigablePath;
 
 /**
  * @author Steve Ebersole
  */
-public class SqmTreatedEntityJoin<T, S extends T> extends SqmEntityJoin<S> implements SqmTreatedPath<T,S> {
-	private final SqmEntityJoin<T> wrappedPath;
+public class SqmTreatedEntityJoin<L,R,S extends R> extends SqmEntityJoin<L,S> implements SqmTreatedJoin<L,R,S> {
+	private final SqmEntityJoin<L,R> wrappedPath;
 	private final EntityDomainType<S> treatTarget;
 
 	public SqmTreatedEntityJoin(
-			SqmEntityJoin<T> wrappedPath,
+			SqmEntityJoin<L,R> wrappedPath,
 			EntityDomainType<S> treatTarget,
 			String alias) {
 		super(
@@ -37,15 +37,32 @@ public class SqmTreatedEntityJoin<T, S extends T> extends SqmEntityJoin<S> imple
 		this.treatTarget = treatTarget;
 	}
 
+	private SqmTreatedEntityJoin(
+			NavigablePath navigablePath,
+			SqmEntityJoin<L,R> wrappedPath,
+			EntityDomainType<S> treatTarget,
+			String alias) {
+		super(
+				navigablePath,
+				treatTarget,
+				alias,
+				wrappedPath.getSqmJoinType(),
+				wrappedPath.getRoot()
+		);
+		this.wrappedPath = wrappedPath;
+		this.treatTarget = treatTarget;
+	}
+
 	@Override
-	public SqmTreatedEntityJoin<T, S> copy(SqmCopyContext context) {
-		final SqmTreatedEntityJoin<T, S> existing = context.getCopy( this );
+	public SqmTreatedEntityJoin<L,R,S> copy(SqmCopyContext context) {
+		final SqmTreatedEntityJoin<L,R,S> existing = context.getCopy( this );
 		if ( existing != null ) {
 			return existing;
 		}
-		final SqmTreatedEntityJoin<T, S> path = context.registerCopy(
+		final SqmTreatedEntityJoin<L,R,S> path = context.registerCopy(
 				this,
 				new SqmTreatedEntityJoin<>(
+						getNavigablePath(),
 						wrappedPath.copy( context ),
 						treatTarget,
 						getExplicitAlias()
@@ -61,7 +78,12 @@ public class SqmTreatedEntityJoin<T, S extends T> extends SqmEntityJoin<S> imple
 	}
 
 	@Override
-	public SqmPath<T> getWrappedPath() {
+	public EntityDomainType<S> getModel() {
+		return getTreatTarget();
+	}
+
+	@Override
+	public SqmPath<R> getWrappedPath() {
 		return wrappedPath;
 	}
 
@@ -72,8 +94,7 @@ public class SqmTreatedEntityJoin<T, S extends T> extends SqmEntityJoin<S> imple
 
 	@Override
 	public EntityDomainType<S> getReferencedPathSource() {
-		//noinspection unchecked
-		return (EntityDomainType<S>) wrappedPath.getReferencedPathSource();
+		return treatTarget;
 	}
 
 	@Override

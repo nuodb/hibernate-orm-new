@@ -7,7 +7,6 @@
 package org.hibernate.engine.jdbc.mutation.internal;
 
 import java.util.Map;
-import java.util.function.Supplier;
 
 import org.hibernate.cfg.Environment;
 import org.hibernate.engine.jdbc.batch.spi.BatchKey;
@@ -16,12 +15,8 @@ import org.hibernate.engine.jdbc.mutation.spi.BatchKeyAccess;
 import org.hibernate.engine.jdbc.mutation.spi.MutationExecutorService;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.internal.util.config.ConfigurationHelper;
-import org.hibernate.metamodel.mapping.EntityMappingType;
-import org.hibernate.persister.entity.mutation.EntityMutationTarget;
 import org.hibernate.sql.model.MutationOperation;
 import org.hibernate.sql.model.MutationOperationGroup;
-import org.hibernate.sql.model.MutationTarget;
-import org.hibernate.sql.model.MutationType;
 import org.hibernate.sql.model.PreparableMutationOperation;
 import org.hibernate.sql.model.SelfExecutingUpdateOperation;
 
@@ -56,23 +51,7 @@ public class StandardMutationExecutorService implements MutationExecutorService 
 				? globalBatchSize
 				: sessionBatchSize;
 
-		final int numberOfOperations = operationGroup.getNumberOfOperations();
-		final MutationType mutationType = operationGroup.getMutationType();
-		final MutationTarget<?> mutationTarget = operationGroup.getMutationTarget();
-
-		if ( mutationType == MutationType.INSERT
-				&& mutationTarget instanceof EntityMutationTarget
-				&& ( (EntityMutationTarget) mutationTarget ).getIdentityInsertDelegate() != null ) {
-			assert mutationTarget instanceof EntityMappingType;
-
-			if ( numberOfOperations > 1 ) {
-				return new MutationExecutorPostInsert( operationGroup, session );
-			}
-
-			return new MutationExecutorPostInsertSingleTable( operationGroup, session );
-		}
-
-		if ( numberOfOperations == 1 ) {
+		if ( operationGroup.getNumberOfOperations() == 1 ) {
 			final MutationOperation singleOperation = operationGroup.getSingleOperation();
 			if ( singleOperation instanceof SelfExecutingUpdateOperation ) {
 				return new MutationExecutorSingleSelfExecuting( (SelfExecutingUpdateOperation) singleOperation, session );
@@ -84,7 +63,13 @@ public class StandardMutationExecutorService implements MutationExecutorService 
 				return new MutationExecutorSingleBatched( jdbcOperation, batchKey, batchSizeToUse, session );
 			}
 
-			return new MutationExecutorSingleNonBatched( jdbcOperation, session );
+			return new MutationExecutorSingleNonBatched(
+					jdbcOperation,
+					operationGroup.asEntityMutationOperationGroup() != null ?
+							operationGroup.asEntityMutationOperationGroup().getMutationDelegate() :
+							null,
+					session
+			);
 		}
 
 		return new MutationExecutorStandard( operationGroup, batchKeySupplier, batchSizeToUse, session );

@@ -9,6 +9,7 @@ package org.hibernate.type.descriptor.java;
 import java.io.Reader;
 import java.io.StringReader;
 import java.sql.Clob;
+import java.sql.NClob;
 import java.util.Arrays;
 
 import org.hibernate.engine.jdbc.CharacterStream;
@@ -62,6 +63,9 @@ public class PrimitiveCharacterArrayJavaType extends AbstractClassJavaType<char[
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) new String( value );
 		}
+		if ( NClob.class.isAssignableFrom( type ) ) {
+			return (X) options.getLobCreator().createNClob( new String( value ) );
+		}
 		if ( Clob.class.isAssignableFrom( type ) ) {
 			return (X) options.getLobCreator().createClob( new String( value ) );
 		}
@@ -89,6 +93,10 @@ public class PrimitiveCharacterArrayJavaType extends AbstractClassJavaType<char[
 		}
 		if (value instanceof Reader) {
 			return DataHelper.extractString( ( (Reader) value ) ).toCharArray();
+		}
+		else if ( value instanceof Character ) {
+			// Support binding a single element as parameter value
+			return new char[]{ (char) value };
 		}
 		throw unknownWrap( value.getClass() );
 	}

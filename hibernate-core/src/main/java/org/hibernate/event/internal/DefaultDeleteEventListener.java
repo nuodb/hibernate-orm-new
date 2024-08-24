@@ -47,9 +47,12 @@ import org.hibernate.property.access.internal.PropertyAccessStrategyBackRefImpl;
 import org.hibernate.proxy.HibernateProxy;
 import org.hibernate.proxy.LazyInitializer;
 import org.hibernate.type.CollectionType;
+import org.hibernate.type.ComponentType;
 import org.hibernate.type.CompositeType;
 import org.hibernate.type.Type;
 import org.hibernate.type.TypeHelper;
+
+import static org.hibernate.engine.internal.Collections.skipRemoval;
 
 /**
  * Defines the default delete event listener used by hibernate for deleting entities
@@ -104,7 +107,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		if ( lazyInitializer != null ) {
 			if ( lazyInitializer.isUninitialized() ) {
 				final EventSource source = event.getSession();
-				final EntityPersister persister = source.getFactory().getMappingMetamodel()
+				final EntityPersister persister = event.getFactory().getMappingMetamodel()
 						.findEntityDescriptor( lazyInitializer.getEntityName() );
 				final Object id = lazyInitializer.getIdentifier();
 				final EntityKey key = source.generateEntityKey( id, persister );
@@ -135,15 +138,15 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 	private static void deleteOwnedCollections(Type type, Object key, EventSource session) {
 		final MappingMetamodelImplementor mappingMetamodel = session.getFactory().getMappingMetamodel();
 		final ActionQueue actionQueue = session.getActionQueue();
-		if ( type.isCollectionType() ) {
+		if ( type instanceof CollectionType ) {
 			final String role = ( (CollectionType) type ).getRole();
 			final CollectionPersister persister = mappingMetamodel.getCollectionDescriptor(role);
-			if ( !persister.isInverse() ) {
+			if ( !persister.isInverse() && !skipRemoval( session, persister, key ) ) {
 				actionQueue.addAction( new CollectionRemoveAction( persister, key, session ) );
 			}
 		}
-		else if ( type.isComponentType() ) {
-			final Type[] subtypes = ( (CompositeType) type ).getSubtypes();
+		else if ( type instanceof ComponentType ) {
+			final Type[] subtypes = ( (ComponentType) type ).getSubtypes();
 			for ( Type subtype : subtypes ) {
 				deleteOwnedCollections( subtype, key, session );
 			}
@@ -276,6 +279,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		// Bean Validation adds a PRE_DELETE listener
 		// and Envers adds a POST_DELETE listener
 		return fss.eventListenerGroup_PRE_DELETE.count() > 0
+			|| fss.eventListenerGroup_POST_COMMIT_DELETE.count() > 0
 			|| fss.eventListenerGroup_POST_DELETE.count() > 1
 			|| fss.eventListenerGroup_POST_DELETE.count() == 1
 				&& !(fss.eventListenerGroup_POST_DELETE.listeners().iterator().next()
@@ -380,7 +384,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		final Object[] deletedState = createDeletedState( persister, entity, currentState, session );
 		entityEntry.setDeletedState( deletedState );
 
-		session.getInterceptor().onDelete(
+		session.getInterceptor().onRemove(
 				entity,
 				entityEntry.getId(),
 				deletedState,
@@ -456,7 +460,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		final String[] propertyNames = persister.getPropertyNames();
 		final BytecodeEnhancementMetadata enhancementMetadata = persister.getBytecodeEnhancementMetadata();
 		for ( int i = 0; i < types.length; i++) {
-			if ( types[i].isCollectionType() && !enhancementMetadata.isAttributeLoaded( parent, propertyNames[i] ) ) {
+			if ( types[i] instanceof CollectionType && !enhancementMetadata.isAttributeLoaded( parent, propertyNames[i] ) ) {
 				final CollectionType collectionType = (CollectionType) types[i];
 				final CollectionPersister collectionDescriptor = persister.getFactory().getMappingMetamodel()
 						.getCollectionDescriptor( collectionType.getRole() );
@@ -504,7 +508,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		try {
 			// cascade-delete to collections BEFORE the collection owner is deleted
 			Cascade.cascade(
-					CascadingActions.DELETE,
+					CascadingActions.REMOVE,
 					CascadePoint.AFTER_INSERT_BEFORE_DELETE,
 					session,
 					persister,
@@ -531,7 +535,7 @@ public class DefaultDeleteEventListener implements DeleteEventListener,	Callback
 		try {
 			// cascade-delete to many-to-one AFTER the parent was deleted
 			Cascade.cascade(
-					CascadingActions.DELETE,
+					CascadingActions.REMOVE,
 					CascadePoint.BEFORE_INSERT_AFTER_DELETE,
 					session,
 					persister,

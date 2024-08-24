@@ -8,7 +8,7 @@ package org.hibernate.dialect.function;
 
 import org.hibernate.dialect.Dialect;
 import org.hibernate.metamodel.mapping.BasicValuedMapping;
-import org.hibernate.query.sqm.BinaryArithmeticOperator;
+import org.hibernate.query.ReturnableType;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.function.SelfRenderingFunctionSqlAstExpression;
 import org.hibernate.sql.ast.SqlAstTranslator;
@@ -26,6 +26,9 @@ import org.hibernate.type.spi.TypeConfiguration;
 
 import java.util.Arrays;
 import java.util.List;
+
+import static org.hibernate.query.sqm.BinaryArithmeticOperator.DIVIDE;
+import static org.hibernate.query.sqm.BinaryArithmeticOperator.MULTIPLY;
 
 /**
  * Used in place of {@link TimestampaddFunction} for databases which don't
@@ -53,6 +56,7 @@ public class IntegralTimestampaddFunction
 	public void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> arguments,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 
 		final DurationUnit field = (DurationUnit) arguments.get( 0 );
@@ -64,7 +68,7 @@ public class IntegralTimestampaddFunction
 			renderWithUnitConversion( sqlAppender, magnitude, to, walker, field, unit );
 		}
 		else {
-			super.render( sqlAppender, arguments, walker );
+			super.render( sqlAppender, arguments, returnType, walker );
 		}
 	}
 
@@ -103,16 +107,15 @@ public class IntegralTimestampaddFunction
 
 	private Expression convertedArgument(DurationUnit field, TemporalUnit unit, Expression magnitude) {
 		final BasicValuedMapping expressionType = (BasicValuedMapping) magnitude.getExpressionType();
-		final String conversionFactor = field.getUnit().conversionFactor( unit, dialect );
+		final String conversionFactor = field.getUnit().conversionFactorFull( unit, dialect );
 		return conversionFactor.isEmpty()
 				? magnitude
 				: new BinaryArithmeticExpression(
 						magnitude,
-						conversionFactor.charAt(0) == '*'
-								? BinaryArithmeticOperator.MULTIPLY
-								: BinaryArithmeticOperator.DIVIDE,
+						conversionFactor.charAt(0) == '*' ? MULTIPLY : DIVIDE,
 						new QueryLiteral<>(
-								expressionType.getExpressibleJavaType().fromString( conversionFactor.substring(1) ),
+								expressionType.getExpressibleJavaType()
+										.fromString( conversionFactor.substring(1) ),
 								expressionType
 						),
 						expressionType
@@ -123,9 +126,9 @@ public class IntegralTimestampaddFunction
 		final JdbcType jdbcType = magnitude.getExpressionType().getSingleJdbcMapping().getJdbcType();
 		if ( jdbcType.isFloat() ) {
 			// We need to multiply the magnitude by the conversion factor and cast to int
-			// Use second by default and nanosecond if we encounter fractional seconds
+			// Use SECOND by default and NATIVE if we encounter fractional seconds
 			return field.getUnit() == TemporalUnit.SECOND
-					? TemporalUnit.NANOSECOND
+					? TemporalUnit.NATIVE
 					: TemporalUnit.SECOND;
 		}
 		else {

@@ -6,9 +6,7 @@
  */
 package org.hibernate.id;
 
-import java.util.Iterator;
 import java.util.List;
-import java.util.NoSuchElementException;
 
 import org.hibernate.FetchMode;
 import org.hibernate.MappingException;
@@ -30,7 +28,7 @@ import org.hibernate.type.Type;
  */
 public class ExportableColumn extends Column {
 
-	public ExportableColumn(Database database, Table table, String name, BasicType type) {
+	public ExportableColumn(Database database, Table table, String name, BasicType<?> type) {
 		this(
 				database,
 				table,
@@ -46,7 +44,7 @@ public class ExportableColumn extends Column {
 			Database database,
 			Table table,
 			String name,
-			BasicType type,
+			BasicType<?> type,
 			String dbTypeDeclaration) {
 		super( name );
 		setValue( new ValueImpl( this, table, type, database ) );
@@ -56,10 +54,10 @@ public class ExportableColumn extends Column {
 	public static class ValueImpl implements Value {
 		private final ExportableColumn column;
 		private final Table table;
-		private final BasicType type;
+		private final BasicType<?> type;
 		private final Database database;
 
-		public ValueImpl(ExportableColumn column, Table table, BasicType type, Database database) {
+		public ValueImpl(ExportableColumn column, Table table, BasicType<?> type, Database database) {
 			this.column = column;
 			this.table = table;
 			this.type = type;
@@ -74,11 +72,6 @@ public class ExportableColumn extends Column {
 		@Override
 		public int getColumnSpan() {
 			return 1;
-		}
-
-		@Override @Deprecated
-		public Iterator<Selectable> getColumnIterator() {
-			return new ColumnIterator( column );
 		}
 
 		@Override
@@ -146,7 +139,7 @@ public class ExportableColumn extends Column {
 		}
 
 		@Override
-		public void createUniqueKey() {
+		public void createUniqueKey(MetadataBuildingContext context) {
 		}
 
 		@Override
@@ -187,38 +180,6 @@ public class ExportableColumn extends Column {
 		public boolean isColumnUpdateable(int index) {
 			return true;
 		}
-
-		@Override
-		public MetadataBuildingContext getBuildingContext() {
-			return table.getIdentifierValue().getBuildingContext();
-		}
 	}
 
-	public static class ColumnIterator implements Iterator<Selectable> {
-		private final ExportableColumn column;
-		private int count = 0;
-
-		public ColumnIterator(ExportableColumn column) {
-			this.column = column;
-		}
-
-		@Override
-		public boolean hasNext() {
-			return count == 0;
-		}
-
-		@Override
-		public ExportableColumn next() {
-			if ( count > 0 ) {
-				throw new NoSuchElementException( "The single element has already been read" );
-			}
-			count++;
-			return column;
-		}
-
-		@Override
-		public void remove() {
-			throw new UnsupportedOperationException( "Cannot remove" );
-		}
-	}
 }

@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 
 import org.hibernate.engine.FetchStyle;
 import org.hibernate.engine.FetchTiming;
+import org.hibernate.engine.spi.EntityHolder;
 import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
@@ -73,11 +74,15 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 				.getJavaTypeRegistry()
 				.resolveManagedTypeDescriptor( idClassSource.getComponentClass() );
 
-		this.representationStrategy = new IdClassRepresentationStrategy( this );
+		this.representationStrategy = new IdClassRepresentationStrategy(
+				this,
+				idClassSource.sortProperties() == null,
+				idClassSource::getPropertyNames
+		);
 
 		final PropertyAccess propertyAccess = PropertyAccessStrategyMapImpl.INSTANCE.buildPropertyAccess(
 				null,
-				EntityIdentifierMapping.ROLE_LOCAL_NAME,
+				EntityIdentifierMapping.ID_ROLE_NAME,
 				true );
 		final AttributeMetadata attributeMetadata = MappingModelCreationHelper.getAttributeMetadata(
 				propertyAccess
@@ -86,7 +91,7 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 		embedded = new EmbeddedAttributeMapping(
 				NavigablePath.IDENTIFIER_MAPPER_PROPERTY,
 				identifiedEntityMapping.getNavigableRole()
-						.append( EntityIdentifierMapping.ROLE_LOCAL_NAME )
+						.append( EntityIdentifierMapping.ID_ROLE_NAME )
 						.append( NavigablePath.IDENTIFIER_MAPPER_PROPERTY ),
 				-1,
 				-1,
@@ -100,7 +105,7 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 				propertyAccess
 		);
 
-		final CompositeType idClassType = (CompositeType) idClassSource.getType();
+		final CompositeType idClassType = idClassSource.getType();
 		( (CompositeTypeImplementor) idClassType ).injectMappingModelPart( embedded, creationProcess );
 
 		creationProcess.registerInitializationCallback(
@@ -126,10 +131,16 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 		super( new MutableAttributeMappingList( inverseMappingType.attributeMappings.size() ) );
 
 		this.navigableRole = inverseMappingType.getNavigableRole();
-		this.idMapping = (NonAggregatedIdentifierMapping) valueMapping;;
+		this.idMapping = (NonAggregatedIdentifierMapping) valueMapping;
 		this.virtualIdEmbeddable = (VirtualIdEmbeddable) valueMapping.getEmbeddableTypeDescriptor();
 		this.javaType = inverseMappingType.javaType;
-		this.representationStrategy = new IdClassRepresentationStrategy( this );
+		this.representationStrategy = new IdClassRepresentationStrategy( this, false, () -> {
+			final String[] attributeNames = new String[inverseMappingType.getNumberOfAttributeMappings()];
+			for ( int i = 0; i < attributeNames.length; i++ ) {
+				attributeNames[i] = inverseMappingType.getAttributeMapping( i ).getAttributeName();
+			}
+			return attributeNames;
+		} );
 		this.embedded = valueMapping;
 		this.selectableMappings = selectableMappings;
 		creationProcess.registerInitializationCallback(
@@ -164,7 +175,7 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 
 		for ( int i = 0; i < propertyValues.length; i++ ) {
 			final AttributeMapping attributeMapping = virtualIdEmbeddable.getAttributeMapping( i );
-			final Object o = attributeMapping.getPropertyAccess().getGetter().get( entity );
+			final Object o = attributeMapping.getValue( entity );
 			if ( o == null ) {
 				final AttributeMapping idClassAttributeMapping = getAttributeMapping( i );
 				if ( idClassAttributeMapping.getPropertyAccess().getGetter().getReturnTypeClass().isPrimitive() ) {
@@ -209,30 +220,25 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 		virtualIdEmbeddable.forEachAttribute(
 				(position, virtualIdAttribute) -> {
 					final AttributeMapping idClassAttribute = attributeMappings.get( position );
-					final Object o = idClassAttribute.getPropertyAccess().getGetter().get( id );
+					Object o = idClassAttribute.getValue( id );
 					if ( virtualIdAttribute instanceof ToOneAttributeMapping && !( idClassAttribute instanceof ToOneAttributeMapping ) ) {
 						final ToOneAttributeMapping toOneAttributeMapping = (ToOneAttributeMapping) virtualIdAttribute;
 						final EntityPersister entityPersister = toOneAttributeMapping.getEntityMappingType()
 								.getEntityPersister();
 						final EntityKey entityKey = session.generateEntityKey( o, entityPersister );
 						final PersistenceContext persistenceContext = session.getPersistenceContext();
-						// it is conceivable there is a proxy, so check that first
-						propertyValues[position] = persistenceContext.getProxy( entityKey );
-						if ( propertyValues[position] == null ) {
-							// otherwise look for an initialized version
-							propertyValues[position] = persistenceContext.getEntity( entityKey );
-							if ( propertyValues[position] == null ) {
-								// get the association out of the entity itself
-								propertyValues[position] = entityDescriptor.getPropertyValue(
-										entity,
-										toOneAttributeMapping.getAttributeName()
-								);
-							}
+						final EntityHolder holder = persistenceContext.getEntityHolder( entityKey );
+						// use the managed object i.e. proxy or initialized entity
+						o = holder == null ? null : holder.getManagedObject();
+						if ( o == null ) {
+							// get the association out of the entity itself
+							o = entityDescriptor.getPropertyValue(
+									entity,
+									toOneAttributeMapping.getAttributeName()
+							);
 						}
 					}
-					else {
-						propertyValues[position] = o;
-					}
+					propertyValues[position] = o;
 				}
 		);
 
@@ -267,14 +273,6 @@ public class IdClassEmbeddable extends AbstractEmbeddableMapping implements Iden
 	public EmbeddableValuedModelPart getEmbeddedValueMapping() {
 		return embedded;
 	}
-
-
-	@Override
-	public boolean isCreateEmptyCompositesEnabled() {
-		// generally we do not want empty composites for identifiers
-		return false;
-	}
-
 
 	@Override
 	public void forEachAttributeMapping(Consumer<? super AttributeMapping> action) {

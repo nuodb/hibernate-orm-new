@@ -8,7 +8,6 @@ package org.hibernate.loader.ast.internal;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import org.hibernate.LockMode;
@@ -40,7 +39,7 @@ import org.hibernate.sql.exec.spi.JdbcOperationQuerySelect;
 import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.JdbcParametersList;
 import org.hibernate.sql.results.internal.RowTransformerStandardImpl;
-import org.hibernate.sql.results.spi.ListResultsConsumer;
+import org.hibernate.sql.results.spi.ManagedResultConsumer;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -72,7 +71,7 @@ public class MultiIdEntityLoaderArrayParam<E> extends AbstractMultiIdEntityLoade
 
 	@Override
 	protected <K> List<E> performOrderedMultiLoad(K[] ids, MultiIdLoadOptions loadOptions, EventSource session) {
-		if ( MultiKeyLoadLogging.MULTI_KEY_LOAD_TRACE_ENABLED ) {
+		if ( MultiKeyLoadLogging.MULTI_KEY_LOAD_LOGGER.isTraceEnabled() ) {
 			MultiKeyLoadLogging.MULTI_KEY_LOAD_LOGGER.tracef(
 					"MultiIdEntityLoaderArrayParam#performOrderedMultiLoad - %s",
 					getLoadable().getEntityName()
@@ -191,12 +190,14 @@ public class MultiIdEntityLoaderArrayParam<E> extends AbstractMultiIdEntityLoade
 				jdbcParameterBindings
 		);
 
-		session.getJdbcServices().getJdbcSelectExecutor().list(
+		session.getJdbcServices().getJdbcSelectExecutor().executeQuery(
 				jdbcSelectOperation,
 				jdbcParameterBindings,
 				new ExecutionContextWithSubselectFetchHandler( session, subSelectFetchableKeysHandler ),
 				RowTransformerStandardImpl.instance(),
-				ListResultsConsumer.UniqueSemantic.FILTER
+				null,
+				idsToLoadFromDatabase.size(),
+				ManagedResultConsumer.INSTANCE
 		);
 
 		for ( int i = 0; i < idsToLoadFromDatabaseResultIndexes.size(); i++ ) {
@@ -228,7 +229,7 @@ public class MultiIdEntityLoaderArrayParam<E> extends AbstractMultiIdEntityLoade
 			K[] ids,
 			MultiIdLoadOptions loadOptions,
 			EventSource session) {
-		if ( MultiKeyLoadLogging.MULTI_KEY_LOAD_TRACE_ENABLED ) {
+		if ( MultiKeyLoadLogging.MULTI_KEY_LOAD_LOGGER.isTraceEnabled() ) {
 			MultiKeyLoadLogging.MULTI_KEY_LOAD_LOGGER.tracef(
 					"MultiIdEntityLoaderArrayParam#performUnorderedMultiLoad - %s",
 					getLoadable().getEntityName()

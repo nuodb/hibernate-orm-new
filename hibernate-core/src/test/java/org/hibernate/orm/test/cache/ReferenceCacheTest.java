@@ -6,22 +6,20 @@
  */
 package org.hibernate.orm.test.cache;
 
-import jakarta.persistence.Cacheable;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-
 import org.hibernate.Session;
 import org.hibernate.annotations.Cache;
 import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.Immutable;
-import org.hibernate.annotations.Proxy;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Configuration;
 import org.hibernate.persister.entity.EntityPersister;
 
+import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 import org.junit.Test;
 
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
+import jakarta.persistence.Cacheable;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -33,8 +31,8 @@ public class ReferenceCacheTest extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration configuration) {
 		super.configure( configuration );
-		configuration.setProperty( AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, "true" );
-		configuration.setProperty( AvailableSettings.USE_QUERY_CACHE, "true" );
+		configuration.setProperty( AvailableSettings.USE_DIRECT_REFERENCE_CACHE_ENTRIES, true );
+		configuration.setProperty( AvailableSettings.USE_QUERY_CACHE, true );
 	}
 
 	@Override
@@ -54,7 +52,7 @@ public class ReferenceCacheTest extends BaseCoreFunctionalTestCase {
 		// save a reference in one session
 		Session s = openSession();
 		s.beginTransaction();
-		s.save( myReferenceData );
+		s.persist( myReferenceData );
 		s.getTransaction().commit();
 		s.close();
 
@@ -82,7 +80,7 @@ public class ReferenceCacheTest extends BaseCoreFunctionalTestCase {
 		// cleanup
 		s = openSession();
 		s.beginTransaction();
-		s.delete( myReferenceData );
+		s.remove( myReferenceData );
 		s.getTransaction().commit();
 		s.close();
 	}
@@ -91,7 +89,6 @@ public class ReferenceCacheTest extends BaseCoreFunctionalTestCase {
 	@Immutable
 	@Cacheable
 	@Cache( usage = CacheConcurrencyStrategy.READ_ONLY )
-	@Proxy( lazy = false )
 	@SuppressWarnings("UnusedDeclaration")
 	public static class MyReferenceData {
 		@Id

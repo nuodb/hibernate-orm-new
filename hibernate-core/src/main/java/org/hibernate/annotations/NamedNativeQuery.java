@@ -38,7 +38,7 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Repeatable(NamedNativeQueries.class)
 public @interface NamedNativeQuery {
 	/**
-	 * The name of this query.
+	 * The name of this query. Must be unique within a persistence unit.
 	 *
 	 * @see org.hibernate.SessionFactory#addNamedQuery
 	 * @see org.hibernate.Session#createNamedQuery
@@ -135,16 +135,10 @@ public @interface NamedNativeQuery {
 	/**
 	 * The cache interaction mode for this query.
 	 *
-	 * @deprecated use {@link #cacheStoreMode()} and
-	 *            {@link #cacheRetrieveMode()} since
-	 *            {@link CacheModeType} is deprecated
-	 *
+	 * @see org.hibernate.query.SelectionQuery#setCacheMode(CacheMode)
 	 * @see org.hibernate.jpa.HibernateHints#HINT_CACHE_MODE
 	 */
-	@Deprecated(since = "6.2") @Remove
-	//TODO: actually, we won't remove it, we'll change its
-	//      type to CacheMode and then un-deprecate it
-	CacheModeType cacheMode() default CacheModeType.NORMAL;
+	CacheMode cacheMode() default CacheMode.NORMAL;
 
 	/**
 	 * Whether the results should be loaded in read-only mode.

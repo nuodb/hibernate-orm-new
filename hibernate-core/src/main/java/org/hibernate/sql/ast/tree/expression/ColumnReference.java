@@ -30,6 +30,7 @@ import static org.hibernate.sql.Template.TEMPLATE;
  *
  * @author Steve Ebersole
  * @author Nathan Xu
+ * @author Yanming Zhou
  */
 public class ColumnReference implements Expression, Assignable {
 	private final String qualifier;
@@ -147,6 +148,10 @@ public class ColumnReference implements Expression, Assignable {
 
 	public String getColumnExpression() {
 		return columnExpression;
+	}
+
+	protected String getReadExpression() {
+		return readExpression;
 	}
 
 	public String getSelectableName() {

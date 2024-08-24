@@ -88,12 +88,30 @@ import static org.hibernate.internal.TransactionManagement.manageTransaction;
  * used in a sophisticated way by libraries or frameworks to implement generic
  * concerns involving entity classes.
  * <p>
+ * When the Metamodel Generator is used, elements of this metamodel may also
+ * be obtained in a typesafe way, via the generated metamodel classes. For
+ * an entity class {@code Book}, the generated {@code Book_} class has:
+ * <ul>
+ * <li>a single member named {@code class_} of type
+ *     {@link jakarta.persistence.metamodel.EntityType EntityType&lt;Book&gt;},
+ *     and
+ * <li>a member for each persistent attribute of {@code Book}, for example,
+ *     {@code title} of type {@link jakarta.persistence.metamodel.SingularAttribute
+ *     SingularAttribute&lt;Book,String&gt;}.
+ * </ul>
+ * <p>
+ * Use of these statically-typed metamodel references is the preferred way of
+ * working with the {@linkplain jakarta.persistence.criteria.CriteriaBuilder
+ * criteria query API}, and with {@linkplain EntityGraph}s.
+ * <p>
  * The factory also {@linkplain #getSchemaManager() provides} a
  * {@link SchemaManager} which allows, as a convenience for writing tests:
  * <ul>
  * <li>programmatic {@linkplain SchemaManager#exportMappedObjects(boolean)
  *     schema export} and {@linkplain SchemaManager#dropMappedObjects(boolean)
- *     schema removal}, and
+ *     schema removal},
+ * <li>schema {@linkplain SchemaManager#validateMappedObjects() validation},
+ *     and
  * <li>an operation for {@linkplain SchemaManager#truncateMappedObjects()
  *     cleaning up} data left behind by tests.
  * </ul>
@@ -118,7 +136,12 @@ import static org.hibernate.internal.TransactionManagement.manageTransaction;
  * @author Gavin King
  * @author Steve Ebersole
  */
-public interface SessionFactory extends EntityManagerFactory, Referenceable, Serializable, java.io.Closeable {
+public interface SessionFactory extends EntityManagerFactory, Referenceable, Serializable {
+	/**
+	 * The JNDI name, used to bind the SessionFactory to JNDI
+	 */
+	String getJndiName();
+
 	/**
 	 * Obtain a {@linkplain SessionBuilder session builder} for creating
 	 * new {@link Session}s with certain customized options.
@@ -202,6 +225,8 @@ public interface SessionFactory extends EntityManagerFactory, Referenceable, Ser
 
 	/**
 	 * Open a {@link StatelessSession} and use it to perform an action.
+	 *
+	 * @since 6.3
 	 */
 	default void inStatelessSession(Consumer<StatelessSession> action) {
 		try ( StatelessSession session = openStatelessSession() ) {
@@ -220,6 +245,8 @@ public interface SessionFactory extends EntityManagerFactory, Referenceable, Ser
 	/**
 	 * Open a {@link StatelessSession} and use it to perform an action
 	 * within the bounds of a transaction.
+	 *
+	 * @since 6.3
 	 */
 	default void inStatelessTransaction(Consumer<StatelessSession> action) {
 		inStatelessSession( session -> manageTransaction( session, session.beginTransaction(), action ) );
@@ -236,6 +263,8 @@ public interface SessionFactory extends EntityManagerFactory, Referenceable, Ser
 
 	/**
 	 * Open a {@link StatelessSession} and use it to obtain a value.
+	 *
+	 * @since 6.3
 	 */
 	default <R> R fromStatelessSession(Function<StatelessSession,R> action) {
 		try ( StatelessSession session = openStatelessSession() ) {
@@ -254,6 +283,8 @@ public interface SessionFactory extends EntityManagerFactory, Referenceable, Ser
 	/**
 	 * Open a {@link StatelessSession} and use it to obtain a value
 	 * within the bounds of a transaction.
+	 *
+	 * @since 6.3
 	 */
 	default <R> R fromStatelessTransaction(Function<StatelessSession,R> action) {
 		return fromStatelessSession( session -> manageTransaction( session, session.beginTransaction(), action ) );

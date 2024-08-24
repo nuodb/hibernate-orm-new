@@ -16,8 +16,6 @@ import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.expression.Expression;
 import org.hibernate.sql.results.jdbc.spi.JdbcValuesMetadata;
 import org.hibernate.type.descriptor.ValueExtractor;
-import org.hibernate.type.descriptor.java.JavaType;
-import org.hibernate.type.spi.TypeConfiguration;
 
 /**
  * SqlSelection used in {@link ResultSetMapping} resolution.  Doubles as its own
@@ -28,32 +26,23 @@ import org.hibernate.type.spi.TypeConfiguration;
 public class ResultSetMappingSqlSelection implements SqlSelection, Expression, SqlExpressionAccess {
 	private final int valuesArrayPosition;
 	private final BasicValuedMapping valueMapping;
-	private final JdbcMapping jdbcMapping;
+	private final ValueExtractor valueExtractor;
 
 	public ResultSetMappingSqlSelection(int valuesArrayPosition, BasicValuedMapping valueMapping) {
 		this.valuesArrayPosition = valuesArrayPosition;
 		this.valueMapping = valueMapping;
-		this.jdbcMapping = valueMapping.getJdbcMapping();
+		this.valueExtractor = valueMapping.getJdbcMapping().getJdbcValueExtractor();
 	}
 
 	public ResultSetMappingSqlSelection(int valuesArrayPosition, JdbcMapping jdbcMapping) {
 		this.valuesArrayPosition = valuesArrayPosition;
-		this.jdbcMapping = jdbcMapping;
 		this.valueMapping = null;
+		this.valueExtractor = jdbcMapping.getJdbcValueExtractor();
 	}
 
 	@Override
 	public ValueExtractor getJdbcValueExtractor() {
-		return jdbcMapping.getJdbcValueExtractor();
-	}
-
-	@Override
-	public SqlSelection createSqlSelection(
-			int jdbcPosition,
-			int valuesArrayPosition,
-			JavaType javaType,
-			TypeConfiguration typeConfiguration) {
-		return this;
+		return valueExtractor;
 	}
 
 	@Override
@@ -67,11 +56,6 @@ public class ResultSetMappingSqlSelection implements SqlSelection, Expression, S
 	}
 
 	@Override
-	public int getJdbcResultSetIndex() {
-		return valuesArrayPosition + 1;
-	}
-
-	@Override
 	public Expression getExpression() {
 		return this;
 	}
@@ -79,6 +63,11 @@ public class ResultSetMappingSqlSelection implements SqlSelection, Expression, S
 	@Override
 	public MappingModelExpressible getExpressionType() {
 		return valueMapping;
+	}
+
+	@Override
+	public boolean isVirtual() {
+		return false;
 	}
 
 	@Override

@@ -37,8 +37,8 @@ public class TreatedEntityFetchTest extends BaseCoreFunctionalTestCase {
 	protected void configure(Configuration configuration) {
 		super.configure( configuration );
 
-		configuration.setProperty( AvailableSettings.SHOW_SQL, Boolean.TRUE.toString() );
-		configuration.setProperty( AvailableSettings.FORMAT_SQL, Boolean.TRUE.toString() );
+		configuration.setProperty( AvailableSettings.SHOW_SQL, true );
+		configuration.setProperty( AvailableSettings.FORMAT_SQL, true );
 		// configuration.setProperty( AvailableSettings.GENERATE_STATISTICS, "true" );
 	}
 
@@ -46,7 +46,7 @@ public class TreatedEntityFetchTest extends BaseCoreFunctionalTestCase {
 	public void prepareEntities() {
 		Session s = openSession();
 		Transaction tx = s.beginTransaction();
-		s.save( new SubEntity().setSubField( new SideEntity( "testName" ) ) );
+		s.persist( new SubEntity().setSubField( new SideEntity( "testName" ) ) );
 		tx.commit();
 		s.close();
 	}

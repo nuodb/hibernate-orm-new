@@ -9,14 +9,18 @@ package org.hibernate.internal;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Supplier;
 
 import org.hibernate.Filter;
 import org.hibernate.HibernateException;
 import org.hibernate.engine.spi.FilterDefinition;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.mapping.JdbcMapping;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Implementation of FilterImpl.  FilterImpl implements the user's
@@ -29,8 +33,12 @@ public class FilterImpl implements Filter, Serializable {
 
 	private transient FilterDefinition definition;
 	private final String filterName;
-	private final Map<String,Object> parameters = new HashMap<>();
-	
+	//Lazily initialized!
+	//Note that ordering is important for cache keys
+	private @Nullable TreeMap<String,Object> parameters;
+	private final boolean autoEnabled;
+	private final boolean applyToLoadByKey;
+
 	void afterDeserialize(SessionFactoryImplementor factory) {
 		definition = factory.getFilterDefinition( filterName );
 		validate();
@@ -44,6 +52,8 @@ public class FilterImpl implements Filter, Serializable {
 	public FilterImpl(FilterDefinition configuration) {
 		this.definition = configuration;
 		filterName = definition.getFilterName();
+		this.autoEnabled = definition.isAutoEnabled();
+		this.applyToLoadByKey = definition.isAppliedToLoadByKey();
 	}
 
 	public FilterDefinition getFilterDefinition() {
@@ -58,9 +68,29 @@ public class FilterImpl implements Filter, Serializable {
 	public String getName() {
 		return definition.getFilterName();
 	}
-	
+
+	/**
+	 * Get a flag that defines if the filter should be enabled by default.
+	 *
+	 * @return The flag value.
+	 */
+	public boolean isAutoEnabled() {
+		return autoEnabled;
+	}
+
+
+	/**
+	 * Get a flag that defines if the filter should be applied
+	 * on direct fetches or not.
+	 *
+	 * @return The flag value.
+	 */
+	public boolean isAppliedToLoadByKey() {
+		return applyToLoadByKey;
+	}
+
 	public Map<String,?> getParameters() {
-		return parameters;
+		return parameters == null ? Collections.emptyMap() : Collections.unmodifiableMap( parameters );
 	}
 
 	/**
@@ -82,6 +112,9 @@ public class FilterImpl implements Filter, Serializable {
 		}
 		if ( argument != null && !type.getJavaTypeDescriptor().isInstance( argument ) ) {
 			throw new IllegalArgumentException( "Incorrect type for parameter [" + name + "]" );
+		}
+		if ( parameters == null ) {
+			parameters = new TreeMap<>();
 		}
 		parameters.put( name, argument );
 		return this;
@@ -110,6 +143,9 @@ public class FilterImpl implements Filter, Serializable {
 				throw new HibernateException( "Incorrect type for parameter [" + name + "]" );
 			}
 		}
+		if ( parameters == null ) {
+			parameters = new TreeMap<>();
+		}
 		parameters.put( name, values );
 		return this;
 	}
@@ -133,7 +169,11 @@ public class FilterImpl implements Filter, Serializable {
 	 * @return The value of the named parameter.
 	 */
 	public Object getParameter(String name) {
-		return parameters.get( name );
+		return parameters == null ? null : parameters.get( name );
+	}
+
+	public Supplier<?> getParameterResolver(String name) {
+		return definition.getParameterResolver(name);
 	}
 
 	/**
@@ -143,15 +183,23 @@ public class FilterImpl implements Filter, Serializable {
 	 * @throws HibernateException If the state is not currently valid.
 	 */
 	public void validate() throws HibernateException {
-		// for each of the defined parameters, make sure its value
-		// has been set
-
+		// for each of the defined parameters, make sure its argument
+		// has been set or a resolver has been implemented and specified
 		for ( final String parameterName : definition.getParameterNames() ) {
-			if ( parameters.get( parameterName ) == null ) {
-				throw new HibernateException(
-						"Filter [" + getName() + "] parameter [" + parameterName + "] value not set"
-				);
+			if ( !hasArgument(parameterName) && !hasResolver(parameterName)) {
+				throw new HibernateException( "Filter parameter '" + getName()
+						+ "' has neither an argument nor a resolver" );
 			}
 		}
+	}
+
+	private boolean hasResolver(String parameterName) {
+		final Supplier<?> resolver = getParameterResolver(parameterName);
+		return resolver != null
+			&& !resolver.getClass().isInterface();
+	}
+
+	private boolean hasArgument(String parameterName) {
+		return parameters != null && parameters.containsKey(parameterName);
 	}
 }

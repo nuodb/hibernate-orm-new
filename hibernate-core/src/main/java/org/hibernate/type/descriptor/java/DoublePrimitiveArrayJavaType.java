@@ -11,6 +11,7 @@ import java.lang.reflect.Array;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 import org.hibernate.HibernateException;
@@ -165,6 +166,19 @@ public class DoublePrimitiveArrayJavaType extends AbstractArrayJavaType<double[]
 			final double[] wrapped = new double[Array.getLength( value )];
 			for ( int i = 0; i < wrapped.length; i++ ) {
 				wrapped[i] = getElementJavaType().wrap( Array.get( value, i ), options );
+			}
+			return wrapped;
+		}
+		else if ( value instanceof Double ) {
+			// Support binding a single element as parameter value
+			return new double[]{ (double) value };
+		}
+		else if ( value instanceof Collection<?> ) {
+			final Collection<?> collection = (Collection<?>) value;
+			final double[] wrapped = new double[collection.size()];
+			int i = 0;
+			for ( Object e : collection ) {
+				wrapped[i++] = getElementJavaType().wrap( e, options );
 			}
 			return wrapped;
 		}

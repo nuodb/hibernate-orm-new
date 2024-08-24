@@ -30,6 +30,8 @@ public interface SqlAstCreationState {
 
 	LoadQueryInfluencers getLoadQueryInfluencers();
 
+	boolean applyOnlyLoadByKeyFilters();
+
 	void registerLockMode(String identificationVariable, LockMode explicitLockMode);
 
 	/**
@@ -41,5 +43,10 @@ public interface SqlAstCreationState {
 			EntityNameUse entityNameUse,
 			String hibernateEntityName) {
 		// No-op
+	}
+
+	@Internal
+	default boolean supportsEntityNameUsage() {
+		return false;
 	}
 }

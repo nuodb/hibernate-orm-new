@@ -19,7 +19,7 @@ import org.hibernate.MappingException;
 import org.hibernate.Transaction;
 import org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.dialect.PostgreSQLDialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.query.NativeQuery;
@@ -98,11 +98,11 @@ public class QueryAndSQLTest {
 				.currentDate();
 
 		String sql = String.format(
-				"select t.TABLE_NAME as {t.tableName}, %s as {t.daysOld} from ALL_TABLES t where t.TABLE_NAME = 'AUDIT_ACTIONS' ",
+				"select t.table_name as {t.tableName}, %s as {t.daysOld} from ALL_TABLES t where t.table_name = 'AUDIT_ACTIONS' ",
 				dateFunctionRendered
 		);
 		String sql2 = String.format(
-				"select TABLE_NAME as t_name, %s as t_time from ALL_TABLES where TABLE_NAME = 'AUDIT_ACTIONS' ",
+				"select table_name as t_name, %s as t_time from ALL_TABLES where table_name = 'AUDIT_ACTIONS' ",
 				dateFunctionRendered
 		);
 
@@ -124,12 +124,12 @@ public class QueryAndSQLTest {
 	}
 
 	@Test
-	@SkipForDialect(dialectClass = AbstractHANADialect.class, matchSubTypes = true, reason = "invalid name of function or procedure: SYSDATE")
+	@SkipForDialect(dialectClass = HANADialect.class, matchSubTypes = true, reason = "invalid name of function or procedure: SYSDATE")
 	public void testNativeQueryWithFormulaAttributeWithoutAlias(SessionFactoryScope scope) {
 		scope.inTransaction(
 				session -> {
-                    String sql = "select TABLE_NAME , " + scope.getSessionFactory().getJdbcServices().getDialect()
-							.currentDate() + " as daysOld from ALL_TABLES  where TABLE_NAME = 'AUDIT_ACTIONS' ";
+                    String sql = "select table_name , " + scope.getSessionFactory().getJdbcServices().getDialect()
+							.currentDate() + " as days_old from ALL_TABLES  where table_name = 'AUDIT_ACTIONS' ";
 					session.createNativeQuery( sql ).addEntity( "t", AllTables.class ).list();
 				}
 		);
@@ -321,7 +321,7 @@ public class QueryAndSQLTest {
 					session.persist( p );
 					Query q = session.getNamedQuery( "plane.getAll" );
 					assertEquals( 1, q.list().size() );
-					session.delete( q.list().get( 0 ) );
+					session.remove( q.list().get( 0 ) );
 				}
 		);
 	}
@@ -361,7 +361,7 @@ public class QueryAndSQLTest {
 					assertEquals( 1, stats.getQueryCachePutCount() );
 					q = session.getNamedQuery( "night.duration" );
 					q.setParameter( "duration", 14l );
-					session.delete( q.list().get( 0 ) );
+					session.remove( q.list().get( 0 ) );
 					assertEquals( 1, stats.getQueryCacheHitCount() );
 				}
 		);
@@ -401,8 +401,8 @@ public class QueryAndSQLTest {
 						List areas = session.getNamedQuery( "getAreaByNative" ).list();
 						assertTrue( 1 == areas.size() );
 						assertEquals( area.getName(), ( (Area) areas.get( 0 ) ).getName() );
-						session.delete( areas.get( 0 ) );
-						session.delete( n2 );
+						session.remove( areas.get( 0 ) );
+						session.remove( n2 );
 						tx.commit();
 					}
 					finally {
@@ -476,8 +476,8 @@ public class QueryAndSQLTest {
 					assertEquals( 1, stats.getQueryCacheHitCount() );
 					Night n2 = (Night) ( (Object[]) result.get( 0 ) )[0];
 					assertEquals( n2.getDuration(), n.getDuration() );
-					session.delete( n2.getArea() );
-					session.delete( n2 );
+					session.remove( n2.getArea() );
+					session.remove( n2 );
 				}
 		);
 
@@ -503,7 +503,7 @@ public class QueryAndSQLTest {
 						List result = q.list();
 						assertEquals( 1, result.size() );
 						assertEquals( ship.getModel(), ( (SpaceShip) result.get( 0 ) ).getModel() );
-						session.delete( result.get( 0 ) );
+						session.remove( result.get( 0 ) );
 						tx.commit();
 					}
 					finally {
@@ -551,8 +551,8 @@ public class QueryAndSQLTest {
 						//FIXME vary depending on databases
 						assertTrue( row[1].toString().startsWith( "50" ) );
 						assertTrue( row[2].toString().startsWith( "500" ) );
-						session.delete( spaceShip.getCaptain() );
-						session.delete( spaceShip );
+						session.remove( spaceShip.getCaptain() );
+						session.remove( spaceShip );
 						tx.commit();
 					}
 					finally {
@@ -587,8 +587,8 @@ public class QueryAndSQLTest {
 								results.get( 0 ) instanceof SynonymousDictionary
 										|| results.get( 1 ) instanceof SynonymousDictionary
 						);
-						session.delete( results.get( 0 ) );
-						session.delete( results.get( 1 ) );
+						session.remove( results.get( 0 ) );
+						session.remove( results.get( 1 ) );
 						tx.commit();
 					}
 					finally {
@@ -629,7 +629,7 @@ public class QueryAndSQLTest {
 
 		scope.inTransaction(
 				session ->
-						session.delete( session.get( Plane.class, plane.getId() ) )
+						session.remove( session.get( Plane.class, plane.getId() ) )
 		);
 	}
 

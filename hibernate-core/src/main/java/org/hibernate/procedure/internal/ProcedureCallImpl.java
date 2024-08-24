@@ -45,6 +45,9 @@ import org.hibernate.procedure.spi.ParameterStrategy;
 import org.hibernate.procedure.spi.ProcedureCallImplementor;
 import org.hibernate.procedure.spi.ProcedureParameterImplementor;
 import org.hibernate.query.BindableType;
+import org.hibernate.query.KeyedPage;
+import org.hibernate.query.KeyedResultList;
+import org.hibernate.query.Order;
 import org.hibernate.query.OutputableType;
 import org.hibernate.query.Query;
 import org.hibernate.query.QueryParameter;
@@ -81,6 +84,8 @@ import org.hibernate.type.spi.TypeConfiguration;
 
 import org.jboss.logging.Logger;
 
+import jakarta.persistence.CacheRetrieveMode;
+import jakarta.persistence.CacheStoreMode;
 import jakarta.persistence.FlushModeType;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.NoResultException;
@@ -401,6 +406,16 @@ public class ProcedureCallImpl<R>
 		return getSession().getFactory();
 	}
 
+	@Override
+	public Query<R> setOrder(List<Order<? super R>> orderList) {
+		throw new UnsupportedOperationException("Ordering not supported for stored procedure calls");
+	}
+
+	@Override
+	public Query<R> setOrder(Order<? super R> order) {
+		throw new UnsupportedOperationException("Ordering not supported for stored procedure calls");
+	}
+
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// Parameter registrations
@@ -639,10 +654,11 @@ public class ProcedureCallImpl<R>
 		}
 
 		LOG.debugf( "Preparing procedure call : %s", call);
+		final String sqlString = call.getSqlString();
 		final CallableStatement statement = (CallableStatement) getSession()
 				.getJdbcCoordinator()
 				.getStatementPreparer()
-				.prepareStatement( call.getSqlString(), true );
+				.prepareStatement( sqlString, true );
 		try {
 			// Register the parameter mode and type
 			callableStatementSupport.registerParameters(
@@ -708,7 +724,8 @@ public class ProcedureCallImpl<R>
 				this,
 				parameterRegistrations,
 				refCursorExtractors.toArray( new JdbcCallRefCursorExtractor[0] ),
-				statement
+				statement,
+				sqlString
 		);
 
 	}
@@ -932,7 +949,7 @@ public class ProcedureCallImpl<R>
 		try {
 			final Output rtn = outputs().getCurrent();
 			if ( !(rtn instanceof ResultSetOutput) ) {
-				throw new IllegalStateException( "Current CallableStatement ou was not a ResultSet, but getResultList was called" );
+				throw new IllegalStateException( "Current CallableStatement was not a ResultSet, but getResultList was called" );
 			}
 
 			//noinspection unchecked
@@ -954,13 +971,23 @@ public class ProcedureCallImpl<R>
 	}
 
 	@Override
+	public long getResultCount() {
+		throw new UnsupportedOperationException( "getResultCount() not implemented for ProcedureCall/StoredProcedureQuery" );
+	}
+
+	@Override
+	public KeyedResultList<R> getKeyedResultList(KeyedPage<R> page) {
+		throw new UnsupportedOperationException("getKeyedResultList() not implemented for ProcedureCall/StoredProcedureQuery");
+	}
+
+	@Override
 	public ScrollableResultsImplementor<R> scroll(ScrollMode scrollMode) {
-		throw new UnsupportedOperationException( "Query#scroll is not valid for ProcedureCall/StoredProcedureQuery" );
+		throw new UnsupportedOperationException( "scroll() is not implemented for ProcedureCall/StoredProcedureQuery" );
 	}
 
 	@Override
 	protected ScrollableResultsImplementor<R> doScroll(ScrollMode scrollMode) {
-		throw new UnsupportedOperationException( "Query#scroll is not valid for ProcedureCall/StoredProcedureQuery" );
+		throw new UnsupportedOperationException( "scroll() is not implemented for ProcedureCall/StoredProcedureQuery" );
 	}
 
 	@Override
@@ -1074,6 +1101,15 @@ public class ProcedureCallImpl<R>
 		// the JPA spec requires IllegalStateException here, even
 		// though it's logically an UnsupportedOperationException
 		throw new IllegalStateException( "Illegal attempt to set lock mode for a procedure calls" );
+	}
+
+	@Override
+	public ProcedureCallImplementor<R> setTimeout(Integer timeout) {
+		if ( timeout == null ) {
+			timeout = -1;
+		}
+		super.setTimeout( (int) timeout );
+		return this;
 	}
 
 	@Override
@@ -1212,8 +1248,22 @@ public class ProcedureCallImpl<R>
 		return getResultList().stream();
 	}
 
+	@Override
+	public Stream stream() {
+		return getResultStream();
+	}
+
 	public ResultSetMapping getResultSetMapping() {
 		return resultSetMapping;
 	}
 
+	@Override
+	public ProcedureCallImplementor<R> setCacheRetrieveMode(CacheRetrieveMode cacheRetrieveMode) {
+		return (ProcedureCallImplementor<R>) super.setCacheRetrieveMode( cacheRetrieveMode );
+	}
+
+	@Override
+	public ProcedureCallImplementor<R> setCacheStoreMode(CacheStoreMode cacheStoreMode) {
+		return (ProcedureCallImplementor<R>) super.setCacheStoreMode( cacheStoreMode );
+	}
 }

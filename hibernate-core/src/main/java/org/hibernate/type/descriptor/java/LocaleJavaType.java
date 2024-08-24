@@ -31,6 +31,11 @@ public class LocaleJavaType extends AbstractClassJavaType<Locale> {
 		super( Locale.class, ImmutableMutabilityPlan.instance(), LocaleComparator.INSTANCE );
 	}
 
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	public String toString(Locale value) {
 		return value.toString();
 	}
@@ -91,6 +96,9 @@ public class LocaleJavaType extends AbstractClassJavaType<Locale> {
 		if ( value == null ) {
 			return null;
 		}
+		if ( Locale.class.isAssignableFrom( type ) ) {
+			return (X) value;
+		}
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) value.toString();
 		}
@@ -100,6 +108,9 @@ public class LocaleJavaType extends AbstractClassJavaType<Locale> {
 	public <X> Locale wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
+		}
+		if ( value instanceof Locale ) {
+			return (Locale) value;
 		}
 		if (value instanceof CharSequence) {
 			return fromString( (CharSequence) value );

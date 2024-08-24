@@ -6,9 +6,7 @@
  */
 package org.hibernate.persister.entity;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -24,7 +22,7 @@ import org.hibernate.boot.model.relational.SqlStringGenerationContext;
 import org.hibernate.cache.spi.access.EntityDataAccess;
 import org.hibernate.cache.spi.access.NaturalIdDataAccess;
 import org.hibernate.dialect.Dialect;
-import org.hibernate.engine.spi.ExecuteUpdateResultCheckStyle;
+import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.internal.DynamicFilterAliasGenerator;
 import org.hibernate.internal.FilterAliasGenerator;
 import org.hibernate.internal.util.collections.ArrayHelper;
@@ -44,16 +42,14 @@ import org.hibernate.metamodel.mapping.EntityDiscriminatorMapping;
 import org.hibernate.metamodel.mapping.EntityIdentifierMapping;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.metamodel.mapping.EntityVersionMapping;
-import org.hibernate.metamodel.mapping.JdbcMapping;
 import org.hibernate.metamodel.mapping.TableDetails;
 import org.hibernate.metamodel.mapping.internal.BasicEntityIdentifierMappingImpl;
 import org.hibernate.metamodel.mapping.internal.CaseStatementDiscriminatorMappingImpl;
 import org.hibernate.metamodel.mapping.internal.MappingModelCreationProcess;
 import org.hibernate.metamodel.spi.MappingMetamodelImplementor;
 import org.hibernate.metamodel.spi.RuntimeModelCreationContext;
-import org.hibernate.persister.spi.PersisterCreationContext;
+import org.hibernate.persister.internal.SqlFragmentPredicate;
 import org.hibernate.query.sqm.function.SqmFunctionRegistry;
-import org.hibernate.spi.NavigablePath;
 import org.hibernate.sql.ast.SqlAstJoinType;
 import org.hibernate.sql.ast.tree.from.NamedTableReference;
 import org.hibernate.sql.ast.tree.from.TableGroup;
@@ -62,9 +58,6 @@ import org.hibernate.sql.ast.tree.from.TableReferenceJoin;
 import org.hibernate.sql.ast.tree.from.UnknownTableReferenceException;
 import org.hibernate.sql.model.ast.builder.MutationGroupBuilder;
 import org.hibernate.sql.model.ast.builder.TableInsertBuilder;
-import org.hibernate.sql.results.graph.DomainResult;
-import org.hibernate.sql.results.graph.DomainResultCreationState;
-import org.hibernate.sql.results.graph.entity.internal.EntityResultJoinedSubclassImpl;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.BasicTypeRegistry;
 import org.hibernate.type.CompositeType;
@@ -79,8 +72,7 @@ import static org.hibernate.internal.util.collections.ArrayHelper.to2DStringArra
 import static org.hibernate.internal.util.collections.ArrayHelper.toIntArray;
 import static org.hibernate.internal.util.collections.ArrayHelper.toStringArray;
 import static org.hibernate.internal.util.collections.CollectionHelper.linkedMapOfSize;
-import static org.hibernate.internal.util.collections.CollectionHelper.mapOfSize;
-import static org.hibernate.jdbc.Expectations.appropriateExpectation;
+import static org.hibernate.jdbc.Expectations.createExpectation;
 import static org.hibernate.metamodel.mapping.internal.MappingModelCreationHelper.buildEncapsulatedCompositeIdentifierMapping;
 import static org.hibernate.metamodel.mapping.internal.MappingModelCreationHelper.buildNonEncapsulatedCompositeIdentifierMapping;
 import static org.hibernate.persister.entity.DiscriminatorHelper.NOT_NULL_DISCRIMINATOR;
@@ -125,7 +117,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 
 	// properties of this class, including inherited properties
 	private final int[] naturalOrderPropertyTableNumbers;
-//	private final int[] propertyTableNumbers;
 
 	// the closure of all properties in the entire hierarchy including
 	// subclasses and superclasses of this class
@@ -134,12 +125,8 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	// the closure of all columns used by the entire hierarchy including
 	// subclasses and superclasses of this class
 	private final int[] subclassColumnTableNumberClosure;
-//	private final int[] subclassFormulaTableNumberClosure;
 	private final String[] subclassColumnClosure;
 
-//	private final boolean[] subclassTableSequentialSelect;
-//	private final boolean[] subclassTableIsLazyClosure;
-	private final boolean[] isInverseSubclassTable;
 	private final boolean[] isNullableSubclassTable;
 
 	// subclass discrimination works by assigning particular
@@ -164,25 +151,12 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	// Span of the tables directly mapped by this entity and super-classes, if any
 	private final int coreTableSpan;
 	private final int subclassCoreTableSpan;
-	// only contains values for SecondaryTables, ie. not tables part of the "coreTableSpan"
+	// only contains values for SecondaryTables, i.e. not tables part of the "coreTableSpan"
 	private final boolean[] isNullableTable;
 	private final boolean[] isInverseTable;
 
 	private final Map<String, Object> discriminatorValuesByTableName;
 	private final Map<String, String> discriminatorColumnNameByTableName;
-	private final Map<String, String> subclassNameByTableName;
-
-	//INITIALIZATION:
-
-	@Deprecated(since = "6.0")
-	public JoinedSubclassEntityPersister(
-			final PersistentClass persistentClass,
-			final EntityDataAccess cacheAccessStrategy,
-			final NaturalIdDataAccess naturalIdRegionAccessStrategy,
-			final PersisterCreationContext creationContext) throws HibernateException {
-		this( persistentClass,cacheAccessStrategy,naturalIdRegionAccessStrategy,
-				(RuntimeModelCreationContext) creationContext );
-	}
 
 	public JoinedSubclassEntityPersister(
 			final PersistentClass persistentClass,
@@ -195,7 +169,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		final Dialect dialect = creationContext.getDialect();
 		final SqmFunctionRegistry functionRegistry = creationContext.getFunctionRegistry();
 		final TypeConfiguration typeConfiguration = creationContext.getTypeConfiguration();
-		final BasicTypeRegistry basicTypeRegistry = creationContext.getTypeConfiguration().getBasicTypeRegistry();
+		final BasicTypeRegistry basicTypeRegistry = typeConfiguration.getBasicTypeRegistry();
 
 		// DISCRIMINATOR
 
@@ -319,17 +293,11 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 
 		final ArrayList<String> subclassTableNames = new ArrayList<>();
 		final ArrayList<Boolean> isConcretes = new ArrayList<>();
-//		final ArrayList<Boolean> isDeferreds = new ArrayList<>();
-//		final ArrayList<Boolean> isLazies = new ArrayList<>();
-		final ArrayList<Boolean> isInverses = new ArrayList<>();
 		final ArrayList<Boolean> isNullables = new ArrayList<>();
 
 		final ArrayList<String[]> allKeyColumns = new ArrayList<>();
 		for ( Table table : persistentClass.getSubclassTableClosure() ) {
 			isConcretes.add( persistentClass.isClassOrSuperclassTable( table ) );
-//			isDeferreds.add( false );
-//			isLazies.add( false );
-			isInverses.add( false );
 			isNullables.add( false );
 			final String tableName = determineTableName( table );
 			subclassTableNames.add( tableName );
@@ -345,10 +313,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		for ( Join join : persistentClass.getSubclassJoinClosure() ) {
 			final Table joinTable = join.getTable();
 			isConcretes.add( persistentClass.isClassOrSuperclassTable( joinTable ) );
-//			isDeferreds.add( join.isSequentialSelect() );
-			isInverses.add( join.isInverse() );
 			isNullables.add( join.isOptional() );
-//			isLazies.add( join.isLazy() );
 			final String joinTableName = determineTableName( joinTable );
 			subclassTableNames.add( joinTableName );
 			final String[] key = new String[idColumnSpan];
@@ -362,9 +327,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		final String[] naturalOrderSubclassTableNameClosure = toStringArray( subclassTableNames );
 		final String[][] naturalOrderSubclassTableKeyColumnClosure = to2DStringArray( allKeyColumns );
 		isClassOrSuperclassTable = ArrayHelper.toBooleanArray( isConcretes );
-//		subclassTableSequentialSelect = ArrayHelper.toBooleanArray( isDeferreds );
-//		subclassTableIsLazyClosure = ArrayHelper.toBooleanArray( isLazies );
-		isInverseSubclassTable = ArrayHelper.toBooleanArray( isInverses );
 		isNullableSubclassTable = ArrayHelper.toBooleanArray( isNullables );
 
 		constraintOrderedTableNames = new String[naturalOrderSubclassTableNameClosure.length];
@@ -411,28 +373,16 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 			isInverseTable[jk] = false;
 
 			customSQLInsert[jk] = currentClass.getCustomSQLInsert();
-			insertCallable[jk] = customSQLInsert[jk] != null && currentClass.isCustomInsertCallable();
-			insertExpectations[jk] = appropriateExpectation(
-					currentClass.getCustomSQLInsertCheckStyle() == null
-							? ExecuteUpdateResultCheckStyle.determineDefault( customSQLInsert[jk], insertCallable[jk] )
-							: currentClass.getCustomSQLInsertCheckStyle()
-			);
+			insertCallable[jk] = currentClass.isCustomInsertCallable();
+			insertExpectations[jk] = createExpectation( currentClass.getInsertExpectation(), insertCallable[jk] );
 
 			customSQLUpdate[jk] = currentClass.getCustomSQLUpdate();
-			updateCallable[jk] = customSQLUpdate[jk] != null && currentClass.isCustomUpdateCallable();
-			updateExpectations[jk] = appropriateExpectation(
-					currentClass.getCustomSQLUpdateCheckStyle() == null
-							? ExecuteUpdateResultCheckStyle.determineDefault( customSQLUpdate[jk], updateCallable[jk] )
-							: currentClass.getCustomSQLUpdateCheckStyle()
-			);
+			updateCallable[jk] = currentClass.isCustomUpdateCallable();
+			updateExpectations[jk] = createExpectation( currentClass.getUpdateExpectation(), updateCallable[jk] );
 
 			customSQLDelete[jk] = currentClass.getCustomSQLDelete();
-			deleteCallable[jk] = customSQLDelete[jk] != null && currentClass.isCustomDeleteCallable();
-			deleteExpectations[jk] = appropriateExpectation(
-					currentClass.getCustomSQLDeleteCheckStyle() == null
-					? ExecuteUpdateResultCheckStyle.determineDefault( customSQLDelete[jk], deleteCallable[jk] )
-					: currentClass.getCustomSQLDeleteCheckStyle()
-			);
+			deleteCallable[jk] = currentClass.isCustomDeleteCallable();
+			deleteExpectations[jk] = createExpectation( currentClass.getDeleteExpectation(), deleteCallable[jk] );
 
 			jk--;
 			currentClass = currentClass.getSuperclass();
@@ -448,28 +398,16 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 			isNullableTable[j] = join.isOptional();
 
 			customSQLInsert[j] = join.getCustomSQLInsert();
-			insertCallable[j] = customSQLInsert[j] != null && join.isCustomInsertCallable();
-			insertExpectations[j] = appropriateExpectation(
-					join.getCustomSQLInsertCheckStyle() == null
-							? ExecuteUpdateResultCheckStyle.determineDefault( customSQLInsert[j], insertCallable[j] )
-							: join.getCustomSQLInsertCheckStyle()
-			);
+			insertCallable[j] = join.isCustomInsertCallable();
+			insertExpectations[j] = createExpectation( join.getInsertExpectation(), insertCallable[j] );
 
 			customSQLUpdate[j] = join.getCustomSQLUpdate();
-			updateCallable[j] = customSQLUpdate[j] != null && join.isCustomUpdateCallable();
-			updateExpectations[j] = appropriateExpectation(
-					join.getCustomSQLUpdateCheckStyle() == null
-							? ExecuteUpdateResultCheckStyle.determineDefault( customSQLUpdate[j], updateCallable[j] )
-							: join.getCustomSQLUpdateCheckStyle()
-			);
+			updateCallable[j] = join.isCustomUpdateCallable();
+			updateExpectations[j] = createExpectation( join.getUpdateExpectation(), updateCallable[j] );
 
 			customSQLDelete[j] = join.getCustomSQLDelete();
-			deleteCallable[j] = customSQLDelete[j] != null && join.isCustomDeleteCallable();
-			deleteExpectations[j] = appropriateExpectation(
-					join.getCustomSQLDeleteCheckStyle() == null
-							? ExecuteUpdateResultCheckStyle.determineDefault( customSQLDelete[j], deleteCallable[j] )
-							: join.getCustomSQLDeleteCheckStyle()
-			);
+			deleteCallable[j] = join.isCustomDeleteCallable();
+			deleteExpectations[j] = createExpectation( join.getDeleteExpectation(), deleteCallable[j] );
 
 			j++;
 		}
@@ -477,13 +415,11 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		// PROPERTIES
 		final int hydrateSpan = getPropertySpan();
 		naturalOrderPropertyTableNumbers = new int[hydrateSpan];
-//		propertyTableNumbers = new int[hydrateSpan];
 		final List<Property> propertyClosure = persistentClass.getPropertyClosure();
 		for ( int i = 0; i < propertyClosure.size(); i++ ) {
 			final String tableName =
 					propertyClosure.get(i).getValue().getTable()
 							.getQualifiedName( creationContext.getSqlStringGenerationContext() );
-//			propertyTableNumbers[i] = getTableId( tableName, this.tableNames );
 			naturalOrderPropertyTableNumbers[i] = getTableId( tableName, naturalOrderTableNames );
 		}
 
@@ -492,7 +428,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		//TODO: code duplication with SingleTableEntityPersister
 
 		final ArrayList<Integer> columnTableNumbers = new ArrayList<>();
-//		final ArrayList<Integer> formulaTableNumbers = new ArrayList<>();
 		final ArrayList<Integer> propTableNumbers = new ArrayList<>();
 		final ArrayList<String> columns = new ArrayList<>();
 
@@ -508,25 +443,18 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 					Column column = (Column) selectable;
 					columns.add( column.getQuotedName( dialect ) );
 				}
-//				else {
-//					formulaTableNumbers.add( tableNumber );
-//				}
 			}
 		}
 
 		subclassColumnTableNumberClosure = toIntArray( columnTableNumbers );
 		subclassPropertyTableNumberClosure = toIntArray( propTableNumbers );
-//		subclassFormulaTableNumberClosure = ArrayHelper.toIntArray( formulaTableNumbers );
 		subclassColumnClosure = toStringArray( columns );
 
 		// SUBCLASSES
 
 		final int subclassSpan = persistentClass.getSubclassSpan() + 1;
-//		subclassClosure = new String[subclassSpan];
 		final int subclassSpanMinusOne = subclassSpan - 1;
-//		subclassClosure[subclassSpanMinusOne] = getEntityName();
 		if ( !persistentClass.isPolymorphic() ) {
-			subclassNameByTableName = emptyMap();
 			discriminatorValuesByTableName = emptyMap();
 			discriminatorColumnNameByTableName = emptyMap();
 			discriminatorValues = null;
@@ -539,7 +467,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 
 			discriminatorValuesByTableName = linkedMapOfSize( subclassSpan + 1 );
 			discriminatorColumnNameByTableName = linkedMapOfSize( subclassSpan + 1 );
-			subclassNameByTableName = mapOfSize( subclassSpan + 1 );
 
 			final Table table = persistentClass.getTable();
 			discriminatorValues = new String[subclassSpan];
@@ -558,9 +485,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 			final List<Subclass> subclasses = persistentClass.getSubclasses();
 			for ( int k = 0; k < subclasses.size(); k++ ) {
 				final Subclass subclass = subclasses.get(k);
-//				subclassClosure[k] = subclass.getEntityName();
 				final Table subclassTable = subclass.getTable();
-				subclassNameByTableName.put( subclassTable.getName(), subclass.getEntityName() );
 				if ( persistentClass.isPolymorphic() ) {
 					final Object discriminatorValue = explicitDiscriminatorColumnName != null
 							? DiscriminatorHelper.getDiscriminatorValue( subclass )
@@ -743,7 +668,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	protected boolean needsDiscriminator() {
+	public boolean needsDiscriminator() {
 		return forceDiscriminator;
 	}
 
@@ -786,13 +711,8 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String getSubclassPropertyTableName(int i) {
+	public String getAttributeMutationTableName(int i) {
 		return subclassTableNameClosure[subclassPropertyTableNumberClosure[i]];
-	}
-
-	@Override
-	protected boolean isInverseSubclassTable(int j) {
-		return isInverseSubclassTable[j];
 	}
 
 	@Override
@@ -838,17 +758,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String getSubclassForDiscriminatorValue(Object value) {
-		if ( value == null ) {
-			return subclassesByDiscriminatorValue.get( NULL_DISCRIMINATOR );
-		}
-		else {
-			final String result = subclassesByDiscriminatorValue.get( value );
-			return result == null ? subclassesByDiscriminatorValue.get( NOT_NULL_DISCRIMINATOR ) : result;
-		}
-	}
-
-	@Override
 	public void addDiscriminatorToInsertGroup(MutationGroupBuilder insertGroupBuilder) {
 		if ( explicitDiscriminatorColumnName != null ) {
 			final TableInsertBuilder tableInsertBuilder = insertGroupBuilder.getTableDetailsBuilder( getRootTableName() );
@@ -871,7 +780,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public Serializable[] getPropertySpaces() {
+	public String[] getPropertySpaces() {
 		return spaces; // don't need subclass tables, because they can't appear in conditions
 	}
 
@@ -941,18 +850,8 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String fromTableFragment(String alias) {
-		return getTableName() + ' ' + alias;
-	}
-
-	@Override
 	public String getTableName() {
 		return tableNames[0];
-	}
-
-	@Override
-	public String generateFilterConditionAlias(String rootAlias) {
-		return generateTableAlias( rootAlias, tableSpan - 1 );
 	}
 
 	@Override
@@ -976,17 +875,12 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	protected int getSubclassPropertyTableNumber(int i) {
-		return subclassPropertyTableNumberClosure[i];
-	}
-
-	@Override
 	public int getTableSpan() {
 		return tableSpan;
 	}
 
 	@Override
-	protected boolean hasMultipleTables() {
+	public boolean hasMultipleTables() {
 		return true;
 	}
 
@@ -1066,26 +960,12 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	public String[][] getContraintOrderedTableKeyColumnClosure() {
+	public String[][] getConstraintOrderedTableKeyColumnClosure() {
 		return constraintOrderedKeyColumnNames;
 	}
 
 	@Override
-	public String getRootTableAlias(String drivingAlias) {
-		return generateTableAlias( drivingAlias, getTableId( getRootTableName(), tableNames ) );
-	}
-
-	@Override
-	public Declarer getSubclassPropertyDeclarer(String propertyPath) {
-		if ( "class".equals( propertyPath ) ) {
-			// special case where we need to force include all subclass joins
-			return Declarer.SUBCLASS;
-		}
-		return super.getSubclassPropertyDeclarer( propertyPath );
-	}
-
-	@Override
-	public int determineTableNumberForColumn(String columnName) {
+	protected int determineTableNumberForColumn(String columnName) {
 		// HHH-7630: In case the naturalOrder/identifier column is explicitly given in the ordering, check here.
 		for ( int i = 0, max = naturalOrderTableKeyColumns.length; i < max; i++ ) {
 			final String[] keyColumns = naturalOrderTableKeyColumns[i];
@@ -1111,6 +991,26 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		throw new HibernateException(
 				"Could not locate table which owns column [" + columnName + "] referenced in order-by mapping - " + getEntityName()
 		);
+	}
+
+	@Override
+	public Object forceVersionIncrement(Object id, Object currentVersion, SharedSessionContractImplementor session) {
+		if ( getSuperMappingType() != null ) {
+			return getSuperMappingType().getEntityPersister().forceVersionIncrement( id, currentVersion, session );
+		}
+		return super.forceVersionIncrement( id, currentVersion, session );
+	}
+
+	@Override
+	public Object forceVersionIncrement(
+			Object id,
+			Object currentVersion,
+			boolean batching,
+			SharedSessionContractImplementor session) throws HibernateException {
+		if ( getSuperMappingType() != null ) {
+			return getSuperMappingType().getEntityPersister().forceVersionIncrement( id, currentVersion, session );
+		}
+		return super.forceVersionIncrement( id, currentVersion, batching, session );
 	}
 
 	@Override
@@ -1215,9 +1115,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
-	protected EntityDiscriminatorMapping generateDiscriminatorMapping(
-			PersistentClass bootEntityDescriptor,
-			MappingModelCreationProcess modelCreationProcess) {
+	protected EntityDiscriminatorMapping generateDiscriminatorMapping(PersistentClass bootEntityDescriptor) {
 		final EntityMappingType superMappingType = getSuperMappingType();
 		if ( superMappingType != null ) {
 			return superMappingType.getDiscriminatorMapping();
@@ -1228,7 +1126,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 				// even though this is a JOINED hierarchy the user has defined an
 				// explicit discriminator column - so we can use the normal
 				// discriminator mapping
-				return super.generateDiscriminatorMapping( bootEntityDescriptor, modelCreationProcess );
+				return super.generateDiscriminatorMapping( bootEntityDescriptor );
 			}
 			else {
 				// otherwise, we need to use the case approach
@@ -1239,8 +1137,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 						notNullColumnNames,
 						discriminatorValues,
 						discriminatorAbstract,
-						resolveDiscriminatorType(),
-						modelCreationProcess
+						resolveDiscriminatorType()
 				);
 			}
 		}
@@ -1271,7 +1168,8 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 
 	@Override
 	public TableDetails getMappedTableDetails() {
-		return getTableMapping( getTableMappings().length - 1 );
+		// Subtract the number of secondary tables (tableSpan - coreTableSpan) and get the last table mapping
+		return getTableMapping( getTableMappings().length - ( tableSpan - coreTableSpan ) - 1 );
 	}
 
 	@Override
@@ -1280,28 +1178,6 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		return superMappingType == null
 				? getMappedTableDetails()
 				: getRootEntityDescriptor().getIdentifierTableDetails();
-	}
-
-	@Override
-	public <T> DomainResult<T> createDomainResult(
-			NavigablePath navigablePath,
-			TableGroup tableGroup,
-			String resultVariable,
-			DomainResultCreationState creationState) {
-		if ( hasSubclasses() ) {
-			final EntityResultJoinedSubclassImpl entityResultJoinedSubclass = new EntityResultJoinedSubclassImpl(
-					navigablePath,
-					this,
-					tableGroup,
-					resultVariable
-			);
-			entityResultJoinedSubclass.afterInitialize( entityResultJoinedSubclass, creationState );
-			//noinspection unchecked
-			return entityResultJoinedSubclass;
-		}
-		else {
-			return super.createDomainResult( navigablePath, tableGroup, resultVariable, creationState );
-		}
 	}
 
 	@Override
@@ -1314,6 +1190,7 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		// i.e. with parenthesis around, as that means the table reference joins will be isolated
 		final boolean innerJoinOptimization = tableGroup.canUseInnerJoins() || tableGroup.isRealTableGroup();
 		final Set<String> tablesToInnerJoin = innerJoinOptimization ? new HashSet<>() : null;
+		boolean needsTreatDiscriminator = false;
 		for ( Map.Entry<String, EntityNameUse> entry : entityNameUses.entrySet() ) {
 			final EntityNameUse.UseKind useKind = entry.getValue().getKind();
 			final JoinedSubclassEntityPersister persister =
@@ -1323,15 +1200,17 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 				final String[] subclassTableNames = persister.getSubclassTableNames();
 				// Build the intersection of all tables names that are of the class or super class
 				// These are the tables that can be safely inner joined
-				if ( tablesToInnerJoin.isEmpty() ) {
-					for ( int i = 0; i < subclassTableNames.length; i++ ) {
-						if ( persister.isClassOrSuperclassTable[i] ) {
-							tablesToInnerJoin.add( subclassTableNames[i] );
-						}
+				final Set<String> classOrSuperclassTables = new HashSet<>( subclassTableNames.length );
+				for ( int i = 0; i < subclassTableNames.length; i++ ) {
+					if ( persister.isClassOrSuperclassTable[i] ) {
+						classOrSuperclassTables.add( subclassTableNames[i] );
 					}
 				}
+				if ( tablesToInnerJoin.isEmpty() ) {
+					tablesToInnerJoin.addAll( classOrSuperclassTables );
+				}
 				else {
-					tablesToInnerJoin.retainAll( Arrays.asList( subclassTableNames ) );
+					tablesToInnerJoin.retainAll( classOrSuperclassTables );
 				}
 				if ( useKind == EntityNameUse.UseKind.FILTER && explicitDiscriminatorColumnName == null ) {
 					// If there is no discriminator column,
@@ -1355,15 +1234,29 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 					}
 				}
 			}
+			final String tableName = persister.getTableName();
 			final TableReference mainTableReference = tableGroup.getTableReference(
 					null,
-					persister.getTableName(),
+					tableName,
 					false
 			);
-			if ( mainTableReference == null ) {
-				throw new UnknownTableReferenceException( persister.getTableName(), "Couldn't find table reference" );
+			if ( mainTableReference != null ) {
+				retainedTableReferences.add( mainTableReference );
 			}
-			retainedTableReferences.add( mainTableReference );
+			final String sqlWhereStringTableExpression = persister.getSqlWhereStringTableExpression();
+			if ( sqlWhereStringTableExpression != null ) {
+				final TableReference tableReference = tableGroup.getTableReference( sqlWhereStringTableExpression );
+				if ( tableReference != null ) {
+					retainedTableReferences.add( tableReference );
+				}
+			}
+			if ( needsDiscriminator() ) {
+				// We allow multiple joined subclasses to use the same table if they define a discriminator column.
+				// In this case, we might need to add a discriminator condition to make sure we filter the correct subtype,
+				// see SingleTableEntityPersister#pruneForSubclasses for more details on this condition
+				needsTreatDiscriminator = needsTreatDiscriminator || !persister.isAbstract()
+						&& useKind == EntityNameUse.UseKind.TREAT && ( isInherited() || !isTypeOrSuperType( persister ) );
+			}
 		}
 		// If no tables to inner join have been found, we add at least the super class tables of this persister
 		if ( innerJoinOptimization && tablesToInnerJoin.isEmpty() ) {
@@ -1376,6 +1269,35 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 		}
 
 		final List<TableReferenceJoin> tableReferenceJoins = tableGroup.getTableReferenceJoins();
+		if ( needsTreatDiscriminator ) {
+			if ( tableReferenceJoins.isEmpty() ) {
+				// We need to apply the discriminator predicate to the primary table reference itself
+				final String discriminatorPredicate = getPrunedDiscriminatorPredicate( entityNameUses, metamodel, "t" );
+				if ( discriminatorPredicate != null ) {
+					final NamedTableReference tableReference = (NamedTableReference) tableGroup.getPrimaryTableReference();
+					tableReference.setPrunedTableExpression( "(select * from " + getRootTableName() + " t where " + discriminatorPredicate + ")" );
+				}
+			}
+			else {
+				// We have to apply the discriminator condition to the root table reference join
+				boolean applied = applyDiscriminatorPredicate(
+						tableReferenceJoins.get( 0 ),
+						(NamedTableReference) tableGroup.getPrimaryTableReference(),
+						entityNameUses,
+						metamodel
+				);
+				int i = 0;
+				for ( ; !applied && i < tableReferenceJoins.size(); i++ ) {
+					final TableReferenceJoin join = tableReferenceJoins.get( i );
+					applied = applyDiscriminatorPredicate( join, join.getJoinedTableReference(), entityNameUses, metamodel );
+				}
+				assert applied : "Could not apply treat discriminator predicate to root table join";
+				if ( i != 0 ) {
+					// Always retain the root table reference join where the discriminator was applied
+					retainedTableReferences.add( tableReferenceJoins.get( i - 1 ).getJoinedTableReference() );
+				}
+			}
+		}
 		if ( tableReferenceJoins.isEmpty() ) {
 			return;
 		}
@@ -1394,9 +1316,8 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 					tableReferenceJoins.add( join );
 				}
 				else {
-					final String tableExpression = oldJoin.getJoinedTableReference().getTableExpression();
 					for ( int i = subclassCoreTableSpan; i < subclassTableNameClosure.length; i++ ) {
-						if ( tableExpression.equals( subclassTableNameClosure[i] ) ) {
+						if ( joinedTableReference.getTableExpression().equals( subclassTableNameClosure[i] ) ) {
 							// Retain joins to secondary tables
 							tableReferenceJoins.add( oldJoin );
 							break;
@@ -1411,13 +1332,46 @@ public class JoinedSubclassEntityPersister extends AbstractEntityPersister {
 	}
 
 	@Override
+	public EntityIdentifierMapping getIdentifierMappingForJoin() {
+		// If the joined subclass has a physical discriminator and has subtypes
+		// we must use the root table identifier mapping for joining to allow table group elimination to work
+		return isPhysicalDiscriminator() && !getSubMappingTypes().isEmpty()
+				? getRootEntityDescriptor().getIdentifierMapping()
+				: super.getIdentifierMappingForJoin();
+	}
+
+	private boolean applyDiscriminatorPredicate(
+			TableReferenceJoin join,
+			NamedTableReference tableReference,
+			Map<String, EntityNameUse> entityNameUses,
+			MappingMetamodelImplementor metamodel) {
+		if ( tableReference.getTableExpression().equals( getRootTableName() ) ) {
+			assert join.getJoinType() == SqlAstJoinType.INNER : "Found table reference join with root table of non-INNER type: " + join.getJoinType();
+			final String discriminatorPredicate = getPrunedDiscriminatorPredicate(
+					entityNameUses,
+					metamodel,
+					"t"
+//					tableReference.getIdentificationVariable()
+			);
+			tableReference.setPrunedTableExpression( "(select * from " + getRootTableName() + " t where " + discriminatorPredicate + ")" );
+//			join.applyPredicate( new SqlFragmentPredicate( discriminatorPredicate ) );
+			return true;
+		}
+		return false;
+	}
+
+	@Override
 	public void visitConstraintOrderedTables(ConstraintOrderedTableConsumer consumer) {
 		for ( int i = 0; i < constraintOrderedTableNames.length; i++ ) {
 			final String tableName = constraintOrderedTableNames[i];
 			final int tablePosition = i;
 			consumer.consume(
 					tableName,
-					() -> columnConsumer -> columnConsumer.accept( tableName, constraintOrderedKeyColumnNames[tablePosition] )
+					() -> columnConsumer -> columnConsumer.accept(
+							tableName,
+							constraintOrderedKeyColumnNames[tablePosition],
+							getIdentifierMapping()::getJdbcMapping
+					)
 			);
 		}
 	}

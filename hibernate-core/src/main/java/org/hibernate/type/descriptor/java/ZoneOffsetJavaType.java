@@ -34,6 +34,11 @@ public class ZoneOffsetJavaType extends AbstractClassJavaType<ZoneOffset> {
 		super( ZoneOffset.class, ImmutableMutabilityPlan.instance(), ZoneOffsetComparator.INSTANCE );
 	}
 
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	public String toString(ZoneOffset value) {
 		return value.getId();
 	}
@@ -53,6 +58,9 @@ public class ZoneOffsetJavaType extends AbstractClassJavaType<ZoneOffset> {
 		if ( value == null ) {
 			return null;
 		}
+		if ( ZoneOffset.class.isAssignableFrom( type ) ) {
+			return (X) value;
+		}
 		if ( String.class.isAssignableFrom( type ) ) {
 			return (X) toString( value );
 		}
@@ -66,6 +74,9 @@ public class ZoneOffsetJavaType extends AbstractClassJavaType<ZoneOffset> {
 	public <X> ZoneOffset wrap(X value, WrapperOptions wrapperOptions) {
 		if ( value == null ) {
 			return null;
+		}
+		if ( value instanceof ZoneOffset ) {
+			return (ZoneOffset) value;
 		}
 		if ( value instanceof CharSequence ) {
 			return fromString( (CharSequence) value );

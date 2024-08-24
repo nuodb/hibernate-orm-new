@@ -7,8 +7,6 @@
 package org.hibernate.mapping;
 
 import org.hibernate.dialect.Dialect;
-import org.hibernate.id.IdentifierGenerator;
-import org.hibernate.id.factory.IdentifierGeneratorFactory;
 import org.hibernate.generator.Generator;
 
 /**
@@ -29,39 +27,6 @@ public interface KeyValue extends Value {
 	
 	boolean isUpdateable();
 
-	Generator createGenerator(
-			IdentifierGeneratorFactory identifierGeneratorFactory,
-			Dialect dialect,
-			RootClass rootClass);
-
-	/**
-	 * @deprecated Use {@link #createGenerator(IdentifierGeneratorFactory, Dialect, RootClass)} instead.
-	 */
-	@Deprecated(since="6.2")
-	default IdentifierGenerator createIdentifierGenerator(
-			IdentifierGeneratorFactory identifierGeneratorFactory,
-			Dialect dialect,
-			String defaultCatalog,
-			String defaultSchema,
-			RootClass rootClass) {
-		return (IdentifierGenerator) createGenerator( identifierGeneratorFactory, dialect, rootClass );
-	}
-
-	/**
-	 * @deprecated Use {@link #createGenerator(IdentifierGeneratorFactory, Dialect, RootClass)} instead.
-	 */
-	@Deprecated(since="6.2")
-	default IdentifierGenerator createIdentifierGenerator(
-			IdentifierGeneratorFactory identifierGeneratorFactory,
-			Dialect dialect,
-			RootClass rootClass) {
-		return (IdentifierGenerator) createGenerator( identifierGeneratorFactory, dialect, rootClass );
-	}
-
-	/**
-	 * @deprecated We need to add {@code Column.isIdentity()}
-	 */
-	@Deprecated(since="6.2")
-	boolean isIdentityColumn(IdentifierGeneratorFactory identifierGeneratorFactory, Dialect dialect);
+	Generator createGenerator(Dialect dialect, RootClass rootClass);
 
 }

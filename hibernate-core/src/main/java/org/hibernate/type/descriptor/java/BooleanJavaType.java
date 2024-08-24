@@ -16,6 +16,8 @@ import org.hibernate.type.descriptor.jdbc.JdbcType;
 /**
  * Descriptor for {@link Boolean} handling.
  *
+ * @see org.hibernate.cfg.AvailableSettings#PREFERRED_BOOLEAN_JDBC_TYPE
+ *
  * @author Steve Ebersole
  */
 public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
@@ -44,10 +46,17 @@ public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
 		stringValueTrue = String.valueOf( characterValueTrue );
 		stringValueFalse = String.valueOf( characterValueFalse );
 	}
+
+	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
 	@Override
 	public String toString(Boolean value) {
 		return value == null ? null : value.toString();
 	}
+
 	@Override
 	public Boolean fromString(CharSequence string) {
 		return Boolean.valueOf( string.toString() );
@@ -72,7 +81,7 @@ public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
 		if ( value == null ) {
 			return null;
 		}
-		if ( Boolean.class.isAssignableFrom( type ) ) {
+		if ( Boolean.class.isAssignableFrom( type ) || type == Object.class ) {
 			return (X) value;
 		}
 		if ( Byte.class.isAssignableFrom( type ) ) {
@@ -95,6 +104,7 @@ public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
 		}
 		throw unknownUnwrap( type );
 	}
+
 	@Override
 	public <X> Boolean wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
@@ -117,10 +127,7 @@ public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
 	}
 
 	private boolean isTrue(String strValue) {
-		if (strValue != null && !strValue.isEmpty()) {
-			return isTrue(strValue.charAt(0));
-		}
-		return false;
+		return strValue != null && !strValue.isEmpty() && isTrue( strValue.charAt(0) );
 	}
 
 	private boolean isTrue(char charValue) {
@@ -189,37 +196,59 @@ public class BooleanJavaType extends AbstractClassJavaType<Boolean> implements
 				@SuppressWarnings("unchecked")
 				BasicValueConverter<Boolean, ?> stringConverter =
 						(BasicValueConverter<Boolean, ?>) converter;
-				String[] values = new String[] {
-						stringConverter.toRelationalValue(false).toString(),
-						stringConverter.toRelationalValue(true).toString()
-				};
+				final Object falseValue = stringConverter.toRelationalValue( false );
+				final Object trueValue = stringConverter.toRelationalValue( true );
+				final String[] values = getPossibleStringValues( stringConverter, falseValue, trueValue );
 				return dialect.getCheckCondition( columnName, values );
 			}
 			else if ( jdbcType.isInteger() ) {
 				@SuppressWarnings("unchecked")
 				BasicValueConverter<Boolean, ? extends Number> numericConverter =
 						(BasicValueConverter<Boolean, ? extends Number>) converter;
-				long[] values = new long[] {
-						numericConverter.toRelationalValue(false).longValue(),
-						numericConverter.toRelationalValue(true).longValue()
-				};
+				final Number falseValue = numericConverter.toRelationalValue( false );
+				final Number trueValue = numericConverter.toRelationalValue( true );
+				Long[] values = getPossibleNumericValues( numericConverter, falseValue, trueValue );
 				return dialect.getCheckCondition( columnName, values );
 			}
 		}
 		return null;
 	}
 
-//	@Override @Deprecated
-//	public String getSpecializedTypeDeclaration(JdbcType jdbcType, BasicValueConverter<?, ?> converter, Dialect dialect) {
-//		if ( converter != null && jdbcType.isString() ) {
-//			@SuppressWarnings("unchecked")
-//			BasicValueConverter<Boolean, ?> stringConverter = (BasicValueConverter<Boolean, ?>) converter;
-//			String[] values = new String[] {
-//					stringConverter.toRelationalValue(false).toString(),
-//					stringConverter.toRelationalValue(true).toString()
-//			};
-//			return dialect.getEnumTypeDeclaration( null, values );
-//		}
-//		return null;
-//	}
+	private static Long[] getPossibleNumericValues(
+			BasicValueConverter<Boolean, ? extends Number> numericConverter,
+			Number falseValue,
+			Number trueValue) {
+		Number nullValue = null;
+		try {
+			nullValue = numericConverter.toRelationalValue( null );
+		}
+		catch ( NullPointerException ignored ) {
+		}
+		Long[] values = new Long[nullValue != null ? 3 : 2];
+		values[0] = falseValue != null ? falseValue.longValue() : null;
+		values[1] = trueValue != null ? trueValue.longValue() : null;
+		if ( nullValue != null ) {
+			values[2] = nullValue.longValue();
+		}
+		return values;
+	}
+
+	private static String[] getPossibleStringValues(
+			BasicValueConverter<Boolean, ?> stringConverter,
+			Object falseValue,
+			Object trueValue) {
+		Object nullValue = null;
+		try {
+			nullValue =  stringConverter.toRelationalValue( null);
+		}
+		catch ( NullPointerException ignored ) {
+		}
+		final String[] values = new String[nullValue != null ? 3 : 2];
+		values[0] = falseValue != null ? falseValue.toString() : null;
+		values[1] = trueValue != null ? trueValue.toString() : null;
+		if ( nullValue != null ) {
+			values[2] =  nullValue.toString();
+		}
+		return values;
+	}
 }

@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.Collection;
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
 
 /**
  * API extension to the JPA {@link Expression} contract
@@ -52,4 +53,19 @@ public interface JpaExpression<T> extends JpaSelection<T>, Expression<T> {
 
 	@Override
 	JpaPredicate in(Expression<Collection<?>> values);
+
+	@Override
+	Predicate equalTo(Expression<?> value);
+
+	@Override
+	Predicate equalTo(Object value);
+
+	@Override
+	<X> JpaExpression<X> cast(Class<X> type);
+
+	@Override
+	Predicate notEqualTo(Expression<?> value);
+
+	@Override
+	Predicate notEqualTo(Object value);
 }

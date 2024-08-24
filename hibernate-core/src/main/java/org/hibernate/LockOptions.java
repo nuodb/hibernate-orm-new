@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import jakarta.persistence.FindOption;
 import jakarta.persistence.PessimisticLockScope;
+import jakarta.persistence.RefreshOption;
 import org.hibernate.query.Query;
 import org.hibernate.query.spi.QueryOptions;
 
@@ -51,7 +53,7 @@ import static java.util.Collections.unmodifiableSet;
  *
  * @author Scott Marlow
  */
-public class LockOptions implements Serializable {
+public class LockOptions implements FindOption, RefreshOption, Serializable {
 	/**
 	 * Represents {@link LockMode#NONE}, to which timeout and scope are
 	 * not applicable.
@@ -512,7 +514,7 @@ public class LockOptions implements Serializable {
 	}
 
 	/**
-	 * Make a copy.
+	 * Make a copy. The new copy will be mutable even if the original wasn't.
 	 *
 	 * @return The copy
 	 */
@@ -520,6 +522,22 @@ public class LockOptions implements Serializable {
 		final LockOptions copy = new LockOptions();
 		copy( this, copy );
 		return copy;
+	}
+
+	/**
+	 * Make a copy, unless this is an immutable instance.
+	 *
+	 * @return The copy, or this if it was immutable.
+	 */
+	public LockOptions makeDefensiveCopy() {
+		if ( immutable ) {
+			return this;
+		}
+		else {
+			final LockOptions copy = new LockOptions();
+			copy( this, copy );
+			return copy;
+		}
 	}
 
 	/**

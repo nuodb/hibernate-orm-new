@@ -22,15 +22,15 @@ import org.hibernate.engine.jdbc.spi.JdbcCoordinator;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.spi.SqlExceptionHelper;
 import org.hibernate.engine.jdbc.spi.SqlStatementLogger;
-import org.hibernate.resource.jdbc.spi.JdbcObserver;
+import org.hibernate.event.spi.EventManager;
+import org.hibernate.event.spi.HibernateMonitoringEvent;
+import org.hibernate.resource.jdbc.spi.JdbcEventHandler;
+import org.hibernate.resource.jdbc.spi.JdbcSessionOwner;
 
 import static org.hibernate.engine.jdbc.JdbcLogging.JDBC_MESSAGE_LOGGER;
-import static org.hibernate.engine.jdbc.batch.JdbcBatchLogging.BATCH_DEBUG_ENABLED;
 import static org.hibernate.engine.jdbc.batch.JdbcBatchLogging.BATCH_LOGGER;
 import static org.hibernate.engine.jdbc.batch.JdbcBatchLogging.BATCH_MESSAGE_LOGGER;
-import static org.hibernate.engine.jdbc.batch.JdbcBatchLogging.BATCH_TRACE_ENABLED;
 import static org.hibernate.sql.model.ModelMutationLogging.MODEL_MUTATION_LOGGER;
-import static org.hibernate.sql.model.ModelMutationLogging.MODEL_MUTATION_LOGGER_TRACE_ENABLED;
 
 /**
  * Standard implementation of Batch
@@ -73,7 +73,7 @@ public class BatchImpl implements Batch {
 
 		this.batchSizeToUse = batchSizeToUse;
 
-		if ( BATCH_TRACE_ENABLED ) {
+		if ( BATCH_LOGGER.isTraceEnabled() ) {
 			BATCH_LOGGER.tracef(
 					"Created Batch (%s) - `%s`",
 					batchSizeToUse,
@@ -99,7 +99,8 @@ public class BatchImpl implements Batch {
 
 	@Override
 	public void addToBatch(JdbcValueBindings jdbcValueBindings, TableInclusionChecker inclusionChecker) {
-		if ( BATCH_TRACE_ENABLED ) {
+		final boolean loggerTraceEnabled = BATCH_LOGGER.isTraceEnabled();
+		if ( loggerTraceEnabled ) {
 			BATCH_LOGGER.tracef(
 					"Adding to JDBC batch (%s) - `%s`",
 					batchPosition + 1,
@@ -110,7 +111,7 @@ public class BatchImpl implements Batch {
 		try {
 			getStatementGroup().forEachStatement( (tableName, statementDetails) -> {
 				if ( inclusionChecker != null && !inclusionChecker.include( statementDetails.getMutatingTableDetails() ) ) {
-					if ( MODEL_MUTATION_LOGGER_TRACE_ENABLED ) {
+					if ( loggerTraceEnabled ) {
 						MODEL_MUTATION_LOGGER.tracef(
 								"Skipping addBatch for table : %s (batch-position=%s)",
 								statementDetails.getMutatingTableDetails().getTableName(),
@@ -229,7 +230,7 @@ public class BatchImpl implements Batch {
 		try {
 			if ( batchPosition == 0 ) {
 				if( !batchExecuted) {
-					if ( BATCH_DEBUG_ENABLED ) {
+					if ( BATCH_LOGGER.isDebugEnabled() ) {
 						BATCH_LOGGER.debugf(
 								"No batched statements to execute - %s",
 								getKey().toLoggableString()
@@ -247,7 +248,7 @@ public class BatchImpl implements Batch {
 	}
 
 	protected void performExecution() {
-		if ( BATCH_TRACE_ENABLED ) {
+		if ( BATCH_LOGGER.isTraceEnabled() ) {
 			BATCH_LOGGER.tracef(
 					"Executing JDBC batch (%s / %s) - `%s`",
 					batchPosition,
@@ -256,8 +257,8 @@ public class BatchImpl implements Batch {
 			);
 		}
 
-		//noinspection deprecation
-		final JdbcObserver observer = jdbcCoordinator.getJdbcSessionOwner().getJdbcSessionContext().getObserver();
+		final JdbcSessionOwner jdbcSessionOwner = jdbcCoordinator.getJdbcSessionOwner();
+		final JdbcEventHandler eventHandler = jdbcSessionOwner.getJdbcSessionContext().getEventHandler();
 		try {
 			getStatementGroup().forEachStatement( (tableName, statementDetails) -> {
 				final String sql = statementDetails.getSqlString();
@@ -270,12 +271,15 @@ public class BatchImpl implements Batch {
 				try {
 					if ( statementDetails.getMutatingTableDetails().isIdentifierTable() ) {
 						final int[] rowCounts;
+						final EventManager eventManager = jdbcSessionOwner.getEventManager();
+						final HibernateMonitoringEvent jdbcBatchExecutionEvent = eventManager.beginJdbcBatchExecutionEvent();
 						try {
-							observer.jdbcExecuteBatchStart();
+							eventHandler.jdbcExecuteBatchStart();
 							rowCounts = statement.executeBatch();
 						}
 						finally {
-							observer.jdbcExecuteBatchEnd();
+							eventManager.completeJdbcBatchExecutionEvent( jdbcBatchExecutionEvent, sql );
+							eventHandler.jdbcExecuteBatchEnd();
 						}
 						checkRowCounts( rowCounts, statementDetails );
 					}
@@ -303,12 +307,11 @@ public class BatchImpl implements Batch {
 	private void checkRowCounts(int[] rowCounts, PreparedStatementDetails statementDetails) throws SQLException, HibernateException {
 		final int numberOfRowCounts = rowCounts.length;
 		if ( batchPosition != 0 ) {
-			final int expectedNumberOfCounts = batchPosition / getStatementGroup().getNumberOfStatements();
-			if ( numberOfRowCounts != expectedNumberOfCounts ) {
+			if ( numberOfRowCounts != batchPosition ) {
 				JDBC_MESSAGE_LOGGER.unexpectedRowCounts(
 						statementDetails.getMutatingTableDetails().getTableName(),
 						numberOfRowCounts,
-						expectedNumberOfCounts
+						batchPosition
 				);
 			}
 		}

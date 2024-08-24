@@ -20,6 +20,7 @@ import org.hibernate.engine.jdbc.connections.spi.ConnectionProvider;
 
 import org.hibernate.testing.jdbc.ConnectionProviderDelegate;
 import org.hibernate.testing.jdbc.JdbcSpies;
+import org.hibernate.testing.jdbc.SharedDriverManagerConnectionProviderImpl;
 
 /**
  * This {@link ConnectionProvider} extends any other ConnectionProvider that would be used by default taken the current configuration properties, and it
@@ -62,6 +63,7 @@ public class PreparedStatementSpyConnectionProvider extends ConnectionProviderDe
 
 	public PreparedStatementSpyConnectionProvider(boolean forceSupportsAggressiveRelease) {
 		super(forceSupportsAggressiveRelease);
+		setConnectionProvider( SharedDriverManagerConnectionProviderImpl.getInstance() );
 	}
 
 	protected Connection actualConnection() throws SQLException {
@@ -76,10 +78,10 @@ public class PreparedStatementSpyConnectionProvider extends ConnectionProviderDe
 	}
 
 	@Override
-	public void closeConnection(Connection conn) throws SQLException {
-		acquiredConnections.remove( conn );
-		releasedConnections.add( conn );
-		super.closeConnection( spyContext.getSpiedInstance( conn ) );
+	public void closeConnection(Connection connection) throws SQLException {
+		acquiredConnections.remove( connection );
+		releasedConnections.add( connection );
+		super.closeConnection( spyContext.getSpiedInstance( connection ) );
 	}
 
 	@Override

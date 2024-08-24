@@ -12,7 +12,8 @@ import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
-import org.hibernate.annotations.Index;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
@@ -20,6 +21,7 @@ import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.tool.schema.internal.SchemaCreatorImpl;
 
 import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,7 +38,7 @@ public class ComponentIndexTest {
 
 	@Before
 	public void setUp(){
-		ssr = new StandardServiceRegistryBuilder().build();
+		ssr = ServiceRegistryUtil.serviceRegistry();
 		metadata = new MetadataSources( ssr )
 				.addAnnotatedClass( User.class )
 				.buildMetadata();
@@ -71,6 +73,7 @@ public class ComponentIndexTest {
 	}
 
 	@Entity(name = "user")
+	@Table(indexes = @Index(name = "city_index", columnList = "city"))
 	public class User {
 		@Id
 		private Long id;
@@ -80,7 +83,6 @@ public class ComponentIndexTest {
 
 	@Embeddable
 	public class Address {
-		@Index( name = "city_index")
 		private String city;
 		private String street;
 		private String postalCode;

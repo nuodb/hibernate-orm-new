@@ -12,20 +12,23 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.JoinColumns;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-import org.hibernate.annotations.ForeignKey;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.tool.schema.internal.SchemaCreatorImpl;
 
 import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.Test;
 
 import org.jboss.logging.Logger;
 
+import static jakarta.persistence.ConstraintMode.NO_CONSTRAINT;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -38,7 +41,7 @@ public class ImplicitCompositeKeyJoinTest {
 
 	@Test
 	public void testSchemaCreationSQLCommandIsGeneratedWithTheCorrectColumnSizeValues() throws Exception {
-		final StandardServiceRegistry ssr = new StandardServiceRegistryBuilder().build();
+		final StandardServiceRegistry ssr = ServiceRegistryUtil.serviceRegistry();
 		try {
 			final org.hibernate.boot.Metadata metadata = new MetadataSources( ssr )
 					.addAnnotatedClass( Employee.class )
@@ -119,11 +122,10 @@ public class ImplicitCompositeKeyJoinTest {
 	@Table(name = "Employee")
 	public class Employee {
 		@EmbeddedId
-		@ForeignKey(name = "none")
 		private EmployeeId id;
 
-		@ManyToOne(optional = true)
-		@ForeignKey(name = "none")
+		@ManyToOne
+		@JoinColumns(value = {}, foreignKey = @ForeignKey(NO_CONSTRAINT))
 		private Employee manager;
 	}
 

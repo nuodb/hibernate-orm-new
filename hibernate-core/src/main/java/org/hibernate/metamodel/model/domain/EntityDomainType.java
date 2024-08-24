@@ -13,13 +13,18 @@ import jakarta.persistence.metamodel.EntityType;
 import org.hibernate.query.sqm.SqmPathSource;
 
 /**
- * Extension to the JPA {@link EntityType} contract
+ * Extension to the JPA {@link EntityType} contract.
  *
  * @author Steve Ebersole
  */
-public interface EntityDomainType<J> extends IdentifiableDomainType<J>, EntityType<J>, SqmPathSource<J> {
+public interface EntityDomainType<J> extends IdentifiableDomainType<J>, EntityType<J>, TreatableDomainType<J> {
 	String getHibernateEntityName();
 
 	@Override
 	Collection<? extends EntityDomainType<? extends J>> getSubTypes();
+
+	@Override
+	default EntityDomainType<J> getSqmType() {
+		return this;
+	}
 }

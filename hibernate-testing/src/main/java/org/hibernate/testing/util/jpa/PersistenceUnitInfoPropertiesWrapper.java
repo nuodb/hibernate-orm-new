@@ -66,6 +66,16 @@ public class PersistenceUnitInfoPropertiesWrapper implements PersistenceUnitInfo
 		return HibernatePersistenceProvider.class.getName();
 	}
 
+	@Override
+	public String getScopeAnnotationName() {
+		return null;
+	}
+
+	@Override
+	public List<String> getQualifierAnnotationNames() {
+		return List.of();
+	}
+
 	public PersistenceUnitTransactionType getTransactionType() {
 		return null;
 	}
@@ -125,6 +135,6 @@ public class PersistenceUnitInfoPropertiesWrapper implements PersistenceUnitInfo
 	}
 
 	public ClassLoader getNewTempClassLoader() {
-		return Thread.currentThread().getContextClassLoader();
+		return null;
 	}
 }

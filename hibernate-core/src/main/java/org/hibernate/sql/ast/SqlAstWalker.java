@@ -22,6 +22,7 @@ import org.hibernate.sql.ast.tree.expression.AggregateColumnWriteExpression;
 import org.hibernate.sql.ast.tree.expression.Distinct;
 import org.hibernate.sql.ast.tree.expression.Duration;
 import org.hibernate.sql.ast.tree.expression.DurationUnit;
+import org.hibernate.sql.ast.tree.expression.EmbeddableTypeLiteral;
 import org.hibernate.sql.ast.tree.expression.EntityTypeLiteral;
 import org.hibernate.sql.ast.tree.expression.Every;
 import org.hibernate.sql.ast.tree.expression.ExtractUnit;
@@ -29,6 +30,7 @@ import org.hibernate.sql.ast.tree.expression.Format;
 import org.hibernate.sql.ast.tree.expression.JdbcLiteral;
 import org.hibernate.sql.ast.tree.expression.JdbcParameter;
 import org.hibernate.sql.ast.tree.expression.ModifiedSubQueryExpression;
+import org.hibernate.sql.ast.tree.expression.NestedColumnReference;
 import org.hibernate.sql.ast.tree.expression.Over;
 import org.hibernate.sql.ast.tree.expression.Overflow;
 import org.hibernate.sql.ast.tree.expression.QueryLiteral;
@@ -39,6 +41,7 @@ import org.hibernate.sql.ast.tree.expression.Star;
 import org.hibernate.sql.ast.tree.expression.Summarization;
 import org.hibernate.sql.ast.tree.expression.TrimSpecification;
 import org.hibernate.sql.ast.tree.expression.UnaryOperation;
+import org.hibernate.sql.ast.tree.expression.UnparsedNumericLiteral;
 import org.hibernate.sql.ast.tree.from.FromClause;
 import org.hibernate.sql.ast.tree.from.FunctionTableReference;
 import org.hibernate.sql.ast.tree.from.NamedTableReference;
@@ -62,6 +65,7 @@ import org.hibernate.sql.ast.tree.predicate.LikePredicate;
 import org.hibernate.sql.ast.tree.predicate.NegatedPredicate;
 import org.hibernate.sql.ast.tree.predicate.NullnessPredicate;
 import org.hibernate.sql.ast.tree.predicate.SelfRenderingPredicate;
+import org.hibernate.sql.ast.tree.predicate.ThruthnessPredicate;
 import org.hibernate.sql.ast.tree.select.QueryGroup;
 import org.hibernate.sql.ast.tree.select.QueryPart;
 import org.hibernate.sql.ast.tree.select.QuerySpec;
@@ -71,6 +75,7 @@ import org.hibernate.sql.ast.tree.select.SortSpecification;
 import org.hibernate.sql.ast.tree.update.Assignment;
 import org.hibernate.sql.ast.tree.update.UpdateStatement;
 import org.hibernate.sql.model.ast.ColumnWriteFragment;
+import org.hibernate.sql.model.internal.OptionalTableUpdate;
 import org.hibernate.sql.model.internal.TableDeleteCustomSql;
 import org.hibernate.sql.model.internal.TableDeleteStandard;
 import org.hibernate.sql.model.internal.TableInsertCustomSql;
@@ -125,6 +130,8 @@ public interface SqlAstWalker {
 
 	void visitColumnReference(ColumnReference columnReference);
 
+	void visitNestedColumnReference(NestedColumnReference nestedColumnReference);
+
 	void visitAggregateColumnWriteExpression(AggregateColumnWriteExpression aggregateColumnWriteExpression);
 
 	void visitExtractUnit(ExtractUnit extractUnit);
@@ -161,6 +168,8 @@ public interface SqlAstWalker {
 
 	void visitEntityTypeLiteral(EntityTypeLiteral expression);
 
+	void visitEmbeddableTypeLiteral(EmbeddableTypeLiteral expression);
+
 	void visitTuple(SqlTuple tuple);
 
 	void visitCollation(Collation collation);
@@ -170,6 +179,8 @@ public interface SqlAstWalker {
 	void visitJdbcLiteral(JdbcLiteral<?> jdbcLiteral);
 
 	void visitQueryLiteral(QueryLiteral<?> queryLiteral);
+
+	<N extends Number> void visitUnparsedNumericLiteral(UnparsedNumericLiteral<N> literal);
 
 	void visitUnaryOperationExpression(UnaryOperation unaryOperationExpression);
 
@@ -201,6 +212,8 @@ public interface SqlAstWalker {
 
 	void visitNullnessPredicate(NullnessPredicate nullnessPredicate);
 
+	void visitThruthnessPredicate(ThruthnessPredicate predicate);
+
 	void visitRelationalPredicate(ComparisonPredicate comparisonPredicate);
 
 	void visitSelfRenderingPredicate(SelfRenderingPredicate selfRenderingPredicate);
@@ -224,6 +237,8 @@ public interface SqlAstWalker {
 	void visitCustomTableDelete(TableDeleteCustomSql tableDelete);
 
 	void visitStandardTableUpdate(TableUpdateStandard tableUpdate);
+
+	void visitOptionalTableUpdate(OptionalTableUpdate tableUpdate);
 
 	void visitCustomTableUpdate(TableUpdateCustomSql tableUpdate);
 

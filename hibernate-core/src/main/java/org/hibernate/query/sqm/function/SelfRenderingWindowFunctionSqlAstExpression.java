@@ -32,7 +32,7 @@ public class SelfRenderingWindowFunctionSqlAstExpression extends SelfRenderingFu
 
 	public SelfRenderingWindowFunctionSqlAstExpression(
 			String functionName,
-			FunctionRenderingSupport renderer,
+			FunctionRenderer renderer,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			Boolean respectNulls,
@@ -65,6 +65,6 @@ public class SelfRenderingWindowFunctionSqlAstExpression extends SelfRenderingFu
 			SqlAppender sqlAppender,
 			SqlAstTranslator<?> walker,
 			SessionFactoryImplementor sessionFactory) {
-		getRenderer().render( sqlAppender, getArguments(), filter, respectNulls, fromFirst, walker );
+		getFunctionRenderer().render( sqlAppender, getArguments(), filter, respectNulls, fromFirst, getType(), walker );
 	}
 }

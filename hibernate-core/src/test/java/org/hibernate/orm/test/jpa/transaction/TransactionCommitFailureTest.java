@@ -20,6 +20,9 @@ import jakarta.persistence.RollbackException;
 import org.hibernate.cfg.Environment;
 import org.hibernate.engine.jdbc.connections.internal.DriverManagerConnectionProviderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
+
+import org.hibernate.testing.jdbc.ConnectionProviderDelegate;
+import org.hibernate.testing.jdbc.SharedDriverManagerConnectionProviderImpl;
 import org.hibernate.testing.orm.jpa.PersistenceUnitDescriptorAdapter;
 import org.hibernate.orm.test.jpa.SettingsGenerator;
 
@@ -67,6 +70,8 @@ public class TransactionCommitFailureTest {
 
 		try {
 			em.getTransaction().begin();
+			// Force connection acquisition
+			em.createQuery( "select 1" ).getResultList();
 			transactionFailureTrigger.set( true );
 			em.getTransaction().commit();
 		}
@@ -89,6 +94,8 @@ public class TransactionCommitFailureTest {
 		EntityManager em = emf.createEntityManager();
 		try {
 			em.getTransaction().begin();
+			// Force connection acquisition
+			em.createQuery( "select 1" ).getResultList();
 			assertEquals( true, connectionIsOpen.get() );
 			transactionFailureTrigger.set( true );
 			em.getTransaction().rollback();
@@ -115,7 +122,11 @@ public class TransactionCommitFailureTest {
 		);
 	}
 
-	public static class ProxyConnectionProvider extends DriverManagerConnectionProviderImpl {
+	public static class ProxyConnectionProvider extends ConnectionProviderDelegate {
+
+		public ProxyConnectionProvider() {
+			setConnectionProvider( SharedDriverManagerConnectionProviderImpl.getInstance() );
+		}
 
 		@Override
 		public Connection getConnection() throws SQLException {
@@ -129,8 +140,10 @@ public class TransactionCommitFailureTest {
 		}
 
 		@Override
-		public void closeConnection(Connection conn) throws SQLException {
-			super.closeConnection( conn );
+		public void closeConnection(Connection connection) throws SQLException {
+			final ConnectionInvocationHandler handler = (ConnectionInvocationHandler)
+					Proxy.getInvocationHandler( connection );
+			super.closeConnection( handler.delegate );
 			connectionIsOpen.set( false );
 		}
 	}

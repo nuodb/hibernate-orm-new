@@ -7,16 +7,21 @@
 package org.hibernate.engine.spi;
 
 import java.sql.Connection;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.naming.NamingException;
 import javax.naming.Reference;
 import jakarta.persistence.EntityGraph;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceUnitTransactionType;
 import jakarta.persistence.PersistenceUnitUtil;
 import jakarta.persistence.Query;
 import jakarta.persistence.SynchronizationType;
+import jakarta.persistence.TypedQueryReference;
 
 import org.hibernate.CustomEntityDirtinessStrategy;
 import org.hibernate.HibernateException;
@@ -49,6 +54,7 @@ import org.hibernate.stat.spi.StatisticsImplementor;
 import org.hibernate.generator.Generator;
 import org.hibernate.type.Type;
 import org.hibernate.type.descriptor.WrapperOptions;
+import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.spi.TypeConfiguration;
 
 /**
@@ -145,6 +151,11 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	}
 
 	@Override
+	public PersistenceUnitTransactionType getTransactionType() {
+		return delegate.getTransactionType();
+	}
+
+	@Override
 	public void addNamedQuery(String name, Query query) {
 		delegate.addNamedQuery( name, query );
 	}
@@ -160,6 +171,16 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	}
 
 	@Override
+	public void runInTransaction(Consumer<EntityManager> work) {
+		delegate.runInTransaction( work );
+	}
+
+	@Override
+	public <R> R callInTransaction(Function<EntityManager, R> work) {
+		return delegate.callInTransaction( work );
+	}
+
+	@Override
 	public Set<String> getDefinedFilterNames() {
 		return delegate.getDefinedFilterNames();
 	}
@@ -167,6 +188,11 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	@Override @Deprecated
 	public FilterDefinition getFilterDefinition(String filterName) throws HibernateException {
 		return delegate.getFilterDefinition( filterName );
+	}
+
+	@Override
+	public Collection<FilterDefinition> getAutoEnabledFilters() {
+		return delegate.getAutoEnabledFilters();
 	}
 
 	@Override
@@ -207,6 +233,16 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	@Override
 	public RootGraphImplementor<?> findEntityGraphByName(String name) {
 		return delegate.findEntityGraphByName( name );
+	}
+
+	@Override
+	public <R> Map<String, TypedQueryReference<R>> getNamedQueries(Class<R> resultType) {
+		return delegate.getNamedQueries( resultType );
+	}
+
+	@Override
+	public <E> Map<String, EntityGraph<? extends E>> getNamedEntityGraphs(Class<E> entityType) {
+		return delegate.getNamedEntityGraphs( entityType );
 	}
 
 	@Override
@@ -260,18 +296,18 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	}
 
 	@Override
-	public CurrentTenantIdentifierResolver getCurrentTenantIdentifierResolver() {
+	public CurrentTenantIdentifierResolver<Object> getCurrentTenantIdentifierResolver() {
 		return delegate.getCurrentTenantIdentifierResolver();
+	}
+
+	@Override
+	public JavaType<Object> getTenantIdentifierJavaType() {
+		return delegate.getTenantIdentifierJavaType();
 	}
 
 	@Override
 	public FastSessionServices getFastSessionServices() {
 		return delegate.getFastSessionServices();
-	}
-
-	@Override @Deprecated
-	public DeserializationResolver<?> getDeserializationResolver() {
-		return delegate.getDeserializationResolver();
 	}
 
 	@Override
@@ -297,6 +333,11 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	@Override
 	public String getName() {
 		return delegate.getName();
+	}
+
+	@Override
+	public String getJndiName() {
+		return delegate.getJndiName();
 	}
 
 	@Override
@@ -350,7 +391,7 @@ public class SessionFactoryDelegatingImpl implements SessionFactoryImplementor, 
 	}
 
 	@Override @Deprecated
-	public <T> BindableType<? extends T> resolveParameterBindType(T bindValue) {
+	public <T> BindableType<? super T> resolveParameterBindType(T bindValue) {
 		return delegate.resolveParameterBindType( bindValue );
 	}
 

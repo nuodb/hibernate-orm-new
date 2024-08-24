@@ -36,9 +36,6 @@ public interface QueryLogging extends BasicLogger {
 	Logger QUERY_LOGGER = Logger.getLogger( LOGGER_NAME );
 	QueryLogging QUERY_MESSAGE_LOGGER = Logger.getMessageLogger( QueryLogging.class, LOGGER_NAME );
 
-	boolean TRACE_ENABLED = QUERY_LOGGER.isTraceEnabled();
-	boolean DEBUG_ENABLED = QUERY_LOGGER.isDebugEnabled();
-
 	static String subLoggerName(String subName) {
 		return LOGGER_NAME + '.' + subName;
 	}
@@ -56,7 +53,7 @@ public interface QueryLogging extends BasicLogger {
 	void namedQueryError(String queryName, @Cause HibernateException e);
 
 	@LogMessage(level = INFO)
-	@Message(value = "Unable to determine lock mode value : %s -> %s", id = 90003002)
+	@Message(value = "Unable to determine lock mode value: %s -> %s", id = 90003002)
 	void unableToDetermineLockModeValue(String hintName, Object value);
 
 	@LogMessage(level = INFO)

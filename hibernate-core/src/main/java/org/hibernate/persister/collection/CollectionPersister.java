@@ -6,7 +6,6 @@
  */
 package org.hibernate.persister.collection;
 
-import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Set;
@@ -14,6 +13,7 @@ import java.util.function.Consumer;
 
 import org.hibernate.Filter;
 import org.hibernate.HibernateException;
+import org.hibernate.Incubating;
 import org.hibernate.MappingException;
 import org.hibernate.cache.spi.access.CollectionDataAccess;
 import org.hibernate.cache.spi.entry.CacheEntryStructure;
@@ -23,8 +23,8 @@ import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.id.IdentifierGenerator;
-import org.hibernate.metadata.CollectionMetadata;
 import org.hibernate.metamodel.CollectionClassification;
+import org.hibernate.metamodel.mapping.ManagedMappingType;
 import org.hibernate.metamodel.mapping.PluralAttributeMapping;
 import org.hibernate.metamodel.mapping.Restrictable;
 import org.hibernate.metamodel.model.domain.NavigableRole;
@@ -91,6 +91,10 @@ public interface CollectionPersister extends Restrictable {
 	 */
 	NavigableRole getNavigableRole();
 
+	/**
+	 * Get the name of this collection role (the fully qualified class name,
+	 * extended by a "property path")
+	 */
 	default String getRole() {
 		return getNavigableRole().getFullPath();
 	}
@@ -132,13 +136,16 @@ public interface CollectionPersister extends Restrictable {
 	 */
 	CacheEntryStructure getCacheEntryStructure();
 
+	@Incubating
+	boolean useShallowQueryCacheLayout();
+
 	/**
 	 * Return the element class of an array, or null otherwise
 	 */
 	Class<?> getElementClass();
 
 	/**
-	 * Is this an array or primitive values?
+	 * Is this an array of primitive values?
 	 */
 	boolean isPrimitiveArray();
 	/**
@@ -209,7 +216,7 @@ public interface CollectionPersister extends Restrictable {
 			PersistentCollection<?> collection,
 			Object key,
 			SharedSessionContractImplementor session);
-	
+
 	/**
 	 * Process queued operations within the PersistentCollection.
 	 */
@@ -217,11 +224,6 @@ public interface CollectionPersister extends Restrictable {
 			PersistentCollection<?> collection,
 			Object key,
 			SharedSessionContractImplementor session);
-	
-	/**
-	 * Get the name of this collection role (the fully qualified class name,
-	 * extended by a "property path")
-	 */
 
 	/**
 	 * Get the surrogate key generation strategy (optional operation)
@@ -255,15 +257,7 @@ public interface CollectionPersister extends Restrictable {
 	/**
 	 * Get the "space" that holds the persistent state
 	 */
-	Serializable[] getCollectionSpaces();
-
-	/**
-	 * Get the user-visible metadata for the collection (optional operation)
-	 *
-	 * @deprecated This operation is no longer called by Hibernate.
-	 */
-	@Deprecated(since = "6.0")
-	CollectionMetadata getCollectionMetadata();
+	String[] getCollectionSpaces();
 
 	/**
 	 * Is cascade delete handled by the database-level
@@ -291,6 +285,17 @@ public interface CollectionPersister extends Restrictable {
 	boolean isAffectedByEnabledFilters(SharedSessionContractImplementor session);
 
 	default boolean isAffectedByEnabledFilters(LoadQueryInfluencers influencers) {
+		throw new UnsupportedOperationException( "CollectionPersister used for [" + getRole() + "] does not support SQL AST" );
+	}
+
+	default boolean isAffectedByEnabledFilters(LoadQueryInfluencers influencers, boolean onlyApplyForLoadByKeyFilters) {
+		throw new UnsupportedOperationException( "CollectionPersister used for [" + getRole() + "] does not support SQL AST" );
+	}
+
+	default boolean isAffectedByEnabledFilters(
+			Set<ManagedMappingType> visitedTypes,
+			LoadQueryInfluencers influencers,
+			boolean onlyApplyForLoadByKey) {
 		throw new UnsupportedOperationException( "CollectionPersister used for [" + getRole() + "] does not support SQL AST" );
 	}
 
@@ -452,4 +457,23 @@ public interface CollectionPersister extends Restrictable {
 	 */
 	@Deprecated( forRemoval = true )
 	Type getIdentifierType();
+
+	String getIdentifierColumnName();
+
+	String getTableName();
+
+	/**
+	 * Generate a list of collection index and element columns
+	 */
+	String selectFragment(String alias, String columnSuffix);
+
+	String[] getCollectionPropertyColumnAliases(String propertyName, String string);
+
+	/**
+	 * Get the persister of the element class, if this is a
+	 * collection of entities (optional operation).  Note that
+	 * for a one-to-many association, the returned persister
+	 * must be {@code OuterJoinLoadable}.
+	 */
+	EntityPersister getElementPersister();
 }

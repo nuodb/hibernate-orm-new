@@ -33,7 +33,6 @@ import org.geolatte.geom.crs.CoordinateReferenceSystems;
 
 import static org.geolatte.geom.builder.DSL.c;
 import static org.geolatte.geom.builder.DSL.point;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -139,9 +138,9 @@ public class PostgisDistanceOperatorsTest {
 						}
 				)
 		);
-		assertEquals(
-				"org.hibernate.QueryException: Parameter 1 of function distance_2d_bbox() has type SPATIAL, but argument is of type java.lang.Integer",
+		assertTrue(
 				thrown.getMessage()
+						.contains("Parameter 1 of function 'distance_2d_bbox()' has type 'SPATIAL', but argument is of type 'java.lang.Integer'")
 		);
 
 	}

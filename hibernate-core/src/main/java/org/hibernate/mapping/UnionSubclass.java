@@ -5,7 +5,7 @@
  * See the lgpl.txt file in the root directory or <http://www.gnu.org/licenses/lgpl-2.1.html>.
  */
 package org.hibernate.mapping;
-import java.util.Iterator;
+
 import java.util.List;
 
 import org.hibernate.boot.spi.MetadataBuildingContext;
@@ -35,11 +35,6 @@ public class UnionSubclass extends Subclass implements TableOwner {
 
 	public java.util.Set<String> getSynchronizedTables() {
 		return synchronizedTables;
-	}
-
-	@Deprecated @SuppressWarnings("deprecation")
-	protected Iterator<Property> getNonDuplicatedPropertyIterator() {
-		return getPropertyClosureIterator();
 	}
 
 	@Override

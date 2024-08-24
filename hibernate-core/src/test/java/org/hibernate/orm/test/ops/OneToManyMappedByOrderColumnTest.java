@@ -9,10 +9,9 @@ package org.hibernate.orm.test.ops;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.hibernate.HibernateException;
 import org.hibernate.annotations.Cascade;
 import org.hibernate.annotations.CascadeType;
-import org.hibernate.query.SemanticException;
-import org.hibernate.stat.spi.StatisticsImplementor;
 
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.SessionFactory;
@@ -65,7 +64,7 @@ public class OneToManyMappedByOrderColumnTest {
 				s.get( Parent.class, 1 );
 				Assertions.fail( "Expected to fail because list index is null" );
 			}
-			catch (SemanticException ex) {
+			catch (HibernateException ex) {
 				Assertions.assertTrue( ex.getMessage().contains( "children" ) );
 			}
 		} );
@@ -78,7 +77,7 @@ public class OneToManyMappedByOrderColumnTest {
 		private Integer id;
 		@OrderColumn(name = "list_idx")
 		@OneToMany(targetEntity = Child.class, mappedBy = "parent", fetch = FetchType.EAGER)
-		@Cascade(CascadeType.DELETE)
+		@Cascade(CascadeType.REMOVE)
 		private List<Child> children = new ArrayList<>();
 
 		public Integer getId() {

@@ -24,23 +24,23 @@ import org.hibernate.boot.model.relational.Namespace;
 import org.hibernate.boot.model.relational.QualifiedName;
 import org.hibernate.boot.model.relational.QualifiedNameParser;
 import org.hibernate.boot.model.relational.SqlStringGenerationContext;
-import org.hibernate.boot.registry.selector.spi.StrategySelector;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.engine.config.spi.ConfigurationService;
 import org.hibernate.engine.config.spi.StandardConverters;
 import org.hibernate.engine.jdbc.Size;
+import org.hibernate.engine.jdbc.env.spi.IdentifierHelper;
 import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.jdbc.internal.FormatStyle;
-import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.jdbc.spi.SqlStatementLogger;
 import org.hibernate.engine.spi.SessionEventListenerManager;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.event.spi.EventManager;
+import org.hibernate.event.spi.HibernateMonitoringEvent;
 import org.hibernate.id.ExportableColumn;
 import org.hibernate.id.IdentifierGeneratorHelper;
 import org.hibernate.id.IntegralDataTypeHolder;
 import org.hibernate.id.PersistentIdentifierGenerator;
 import org.hibernate.internal.CoreMessageLogger;
-import org.hibernate.internal.util.StringHelper;
 import org.hibernate.jdbc.AbstractReturningWork;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.PrimaryKey;
@@ -53,10 +53,11 @@ import org.hibernate.type.Type;
 import org.jboss.logging.Logger;
 
 import static java.util.Collections.singletonMap;
-import static org.hibernate.cfg.AvailableSettings.ID_DB_STRUCTURE_NAMING_STRATEGY;
+import static org.hibernate.id.IdentifierGeneratorHelper.getNamingStrategy;
 import static org.hibernate.id.enhanced.OptimizerFactory.determineImplicitOptimizerName;
-import static org.hibernate.internal.log.IncubationLogger.INCUBATION_LOGGER;
-import static org.hibernate.internal.util.NullnessHelper.coalesceSuppliedValues;
+import static org.hibernate.internal.util.StringHelper.isEmpty;
+import static org.hibernate.internal.util.StringHelper.isNotEmpty;
+import static org.hibernate.internal.util.StringHelper.qualify;
 import static org.hibernate.internal.util.config.ConfigurationHelper.getBoolean;
 import static org.hibernate.internal.util.config.ConfigurationHelper.getInt;
 import static org.hibernate.internal.util.config.ConfigurationHelper.getString;
@@ -220,6 +221,7 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 
 	private String contributor;
 
+	private String options;
 	/**
 	 * Type mapping for the identifier.
 	 *
@@ -331,11 +333,11 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 
 	@Override
 	public void configure(Type type, Properties parameters, ServiceRegistry serviceRegistry) throws MappingException {
-		storeLastUsedValue = serviceRegistry.getService( ConfigurationService.class )
+		storeLastUsedValue = serviceRegistry.requireService( ConfigurationService.class )
 				.getSetting( AvailableSettings.TABLE_GENERATOR_STORE_LAST_USED, StandardConverters.BOOLEAN, true );
 		identifierType = type;
 
-		final JdbcEnvironment jdbcEnvironment = serviceRegistry.getService( JdbcEnvironment.class );
+		final JdbcEnvironment jdbcEnvironment = serviceRegistry.requireService( JdbcEnvironment.class );
 
 		qualifiedTableName = determineGeneratorTableName( parameters, jdbcEnvironment, serviceRegistry );
 		segmentColumnName = determineSegmentColumnName( parameters, jdbcEnvironment );
@@ -358,6 +360,7 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 		if ( contributor == null ) {
 			contributor = "orm";
 		}
+		options = parameters.getProperty( OPTIONS );
 	}
 
 	private static OptimizerDescriptor determineOptimizationStrategy(Properties parameters, int incrementSize) {
@@ -377,60 +380,29 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 	 * @return The table name to use.
 	 */
 	protected QualifiedName determineGeneratorTableName(Properties params, JdbcEnvironment jdbcEnvironment, ServiceRegistry serviceRegistry) {
-		final String explicitTableName = getString( TABLE_PARAM, params );
-		if ( StringHelper.isNotEmpty( explicitTableName ) ) {
-			if ( explicitTableName.contains( "." ) ) {
-				return QualifiedNameParser.INSTANCE.parse( explicitTableName );
-			}
-			else {
-				final Identifier catalog = jdbcEnvironment.getIdentifierHelper().toIdentifier(
-						getString( CATALOG, params )
-				);
-				final Identifier schema = jdbcEnvironment.getIdentifierHelper().toIdentifier(
-						getString( SCHEMA, params )
-				);
-				return new QualifiedNameParser.NameParts(
-						catalog,
-						schema,
-						jdbcEnvironment.getIdentifierHelper().toIdentifier( explicitTableName )
-				);
-			}
+		final IdentifierHelper identifierHelper = jdbcEnvironment.getIdentifierHelper();
+		final Identifier catalog = identifierHelper.toIdentifier( getString( CATALOG, params ) );
+		final Identifier schema = identifierHelper.toIdentifier( getString( SCHEMA, params ) );
+		final String tableName = getString( TABLE_PARAM, params );
+		return tableName( params, serviceRegistry, tableName, catalog, schema, identifierHelper );
+	}
+
+	private static QualifiedName tableName(
+			Properties params,
+			ServiceRegistry serviceRegistry,
+			String explicitTableName,
+			Identifier catalog, Identifier schema,
+			IdentifierHelper identifierHelper) {
+		if ( isNotEmpty( explicitTableName ) ) {
+			return explicitTableName.contains(".")
+					? QualifiedNameParser.INSTANCE.parse( explicitTableName )
+					: new QualifiedNameParser.NameParts( catalog, schema,
+							identifierHelper.toIdentifier( explicitTableName ) );
 		}
-
-		final StrategySelector strategySelector = serviceRegistry.getService( StrategySelector.class );
-
-		final String namingStrategySetting = coalesceSuppliedValues(
-				() -> {
-					final String localSetting = getString( ID_DB_STRUCTURE_NAMING_STRATEGY, params );
-					if ( localSetting != null ) {
-						INCUBATION_LOGGER.incubatingSetting( ID_DB_STRUCTURE_NAMING_STRATEGY );
-					}
-					return localSetting;
-				},
-				() -> {
-					final ConfigurationService configurationService = serviceRegistry.getService( ConfigurationService.class );
-					final String globalSetting = getString( ID_DB_STRUCTURE_NAMING_STRATEGY, configurationService.getSettings() );
-					if ( globalSetting != null ) {
-						INCUBATION_LOGGER.incubatingSetting( ID_DB_STRUCTURE_NAMING_STRATEGY );
-					}
-					return globalSetting;
-				},
-				StandardNamingStrategy.class::getName
-		);
-
-		final ImplicitDatabaseObjectNamingStrategy namingStrategy = strategySelector.resolveStrategy(
-				ImplicitDatabaseObjectNamingStrategy.class,
-				namingStrategySetting
-		);
-
-		final Identifier catalog = jdbcEnvironment.getIdentifierHelper().toIdentifier(
-				getString( CATALOG, params )
-		);
-		final Identifier schema = jdbcEnvironment.getIdentifierHelper().toIdentifier(
-				getString( SCHEMA, params )
-		);
-
-		return namingStrategy.determineTableName(  catalog, schema, params, serviceRegistry );
+		else {
+			return getNamingStrategy( params, serviceRegistry )
+					.determineTableName( catalog, schema, params, serviceRegistry );
+		}
 	}
 
 	/**
@@ -474,11 +446,8 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 	 * @return The name of the value column
 	 */
 	protected String determineSegmentValue(Properties params) {
-		String segmentValue = params.getProperty( SEGMENT_VALUE_PARAM );
-		if ( StringHelper.isEmpty( segmentValue ) ) {
-			segmentValue = determineDefaultSegmentValue( params );
-		}
-		return segmentValue;
+		final String segmentValue = params.getProperty( SEGMENT_VALUE_PARAM );
+		return isEmpty( segmentValue ) ? determineDefaultSegmentValue( params ) : segmentValue;
 	}
 
 	/**
@@ -518,9 +487,9 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 
 	protected String buildSelectQuery(String formattedPhysicalTableName, SqlStringGenerationContext context) {
 		final String alias = "tbl";
-		final String query = "select " + StringHelper.qualify( alias, valueColumnName )
+		final String query = "select " + qualify( alias, valueColumnName )
 				+ " from " + formattedPhysicalTableName + ' ' + alias
-				+ " where " + StringHelper.qualify( alias, segmentColumnName ) + "=?";
+				+ " where " + qualify( alias, segmentColumnName ) + "=?";
 		final LockOptions lockOptions = new LockOptions( LockMode.PESSIMISTIC_WRITE );
 		lockOptions.setAliasSpecificLockMode( alias, LockMode.PESSIMISTIC_WRITE );
 		final Map<String,String[]> updateTargetColumnsMap = singletonMap( alias, new String[] { valueColumnName } );
@@ -555,11 +524,10 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 
 	@Override
 	public Object generate(final SharedSessionContractImplementor session, final Object obj) {
-		final SqlStatementLogger statementLogger = session.getFactory().getServiceRegistry()
-				.getService( JdbcServices.class )
-				.getSqlStatementLogger();
+		final SqlStatementLogger statementLogger =
+				session.getFactory().getJdbcServices()
+						.getSqlStatementLogger();
 		final SessionEventListenerManager statsCollector = session.getEventListenerManager();
-
 		return optimizer.generate(
 				new AccessCallback() {
 					@Override
@@ -568,13 +536,12 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 								new AbstractReturningWork<>() {
 									@Override
 									public IntegralDataTypeHolder execute(Connection connection) throws SQLException {
-										return nextValue( connection, statementLogger, statsCollector );
+										return nextValue( connection, statementLogger, statsCollector, session );
 									}
 								},
 								true
 						);
 					}
-
 					@Override
 					public String getTenantIdentifier() {
 						return session.getTenantIdentifier();
@@ -586,40 +553,29 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 	private IntegralDataTypeHolder nextValue(
 			Connection connection,
 			SqlStatementLogger logger,
-			SessionEventListenerManager listener)
+			SessionEventListenerManager listener,
+			SharedSessionContractImplementor session)
 			throws SQLException {
 		final IntegralDataTypeHolder value = makeValue();
 		int rows;
 		do {
 
-			try ( PreparedStatement selectPS = prepareStatement( connection, selectQuery, logger, listener ) ) {
+			try ( PreparedStatement selectPS = prepareStatement( connection, selectQuery, logger, listener, session ) ) {
 				selectPS.setString( 1, segmentValue );
-				final ResultSet selectRS = executeQuery( selectPS, listener );
+				final ResultSet selectRS = executeQuery( selectPS, listener, selectQuery, session );
 				if ( !selectRS.next() ) {
-					long initializationValue;
-					if ( storeLastUsedValue ) {
-						initializationValue = initialValue - 1;
-					}
-					else {
-						initializationValue = initialValue;
-					}
+					final long initializationValue = storeLastUsedValue ? initialValue - 1 : initialValue;
 					value.initialize( initializationValue );
 
-					try ( PreparedStatement statement = prepareStatement( connection, insertQuery, logger, listener ) ) {
+					try ( PreparedStatement statement = prepareStatement( connection, insertQuery, logger, listener, session ) ) {
 						LOG.tracef( "binding parameter [%s] - [%s]", 1, segmentValue );
 						statement.setString( 1, segmentValue );
 						value.bind( statement, 2 );
-						executeUpdate( statement, listener);
+						executeUpdate( statement, listener, insertQuery, session);
 					}
 				}
 				else {
-					int defaultValue;
-					if ( storeLastUsedValue ) {
-						defaultValue = 0;
-					}
-					else {
-						defaultValue = 1;
-					}
+					final int defaultValue = storeLastUsedValue ? 0 : 1;
 					value.initialize( selectRS, defaultValue );
 				}
 				selectRS.close();
@@ -630,7 +586,7 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 			}
 
 
-			try ( PreparedStatement statement = prepareStatement( connection, updateQuery, logger, listener ) ) {
+			try ( PreparedStatement statement = prepareStatement( connection, updateQuery, logger, listener, session ) ) {
 				final IntegralDataTypeHolder updateValue = value.copy();
 				if ( optimizer.applyIncrementSizeToSourceValues() ) {
 					updateValue.add( incrementSize );
@@ -641,7 +597,7 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 				updateValue.bind( statement, 1 );
 				value.bind( statement, 2 );
 				statement.setString( 3, segmentValue );
-				rows = executeUpdate( statement, listener );
+				rows = executeUpdate( statement, listener, updateQuery, session );
 			}
 			catch (SQLException e) {
 				LOG.unableToUpdateQueryHiValue( physicalTableName.render(), e );
@@ -651,46 +607,58 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 		while ( rows == 0 );
 
 		accessCount++;
-		if ( storeLastUsedValue ) {
-			return value.increment();
-		}
-		else {
-			return value;
-		}
+		return storeLastUsedValue ? value.increment() : value;
 	}
 
 	private PreparedStatement prepareStatement(
 			Connection connection,
 			String sql,
 			SqlStatementLogger logger,
-			SessionEventListenerManager listener) throws SQLException {
+			SessionEventListenerManager listener,
+			SharedSessionContractImplementor session) throws SQLException {
 		logger.logStatement( sql, FormatStyle.BASIC.getFormatter() );
+		final EventManager eventManager = session.getEventManager();
+		final HibernateMonitoringEvent creationEvent = eventManager.beginJdbcPreparedStatementCreationEvent();
 		try {
 			listener.jdbcPrepareStatementStart();
 			return connection.prepareStatement( sql );
 		}
 		finally {
+			eventManager.completeJdbcPreparedStatementCreationEvent( creationEvent, sql );
 			listener.jdbcPrepareStatementEnd();
 		}
 	}
 
-	private int executeUpdate(PreparedStatement ps, SessionEventListenerManager listener) throws SQLException {
+	private int executeUpdate(
+			PreparedStatement ps,
+			SessionEventListenerManager listener,
+			String sql,
+			SharedSessionContractImplementor session) throws SQLException {
+		final EventManager eventManager = session.getEventManager();
+		final HibernateMonitoringEvent executionEvent = eventManager.beginJdbcPreparedStatementExecutionEvent();
 		try {
 			listener.jdbcExecuteStatementStart();
 			return ps.executeUpdate();
 		}
 		finally {
+			eventManager.completeJdbcPreparedStatementExecutionEvent( executionEvent, sql );
 			listener.jdbcExecuteStatementEnd();
 		}
-
 	}
 
-	private ResultSet executeQuery(PreparedStatement ps, SessionEventListenerManager listener) throws SQLException {
+	private ResultSet executeQuery(
+			PreparedStatement ps,
+			SessionEventListenerManager listener,
+			String sql,
+			SharedSessionContractImplementor session) throws SQLException {
+		final EventManager eventManager = session.getEventManager();
+		final HibernateMonitoringEvent executionEvent = eventManager.beginJdbcPreparedStatementExecutionEvent();
 		try {
 			listener.jdbcExecuteStatementStart();
 			return ps.executeQuery();
 		}
 		finally {
+			eventManager.completeJdbcPreparedStatementExecutionEvent( executionEvent, sql );
 			listener.jdbcExecuteStatementEnd();
 		}
 	}
@@ -708,6 +676,9 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 					qualifiedTableName.getObjectName(),
 					(identifier) -> new Table( contributor, namespace, identifier, false )
 			);
+			if ( isNotEmpty( options ) ) {
+				table.setOptions( options );
+			}
 
 			final BasicTypeRegistry basicTypeRegistry = database.getTypeConfiguration().getBasicTypeRegistry();
 			// todo : not sure the best solution here.  do we add the columns if missing?  other?
@@ -737,15 +708,15 @@ public class TableGenerator implements PersistentIdentifierGenerator {
 		}
 
 		// allow physical naming strategies a chance to kick in
-		this.physicalTableName = table.getQualifiedTableName();
+		physicalTableName = table.getQualifiedTableName();
 		table.addInitCommand( this::generateInsertInitCommand );
 	}
 
 	@Override
 	public void initialize(SqlStringGenerationContext context) {
-		String formattedPhysicalTableName = context.format( physicalTableName );
-		this.selectQuery = buildSelectQuery( formattedPhysicalTableName, context );
-		this.updateQuery = buildUpdateQuery( formattedPhysicalTableName, context );
-		this.insertQuery = buildInsertQuery( formattedPhysicalTableName, context );
+		final String formattedPhysicalTableName = context.format( physicalTableName );
+		selectQuery = buildSelectQuery( formattedPhysicalTableName, context );
+		updateQuery = buildUpdateQuery( formattedPhysicalTableName, context );
+		insertQuery = buildInsertQuery( formattedPhysicalTableName, context );
 	}
 }

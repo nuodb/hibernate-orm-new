@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.dialect.PostgreSQLDialect;
+import org.hibernate.dialect.SybaseDialect;
 import org.hibernate.metamodel.MappingMetamodel;
 import org.hibernate.metamodel.mapping.JdbcMapping;
 import org.hibernate.persister.entity.EntityPersister;
@@ -36,6 +37,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 @DomainModel(annotatedClasses = { UUIDBinaryTest.Node.class })
 @SessionFactory
 @SkipForDialect(dialectClass = PostgreSQLDialect.class, reason = "Postgres has its own UUID type")
+@SkipForDialect( dialectClass = SybaseDialect.class, matchSubTypes = true,
+		reason = "Skipped for Sybase to avoid problems with UUIDs potentially ending with a trailing 0 byte")
 public class UUIDBinaryTest {
 
 	private static class UUIDPair {
@@ -57,11 +60,11 @@ public class UUIDBinaryTest {
 
 		final UUIDPair uuidPair = scope.fromTransaction( session -> {
 			final Node root = new Node( "root" );
-			session.save( root );
+			session.persist( root );
 			assertThat( root.id, notNullValue());
 
 			final Node child = new Node( "child", root );
-			session.save( child );
+			session.persist( child );
 			assertThat( child.id, notNullValue() );
 
 			return new UUIDPair(root.id, child.id);

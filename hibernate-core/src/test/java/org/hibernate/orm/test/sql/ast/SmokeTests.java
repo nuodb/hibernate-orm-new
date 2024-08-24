@@ -29,6 +29,7 @@ import org.hibernate.sql.ast.tree.select.SelectStatement;
 import org.hibernate.sql.exec.spi.JdbcOperationQuerySelect;
 import org.hibernate.sql.results.graph.DomainResult;
 import org.hibernate.sql.results.graph.DomainResultAssembler;
+import org.hibernate.sql.results.graph.InitializerParent;
 import org.hibernate.sql.results.graph.basic.BasicResult;
 import org.hibernate.sql.results.graph.basic.BasicResultAssembler;
 import org.hibernate.sql.results.internal.SqlSelectionImpl;
@@ -81,9 +82,9 @@ public class SmokeTests {
 			assertThat( rootTableGroup.getTableGroupJoins().isEmpty(), is( true ) );
 
 
-			// `s` is the "alias stem" for `SimpleEntity` and as it is the first entity with that stem in
-			// the query the base becomes `s1`.  The primary table reference is always suffixed as `_0`
-			assertThat( rootTableGroup.getPrimaryTableReference().getIdentificationVariable(), is( "s1_0" ) );
+			// `se` is the "alias stem" for `SimpleEntity` and as it is the first entity with that stem in
+			// the query the base becomes `se1`.  The primary table reference is always suffixed as `_0`
+			assertThat( rootTableGroup.getPrimaryTableReference().getIdentificationVariable(), is( "se1_0" ) );
 
 			final SelectClause selectClause = sqlAst.getQuerySpec().getSelectClause();
 			assertThat( selectClause.getSqlSelections().size(), is( 1 ) ) ;
@@ -99,7 +100,7 @@ public class SmokeTests {
 
 			assertThat(
 					jdbcSelectOperation.getSqlString(),
-					is( "select s1_0.name from mapping_simple_entity s1_0" )
+					is( "select se1_0.name from mapping_simple_entity se1_0" )
 			);
 		} );
 	}
@@ -137,9 +138,9 @@ public class SmokeTests {
 					assertThat( rootTableGroup.getTableGroupJoins().isEmpty(), is( true ) );
 
 
-					// `s` is the "alias stem" for `SimpleEntity` and as it is the first entity with that stem in
-					// the query the base becomes `s1`.  The primary table reference is always suffixed as `_0`
-					assertThat( rootTableGroup.getPrimaryTableReference().getIdentificationVariable(), is( "s1_0" ) );
+					// `se` is the "alias stem" for `SimpleEntity` and as it is the first entity with that stem in
+					// the query the base becomes `se1`.  The primary table reference is always suffixed as `_0`
+					assertThat( rootTableGroup.getPrimaryTableReference().getIdentificationVariable(), is( "se1_0" ) );
 
 					final SelectClause selectClause = sqlAst.getQuerySpec().getSelectClause();
 					assertThat( selectClause.getSqlSelections().size(), is( 1 ) );
@@ -153,7 +154,7 @@ public class SmokeTests {
 					final Expression selectedExpression = sqlSelection.getExpression();
 					assertThat( selectedExpression, instanceOf( ColumnReference.class ) );
 					final ColumnReference columnReference = (ColumnReference) selectedExpression;
-					assertThat( columnReference.getExpressionText(), is( "s1_0.gender" ) );
+					assertThat( columnReference.getExpressionText(), is( "se1_0.gender" ) );
 
 					final JdbcMapping selectedExpressible = selectedExpression.getExpressionType().getSingleJdbcMapping();
 					assertThat( selectedExpressible.getJdbcType().isInteger(), is( true ) );
@@ -173,7 +174,10 @@ public class SmokeTests {
 
 					// ScalarDomainResultImpl creates and caches the assembler at its creation.
 					// this just gets access to that cached one
-					final DomainResultAssembler<?> resultAssembler = domainResult.createResultAssembler( null, null );
+					final DomainResultAssembler<?> resultAssembler = domainResult.createResultAssembler(
+							null,
+							null
+					);
 
 					assertThat( resultAssembler, instanceOf( BasicResultAssembler.class ) );
 
@@ -184,7 +188,7 @@ public class SmokeTests {
 
 					assertThat(
 							jdbcSelectOperation.getSqlString(),
-							is( "select s1_0.gender from mapping_simple_entity s1_0" )
+							is( "select se1_0.gender from mapping_simple_entity se1_0" )
 					);
 				}
 		);

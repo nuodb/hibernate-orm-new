@@ -17,8 +17,10 @@ import org.hibernate.dialect.temptable.TemporaryTableColumn;
 import org.hibernate.engine.jdbc.Size;
 import org.hibernate.mapping.Column;
 import org.hibernate.mapping.Constraint;
+import org.hibernate.mapping.PrimaryKey;
 import org.hibernate.mapping.Table;
-import org.hibernate.mapping.UserDefinedType;
+import org.hibernate.mapping.UniqueKey;
+import org.hibernate.mapping.UserDefinedObjectType;
 
 import static java.lang.Math.log;
 import static org.hibernate.type.SqlTypes.*;
@@ -39,12 +41,21 @@ public class ColumnOrderingStrategyStandard implements ColumnOrderingStrategy {
 	}
 
 	@Override
-	public List<Column> orderUserDefinedTypeColumns(UserDefinedType userDefinedType, Metadata metadata) {
+	public List<Column> orderUserDefinedTypeColumns(UserDefinedObjectType userDefinedType, Metadata metadata) {
 		return orderColumns( userDefinedType.getColumns(), metadata );
 	}
 
 	@Override
 	public List<Column> orderConstraintColumns(Constraint constraint, Metadata metadata) {
+		// We try to find uniqueKey constraint containing only primary key.
+		//	This uniqueKey then orders primaryKey columns. Otherwise, order as usual.
+		if ( constraint instanceof PrimaryKey ) {
+			UniqueKey uniqueKey = ((PrimaryKey) constraint).getOrderingUniqueKey();
+			if ( uniqueKey != null ) {
+				return uniqueKey.getColumns();
+			}
+		}
+
 		return orderColumns( constraint.getColumns(), metadata );
 	}
 

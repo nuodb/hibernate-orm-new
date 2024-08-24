@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.hibernate.query.sqm.tree.domain.SqmTreatedPath;
-import org.hibernate.query.sqm.tree.from.SqmFrom;
 import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.spi.SqlAstCreationState;
 import org.hibernate.sql.ast.spi.SqlAstProcessingState;
@@ -21,6 +19,8 @@ import org.hibernate.sql.ast.spi.SqlExpressionResolver;
 import org.hibernate.sql.ast.spi.SqlSelection;
 import org.hibernate.sql.ast.tree.expression.ColumnReference;
 import org.hibernate.sql.ast.tree.expression.Expression;
+import org.hibernate.sql.ast.tree.from.FromClause;
+import org.hibernate.sql.ast.tree.predicate.Predicate;
 import org.hibernate.sql.ast.tree.select.QueryPart;
 import org.hibernate.sql.ast.tree.select.QuerySpec;
 import org.hibernate.sql.ast.tree.select.SelectClause;
@@ -32,11 +32,10 @@ import org.hibernate.type.spi.TypeConfiguration;
  * @author Steve Ebersole
  */
 public class SqlAstQueryPartProcessingStateImpl
-		extends SqlAstProcessingStateImpl
+		extends AbstractSqlAstQueryNodeProcessingStateImpl
 		implements SqlAstQueryPartProcessingState {
 
 	private final QueryPart queryPart;
-	private final Map<SqmFrom<?, ?>, Boolean> sqmFromRegistrations = new HashMap<>();
 	private final boolean deduplicateSelectionItems;
 	private FetchParent nestingFetchParent;
 
@@ -77,38 +76,20 @@ public class SqlAstQueryPartProcessingStateImpl
 	}
 
 	@Override
-	public void registerTreatedFrom(SqmFrom<?, ?> sqmFrom) {
-		sqmFromRegistrations.put( sqmFrom, null );
+	public FromClause getFromClause() {
+		return queryPart.getLastQuerySpec().getFromClause();
 	}
 
 	@Override
-	public void registerFromUsage(SqmFrom<?, ?> sqmFrom, boolean downgradeTreatUses) {
-		if ( !( sqmFrom instanceof SqmTreatedPath<?, ?> ) ) {
-			if ( !sqmFromRegistrations.containsKey( sqmFrom ) ) {
-				final SqlAstProcessingState parentState = getParentState();
-				if ( parentState instanceof SqlAstQueryPartProcessingState ) {
-					( (SqlAstQueryPartProcessingState) parentState ).registerFromUsage( sqmFrom, downgradeTreatUses );
-				}
-			}
-			else {
-				// If downgrading was once forcibly disabled, don't overwrite that anymore
-				final Boolean currentValue = sqmFromRegistrations.get( sqmFrom );
-				if ( currentValue != Boolean.FALSE ) {
-					sqmFromRegistrations.put( sqmFrom, downgradeTreatUses );
-				}
-			}
-		}
-	}
-
-	@Override
-	public Map<SqmFrom<?, ?>, Boolean> getFromRegistrations() {
-		return sqmFromRegistrations;
+	public void applyPredicate(Predicate predicate) {
+		queryPart.getLastQuerySpec().applyPredicate( predicate );
 	}
 
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// SqlExpressionResolver
 
 	private Map<?, ?> sqlSelectionMap;
+	private int nextJdbcPosition = 1;
 
 	@Override
 	public SqlSelection resolveSqlSelection(
@@ -124,33 +105,28 @@ public class SqlAstQueryPartProcessingStateImpl
 			else {
 				throw new IllegalArgumentException( "Illegal expression passed for nested fetching: " + expression );
 			}
-			return expression.createSqlSelection(
-					-1,
-					nestingFetchParent.getReferencedMappingType().getSelectableIndex( selectableName ),
-					javaType,
-					typeConfiguration
-			);
+			final int selectableIndex = nestingFetchParent.getReferencedMappingType().getSelectableIndex( selectableName );
+			if ( selectableIndex != -1 ) {
+				return expression.createSqlSelection(
+						-1,
+						selectableIndex,
+						javaType,
+						true,
+						typeConfiguration
+				);
+			}
 		}
-		final Map<Expression, SqlSelection> selectionMap;
+		final Map<Expression, Object> selectionMap;
 		if ( deduplicateSelectionItems ) {
-			final SqlSelection existing;
 			if ( sqlSelectionMap == null ) {
 				sqlSelectionMap = new HashMap<>();
-				existing = null;
-			}
-			else {
-				existing = (SqlSelection) sqlSelectionMap.get( expression );
-			}
-
-			if ( existing != null ) {
-				return existing;
 			}
 			//noinspection unchecked
-			selectionMap = (Map<Expression, SqlSelection>) sqlSelectionMap;
+			selectionMap = (Map<Expression, Object>) sqlSelectionMap;
 		}
 		else if ( fetchParent != null ) {
 			// De-duplicate selection items within the root of a fetch parent
-			final Map<FetchParent, Map<Expression, SqlSelection>> fetchParentSqlSelectionMap;
+			final Map<FetchParent, Map<Expression, Object>> fetchParentSqlSelectionMap;
 			final FetchParent root = fetchParent.getRoot();
 			if ( sqlSelectionMap == null ) {
 				sqlSelectionMap = fetchParentSqlSelectionMap = new HashMap<>();
@@ -158,8 +134,8 @@ public class SqlAstQueryPartProcessingStateImpl
 			}
 			else {
 				//noinspection unchecked
-				fetchParentSqlSelectionMap = (Map<FetchParent, Map<Expression, SqlSelection>>) sqlSelectionMap;
-				final Map<Expression, SqlSelection> map = fetchParentSqlSelectionMap.get( root );
+				fetchParentSqlSelectionMap = (Map<FetchParent, Map<Expression, Object>>) sqlSelectionMap;
+				final Map<Expression, Object> map = fetchParentSqlSelectionMap.get( root );
 				if ( map == null ) {
 					fetchParentSqlSelectionMap.put( root, selectionMap = new HashMap<>() );
 				}
@@ -167,31 +143,60 @@ public class SqlAstQueryPartProcessingStateImpl
 					selectionMap = map;
 				}
 			}
-			final SqlSelection sqlSelection = selectionMap.get( expression );
-			if ( sqlSelection != null ) {
-				return sqlSelection;
-			}
 		}
 		else {
 			selectionMap = null;
 		}
 
+		final int jdbcPosition;
+		final Object existingSelection;
+		if ( selectionMap != null ) {
+			existingSelection = selectionMap.get( expression );
+			if ( existingSelection != null ) {
+				if ( existingSelection instanceof SqlSelection ) {
+					final SqlSelection sqlSelection = (SqlSelection) existingSelection;
+					if ( sqlSelection.getExpressionType() == expression.getExpressionType() ) {
+						return sqlSelection;
+					}
+					jdbcPosition = sqlSelection.getJdbcResultSetIndex();
+				}
+				else {
+					final SqlSelection[] selections = (SqlSelection[]) existingSelection;
+					for ( SqlSelection sqlSelection : selections ) {
+						if ( sqlSelection.getExpressionType() == expression.getExpressionType() ) {
+							return sqlSelection;
+						}
+					}
+					jdbcPosition = selections[0].getJdbcResultSetIndex();
+				}
+			}
+			else {
+				jdbcPosition = nextJdbcPosition++;
+			}
+		}
+		else {
+			jdbcPosition = nextJdbcPosition++;
+			existingSelection = null;
+		}
+		final boolean virtual = existingSelection != null;
 		final SelectClause selectClause = ( (QuerySpec) queryPart ).getSelectClause();
 		final int valuesArrayPosition = selectClause.getSqlSelections().size();
 		final SqlSelection sqlSelection;
 		if ( isTopLevel() ) {
 			sqlSelection = expression.createDomainResultSqlSelection(
-					valuesArrayPosition + 1,
+					jdbcPosition,
 					valuesArrayPosition,
 					javaType,
+					virtual,
 					typeConfiguration
 			);
 		}
 		else {
 			sqlSelection = expression.createSqlSelection(
-					valuesArrayPosition + 1,
+					jdbcPosition,
 					valuesArrayPosition,
 					javaType,
+					virtual,
 					typeConfiguration
 			);
 		}
@@ -199,7 +204,23 @@ public class SqlAstQueryPartProcessingStateImpl
 		selectClause.addSqlSelection( sqlSelection );
 
 		if ( selectionMap != null ) {
-			selectionMap.put( expression, sqlSelection );
+			if ( virtual ) {
+				final SqlSelection[] selections;
+				if ( existingSelection instanceof SqlSelection ) {
+					selections = new SqlSelection[2];
+					selections[0] = (SqlSelection) existingSelection;
+				}
+				else {
+					final SqlSelection[] existingSelections = (SqlSelection[]) existingSelection;
+					selections = new SqlSelection[existingSelections.length + 1];
+					System.arraycopy( existingSelections, 0, selections, 0, existingSelections.length );
+				}
+				selections[selections.length - 1] = sqlSelection;
+				selectionMap.put( expression, selections );
+			}
+			else {
+				selectionMap.put( expression, sqlSelection );
+			}
 		}
 
 		return sqlSelection;

@@ -104,7 +104,7 @@ public class IdentityJoinedSubclassBatchingTest {
 				e.setAddress( "buckhead" );
 				e.setZip( "30305" );
 				e.setCountry( "USA" );
-				s.save( e );
+				s.persist( e );
 				if ( i % nBeforeFlush == 0 && i > 0 ) {
 					s.flush();
 					s.clear();
@@ -113,24 +113,26 @@ public class IdentityJoinedSubclassBatchingTest {
 		} );
 
 		scope.inTransaction( s -> {
-			ScrollableResults sr = s.createQuery(
+			try (ScrollableResults sr = s.createQuery(
 							"select e from Employee e" )
-					.scroll( ScrollMode.FORWARD_ONLY );
+					.scroll( ScrollMode.FORWARD_ONLY )) {
 
-			while ( sr.next() ) {
-				Employee e = (Employee) sr.get();
-				e.setTitle( "Unknown" );
+				while ( sr.next() ) {
+					Employee e = (Employee) sr.get();
+					e.setTitle( "Unknown" );
+				}
 			}
 		} );
 
 		scope.inTransaction( s -> {
-			ScrollableResults sr = s.createQuery(
+			try (ScrollableResults sr = s.createQuery(
 							"select e from Employee e" )
-					.scroll( ScrollMode.FORWARD_ONLY );
+					.scroll( ScrollMode.FORWARD_ONLY )) {
 
-			while ( sr.next() ) {
-				Employee e = (Employee) sr.get();
-				s.delete( e );
+				while ( sr.next() ) {
+					Employee e = (Employee) sr.get();
+					s.remove( e );
+				}
 			}
 		} );
 	}
@@ -148,7 +150,7 @@ public class IdentityJoinedSubclassBatchingTest {
 				e.setAddress( "buckhead" );
 				e.setZip( "30305" );
 				e.setCountry( "USA" );
-				s.save( e );
+				s.persist( e );
 			}
 		} );
 
@@ -158,13 +160,14 @@ public class IdentityJoinedSubclassBatchingTest {
 		} );
 
 		scope.inTransaction( s -> {
-			ScrollableResults sr = s.createQuery(
+			try (ScrollableResults sr = s.createQuery(
 							"select e from Employee e" )
-					.scroll( ScrollMode.FORWARD_ONLY );
+					.scroll( ScrollMode.FORWARD_ONLY )) {
 
-			while ( sr.next() ) {
-				Employee e = (Employee) sr.get();
-				s.delete( e );
+				while ( sr.next() ) {
+					Employee e = (Employee) sr.get();
+					s.remove( e );
+				}
 			}
 		} );
 
@@ -182,7 +185,7 @@ public class IdentityJoinedSubclassBatchingTest {
 			e.setAddress( "buckhead" );
 			e.setZip( "30305" );
 			e.setCountry( "USA" );
-			s.save( e );
+			s.persist( e );
 			s.flush();
 
 			long numberOfInsertedEmployee = (long) s.createQuery( "select count(e) from Employee e" ).uniqueResult();
@@ -191,13 +194,14 @@ public class IdentityJoinedSubclassBatchingTest {
 
 
 		scope.inTransaction( s -> {
-			ScrollableResults sr = s.createQuery(
+			try (ScrollableResults sr = s.createQuery(
 							"select e from Employee e" )
-					.scroll( ScrollMode.FORWARD_ONLY );
+					.scroll( ScrollMode.FORWARD_ONLY )) {
 
-			while ( sr.next() ) {
-				Employee e = (Employee) sr.get();
-				s.delete( e );
+				while ( sr.next() ) {
+					Employee e = (Employee) sr.get();
+					s.remove( e );
+				}
 			}
 		} );
 

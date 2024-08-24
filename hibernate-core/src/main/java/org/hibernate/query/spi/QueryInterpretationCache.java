@@ -10,12 +10,14 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.hibernate.Incubating;
+import org.hibernate.query.hql.HqlTranslator;
 import org.hibernate.query.sql.spi.ParameterInterpretation;
 import org.hibernate.query.sqm.tree.SqmStatement;
 
 /**
  * Cache for various parts of translating or interpreting queries.
  *
+ * @see org.hibernate.cfg.AvailableSettings#QUERY_PLAN_CACHE_ENABLED
  * @see org.hibernate.cfg.AvailableSettings#QUERY_PLAN_CACHE_MAX_SIZE
  *
  * @author Steve Ebersole
@@ -35,7 +37,7 @@ public interface QueryInterpretationCache {
 	int getNumberOfCachedHqlInterpretations();
 	int getNumberOfCachedQueryPlans();
 
-	HqlInterpretation resolveHqlInterpretation(String queryString, Class<?> expectedResultType, Function<String, SqmStatement<?>> creator);
+	<R> HqlInterpretation<R> resolveHqlInterpretation(String queryString, Class<R> expectedResultType, HqlTranslator translator);
 
 	<R> SelectQueryPlan<R> resolveSelectQueryPlan(Key key, Supplier<SelectQueryPlan<R>> creator);
 

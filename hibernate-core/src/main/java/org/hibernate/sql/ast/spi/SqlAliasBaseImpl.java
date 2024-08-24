@@ -28,13 +28,9 @@ public class SqlAliasBaseImpl implements SqlAliasBase {
 
 	@Override
 	public String generateNewAlias() {
-		synchronized (this) {
-			final String alias = stem + "_" + ( aliasCount++ );
-			if ( SqlTreeCreationLogger.DEBUG_ENABLED ) {
-				SqlTreeCreationLogger.LOGGER.debugf( "Created new SQL alias : %s", alias );
-			}
-			return alias;
-		}
+		final String alias = stem + "_" + ( aliasCount++ );
+		SqlTreeCreationLogger.LOGGER.debugf( "Created new SQL alias : %s", alias );
+		return alias;
 	}
 
 	@Override

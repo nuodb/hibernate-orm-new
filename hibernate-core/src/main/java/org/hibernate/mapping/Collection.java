@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -18,6 +17,7 @@ import java.util.function.Supplier;
 
 import org.hibernate.FetchMode;
 import org.hibernate.MappingException;
+import org.hibernate.annotations.CacheLayout;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.boot.spi.MetadataImplementor;
@@ -27,8 +27,7 @@ import org.hibernate.engine.spi.ExecuteUpdateResultCheckStyle;
 import org.hibernate.engine.spi.Mapping;
 import org.hibernate.internal.FilterConfiguration;
 import org.hibernate.internal.util.StringHelper;
-import org.hibernate.internal.util.collections.ArrayHelper;
-import org.hibernate.persister.collection.CollectionPersister;
+import org.hibernate.jdbc.Expectation;
 import org.hibernate.resource.beans.spi.ManagedBean;
 import org.hibernate.service.ServiceRegistry;
 import org.hibernate.type.CollectionType;
@@ -36,12 +35,15 @@ import org.hibernate.type.CustomCollectionType;
 import org.hibernate.type.Type;
 import org.hibernate.usertype.UserCollectionType;
 
+import static org.hibernate.internal.util.collections.ArrayHelper.EMPTY_BOOLEAN_ARRAY;
+import static org.hibernate.engine.spi.ExecuteUpdateResultCheckStyle.expectationConstructor;
+
 /**
  * A mapping model object representing a collection. Subclasses specialize to particular kinds of collection.
  *
  * @author Gavin King
  */
-public abstract class Collection implements Fetchable, Value, Filterable {
+public abstract class Collection implements Fetchable, Value, Filterable, SoftDeletable {
 
 	public static final String DEFAULT_ELEMENT_COLUMN_NAME = "elt";
 	public static final String DEFAULT_KEY_COLUMN_NAME = "id";
@@ -60,6 +62,7 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	private boolean subselectLoadable;
 	private String cacheConcurrencyStrategy;
 	private String cacheRegionName;
+	private CacheLayout queryCacheLayout;
 	private String orderBy;
 	private String where;
 	private String manyToManyWhere;
@@ -80,8 +83,6 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	private CollectionType cachedCollectionType;
 	private CollectionSemantics<?,?> cachedCollectionSemantics;
 
-	private Class<? extends CollectionPersister> collectionPersisterClass;
-
 	private final List<FilterConfiguration> filters = new ArrayList<>();
 	private final List<FilterConfiguration> manyToManyFilters = new ArrayList<>();
 	private final java.util.Set<String> synchronizedTables = new HashSet<>();
@@ -99,7 +100,14 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	private boolean customDeleteAllCallable;
 	private ExecuteUpdateResultCheckStyle deleteAllCheckStyle;
 
+	private Column softDeleteColumn;
+
 	private String loaderName;
+
+	private Supplier<? extends Expectation> insertExpectation;
+	private Supplier<? extends Expectation> updateExpectation;
+	private Supplier<? extends Expectation> deleteExpectation;
+	private Supplier<? extends Expectation> deleteAllExpectation;
 
 	/**
 	 * hbm.xml binding
@@ -151,7 +159,6 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		this.typeName = original.typeName;
 		this.typeParameters = original.typeParameters == null ? null : new Properties(original.typeParameters);
 		this.customTypeBeanResolver = original.customTypeBeanResolver;
-		this.collectionPersisterClass = original.collectionPersisterClass;
 		this.filters.addAll( original.filters );
 		this.manyToManyFilters.addAll( original.manyToManyFilters );
 		this.synchronizedTables.addAll( original.synchronizedTables );
@@ -167,6 +174,10 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		this.customSQLDeleteAll = original.customSQLDeleteAll;
 		this.customDeleteAllCallable = original.customDeleteAllCallable;
 		this.deleteAllCheckStyle = original.deleteAllCheckStyle;
+		this.insertExpectation = original.insertExpectation;
+		this.updateExpectation = original.updateExpectation;
+		this.deleteExpectation = original.deleteExpectation;
+		this.deleteAllExpectation = original.deleteAllExpectation;
 		this.loaderName = original.loaderName;
 	}
 
@@ -221,7 +232,7 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 			try {
 				final ClassLoaderService classLoaderService = getMetadata().getMetadataBuildingOptions()
 						.getServiceRegistry()
-						.getService( ClassLoaderService.class );
+						.requireService( ClassLoaderService.class );
 				setComparator( (Comparator<?>) classLoaderService.classForName( comparatorClassName ).getConstructor().newInstance() );
 			}
 			catch (Exception e) {
@@ -348,8 +359,8 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		return batchSize;
 	}
 
-	public void setBatchSize(int i) {
-		batchSize = i;
+	public void setBatchSize(int batchSize) {
+		this.batchSize = batchSize;
 	}
 
 	public FetchMode getFetchMode() {
@@ -358,14 +369,6 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 
 	public void setFetchMode(FetchMode fetchMode) {
 		this.fetchMode = fetchMode;
-	}
-
-	public void setCollectionPersisterClass(Class<? extends CollectionPersister> persister) {
-		this.collectionPersisterClass = persister;
-	}
-
-	public Class<? extends CollectionPersister> getCollectionPersisterClass() {
-		return collectionPersisterClass;
 	}
 
 	public void validate(Mapping mapping) throws MappingException {
@@ -392,52 +395,19 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		checkColumnDuplication();
 	}
 
-	private void checkColumnDuplication(java.util.Set<String> distinctColumns, Value value)
-			throws MappingException {
-		final boolean[] insertability = value.getColumnInsertability();
-		final boolean[] updatability = value.getColumnUpdateability();
-		int i = 0;
-		for ( Selectable selectable : value.getSelectables() ) {
-			// exclude formulas and columns that are not insertable or updatable
-			// since these values can be repeated (HHH-5393)
-			if ( !selectable.isFormula() && ( insertability[i] || updatability[i] ) ) {
-				Column col = (Column) selectable;
-				if ( !distinctColumns.add( col.getName() ) ) {
-					throw new MappingException(
-							"Repeated column in mapping for collection: "
-									+ getRole()
-									+ " column: "
-									+ col.getName()
-					);
-				}
-			}
-			i++;
-		}
-	}
-
 	private void checkColumnDuplication() throws MappingException {
+		final String owner = "collection '" + getReferencedPropertyName() + "'";
 		final HashSet<String> cols = new HashSet<>();
-		checkColumnDuplication( cols, getKey() );
+		getKey().checkColumnDuplication( cols, owner );
 		if ( isIndexed() ) {
-			checkColumnDuplication(
-					cols,
-					( (IndexedCollection) this ).getIndex()
-			);
+			( (IndexedCollection) this ).getIndex().checkColumnDuplication( cols, owner );
 		}
 		if ( isIdentified() ) {
-			checkColumnDuplication(
-					cols,
-					( (IdentifierCollection) this ).getIdentifier()
-			);
+			( (IdentifierCollection) this ).getIdentifier().checkColumnDuplication( cols, owner );
 		}
 		if ( !isOneToMany() ) {
-			checkColumnDuplication( cols, getElement() );
+			getElement().checkColumnDuplication( cols, owner );
 		}
-	}
-
-	@Deprecated
-	public Iterator<Selectable> getColumnIterator() {
-		return Collections.emptyIterator();
 	}
 
 	@Override
@@ -529,7 +499,7 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	}
 
 	@Override
-	public void createUniqueKey() {
+	public void createUniqueKey(MetadataBuildingContext context) {
 	}
 
 	public boolean isSimpleValue() {
@@ -599,11 +569,19 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		this.cacheRegionName = StringHelper.nullIfEmpty( cacheRegionName );
 	}
 
+	public CacheLayout getQueryCacheLayout() {
+		return queryCacheLayout;
+	}
+
+	public void setQueryCacheLayout(CacheLayout queryCacheLayout) {
+		this.queryCacheLayout = queryCacheLayout;
+	}
 
 	public void setCustomSQLInsert(String customSQLInsert, boolean callable, ExecuteUpdateResultCheckStyle checkStyle) {
 		this.customSQLInsert = customSQLInsert;
 		this.customInsertCallable = callable;
 		this.insertCheckStyle = checkStyle;
+		this.insertExpectation = expectationConstructor( checkStyle );
 	}
 
 	public String getCustomSQLInsert() {
@@ -614,14 +592,11 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		return customInsertCallable;
 	}
 
-	public ExecuteUpdateResultCheckStyle getCustomSQLInsertCheckStyle() {
-		return insertCheckStyle;
-	}
-
 	public void setCustomSQLUpdate(String customSQLUpdate, boolean callable, ExecuteUpdateResultCheckStyle checkStyle) {
 		this.customSQLUpdate = customSQLUpdate;
 		this.customUpdateCallable = callable;
 		this.updateCheckStyle = checkStyle;
+		this.updateExpectation = expectationConstructor( checkStyle );
 	}
 
 	public String getCustomSQLUpdate() {
@@ -632,14 +607,11 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		return customUpdateCallable;
 	}
 
-	public ExecuteUpdateResultCheckStyle getCustomSQLUpdateCheckStyle() {
-		return updateCheckStyle;
-	}
-
 	public void setCustomSQLDelete(String customSQLDelete, boolean callable, ExecuteUpdateResultCheckStyle checkStyle) {
 		this.customSQLDelete = customSQLDelete;
 		this.customDeleteCallable = callable;
 		this.deleteCheckStyle = checkStyle;
+		this.deleteExpectation = expectationConstructor( checkStyle );
 	}
 
 	public String getCustomSQLDelete() {
@@ -650,10 +622,6 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		return customDeleteCallable;
 	}
 
-	public ExecuteUpdateResultCheckStyle getCustomSQLDeleteCheckStyle() {
-		return deleteCheckStyle;
-	}
-
 	public void setCustomSQLDeleteAll(
 			String customSQLDeleteAll,
 			boolean callable,
@@ -661,6 +629,7 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 		this.customSQLDeleteAll = customSQLDeleteAll;
 		this.customDeleteAllCallable = callable;
 		this.deleteAllCheckStyle = checkStyle;
+		this.deleteAllExpectation = expectationConstructor( checkStyle );
 	}
 
 	public String getCustomSQLDeleteAll() {
@@ -777,19 +746,19 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	}
 
 	@SuppressWarnings("rawtypes")
-	public void setTypeParameters(java.util.Map parameterMap) {
-		if ( parameterMap instanceof Properties ) {
-			this.typeParameters = (Properties) parameterMap;
+	public void setTypeParameters(java.util.Map typeParameters) {
+		if ( typeParameters instanceof Properties ) {
+			this.typeParameters = (Properties) typeParameters;
 		}
 		else {
 			this.typeParameters = new Properties();
-			typeParameters.putAll( parameterMap );
+			this.typeParameters.putAll( typeParameters );
 		}
 	}
 
 	@Override
 	public boolean[] getColumnInsertability() {
-		return ArrayHelper.EMPTY_BOOLEAN_ARRAY;
+		return EMPTY_BOOLEAN_ARRAY;
 	}
 
 	@Override
@@ -799,7 +768,7 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 
 	@Override
 	public boolean[] getColumnUpdateability() {
-		return ArrayHelper.EMPTY_BOOLEAN_ARRAY;
+		return EMPTY_BOOLEAN_ARRAY;
 	}
 
 	@Override
@@ -859,5 +828,47 @@ public abstract class Collection implements Fetchable, Value, Filterable {
 	@Override
 	public boolean isColumnUpdateable(int index) {
 		return false;
+	}
+
+	@Override
+	public void enableSoftDelete(Column indicatorColumn) {
+		this.softDeleteColumn = indicatorColumn;
+	}
+
+	@Override
+	public Column getSoftDeleteColumn() {
+		return softDeleteColumn;
+	}
+
+	public Supplier<? extends Expectation> getInsertExpectation() {
+		return insertExpectation;
+	}
+
+	public void setInsertExpectation(Supplier<? extends Expectation> insertExpectation) {
+		this.insertExpectation = insertExpectation;
+	}
+
+	public Supplier<? extends Expectation> getUpdateExpectation() {
+		return updateExpectation;
+	}
+
+	public void setUpdateExpectation(Supplier<? extends Expectation> updateExpectation) {
+		this.updateExpectation = updateExpectation;
+	}
+
+	public Supplier<? extends Expectation> getDeleteExpectation() {
+		return deleteExpectation;
+	}
+
+	public void setDeleteExpectation(Supplier<? extends Expectation> deleteExpectation) {
+		this.deleteExpectation = deleteExpectation;
+	}
+
+	public Supplier<? extends Expectation> getDeleteAllExpectation() {
+		return deleteAllExpectation;
+	}
+
+	public void setDeleteAllExpectation(Supplier<? extends Expectation> deleteAllExpectation) {
+		this.deleteAllExpectation = deleteAllExpectation;
 	}
 }

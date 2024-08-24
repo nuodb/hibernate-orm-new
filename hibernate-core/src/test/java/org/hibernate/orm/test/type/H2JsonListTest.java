@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.dialect.H2Dialect;
+import org.hibernate.query.sql.spi.NativeQueryImplementor;
 import org.hibernate.type.SqlTypes;
 
 import org.hibernate.testing.orm.junit.DomainModel;
@@ -30,17 +31,18 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator.safeRandomUUID;
 
 @SessionFactory
 @DomainModel( annotatedClasses = { H2JsonListTest.Path.class, H2JsonListTest.PathClob.class } )
-@RequiresDialect( value = H2Dialect.class, majorVersion = 2 )
+@RequiresDialect( value = H2Dialect.class )
 @Jira( "https://hibernate.atlassian.net/browse/HHH-16320" )
 public class H2JsonListTest {
 	@BeforeAll
 	public void setUp(SessionFactoryScope scope) {
 		scope.inTransaction( session -> {
-			session.persist( new Path( List.of( UUID.randomUUID(), UUID.randomUUID() ) ) );
-			session.persist( new PathClob( List.of( UUID.randomUUID(), UUID.randomUUID() ) ) );
+			session.persist( new Path( List.of( safeRandomUUID(), safeRandomUUID() ) ) );
+			session.persist( new PathClob( List.of( safeRandomUUID(), safeRandomUUID() ) ) );
 		} );
 	}
 
@@ -73,7 +75,7 @@ public class H2JsonListTest {
 					.executeUpdate();
 		} );
 		scope.inTransaction( session -> {
-			final Path path = session.createNativeQuery(
+			final Path path = (Path) session.createNativeQuery(
 					"select * from paths_clob where id = 99",
 					Path.class
 			).getSingleResult();
@@ -103,10 +105,11 @@ public class H2JsonListTest {
 					.executeUpdate();
 		} );
 		scope.inTransaction( session -> {
-			final PathClob path = session.createNativeQuery(
+			final NativeQueryImplementor<PathClob> nativeQuery = session.createNativeQuery(
 					"select * from paths_clob where id = 99",
 					PathClob.class
-			).getSingleResult();
+			);
+			final PathClob path = nativeQuery.getSingleResult();
 			assertThat( path ).isNotNull();
 			assertThat( path.getRelativePaths() ).hasSize( 2 );
 		} );

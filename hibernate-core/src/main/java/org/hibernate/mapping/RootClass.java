@@ -7,7 +7,6 @@
 package org.hibernate.mapping;
 
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -18,8 +17,6 @@ import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 import org.hibernate.internal.util.ReflectHelper;
-import org.hibernate.internal.util.collections.SingletonIterator;
-import org.hibernate.persister.entity.EntityPersister;
 
 import static org.hibernate.internal.util.StringHelper.nullIfEmpty;
 
@@ -29,7 +26,7 @@ import static org.hibernate.internal.util.StringHelper.nullIfEmpty;
  *
  * @author Gavin King
  */
-public class RootClass extends PersistentClass implements TableOwner {
+public class RootClass extends PersistentClass implements TableOwner, SoftDeletable {
 	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( RootClass.class );
 
 	@Deprecated(since = "6.2") @Remove
@@ -50,15 +47,15 @@ public class RootClass extends PersistentClass implements TableOwner {
 	private Value discriminator;
 	private boolean mutable = true;
 	private boolean embeddedIdentifier;
-	private boolean explicitPolymorphism;
-	private Class<? extends EntityPersister> entityPersisterClass;
 	private boolean forceDiscriminator;
+	private boolean concreteProxy;
 	private String where;
 	private Table table;
 	private boolean discriminatorInsertable = true;
 	private int nextSubclassId;
 	private Property declaredIdentifierProperty;
 	private Property declaredVersion;
+	private Column softDeleteColumn;
 
 	public RootClass(MetadataBuildingContext buildingContext) {
 		super( buildingContext );
@@ -107,6 +104,10 @@ public class RootClass extends PersistentClass implements TableOwner {
 		return identifierProperty != null;
 	}
 
+	public boolean hasDiscriminator() {
+		return discriminator != null;
+	}
+
 	@Override
 	public Value getDiscriminator() {
 		return discriminator;
@@ -122,6 +123,10 @@ public class RootClass extends PersistentClass implements TableOwner {
 		return polymorphic;
 	}
 
+	/**
+	 * @deprecated No longer supported
+	 */
+	@Deprecated
 	public void setPolymorphic(boolean polymorphic) {
 		this.polymorphic = polymorphic;
 	}
@@ -131,29 +136,14 @@ public class RootClass extends PersistentClass implements TableOwner {
 		return this;
 	}
 
-	@Override @Deprecated
-	public Iterator<Property> getPropertyClosureIterator() {
-		return getPropertyIterator();
-	}
-
 	@Override
 	public List<Property> getPropertyClosure() {
 		return getProperties();
 	}
 
-	@Override @Deprecated
-	public Iterator<Table> getTableClosureIterator() {
-		return new SingletonIterator<>( getTable() );
-	}
-
 	@Override
 	public List<Table> getTableClosure() {
 		return List.of( getTable() );
-	}
-
-	@Override @Deprecated
-	public Iterator<KeyValue> getKeyClosureIterator() {
-		return new SingletonIterator<>( getKey() );
 	}
 
 	@Override
@@ -165,11 +155,6 @@ public class RootClass extends PersistentClass implements TableOwner {
 	public void addSubclass(Subclass subclass) throws MappingException {
 		super.addSubclass( subclass );
 		setPolymorphic( true );
-	}
-
-	@Override
-	public boolean isExplicitPolymorphism() {
-		return explicitPolymorphism;
 	}
 
 	@Override
@@ -206,18 +191,8 @@ public class RootClass extends PersistentClass implements TableOwner {
 	}
 
 	@Override
-	public Class<? extends EntityPersister> getEntityPersisterClass() {
-		return entityPersisterClass;
-	}
-
-	@Override
 	public Table getRootTable() {
 		return getTable();
-	}
-
-	@Override
-	public void setEntityPersisterClass(Class<? extends EntityPersister> persister) {
-		this.entityPersisterClass = persister;
 	}
 
 	@Override
@@ -238,8 +213,11 @@ public class RootClass extends PersistentClass implements TableOwner {
 		this.embeddedIdentifier = embeddedIdentifier;
 	}
 
+	/**
+	 * @deprecated No longer supported
+	 */
+	@Deprecated
 	public void setExplicitPolymorphism(boolean explicitPolymorphism) {
-		this.explicitPolymorphism = explicitPolymorphism;
 	}
 
 	public void setIdentifier(KeyValue identifier) {
@@ -272,6 +250,15 @@ public class RootClass extends PersistentClass implements TableOwner {
 
 	public void setForceDiscriminator(boolean forceDiscriminator) {
 		this.forceDiscriminator = forceDiscriminator;
+	}
+
+	@Override
+	public boolean isConcreteProxy() {
+		return concreteProxy;
+	}
+
+	public void setConcreteProxy(boolean concreteProxy) {
+		this.concreteProxy = concreteProxy;
 	}
 
 	@Override
@@ -415,6 +402,16 @@ public class RootClass extends PersistentClass implements TableOwner {
 			}
 		}
 		return tables;
+	}
+
+	@Override
+	public void enableSoftDelete(Column indicatorColumn) {
+		this.softDeleteColumn = indicatorColumn;
+	}
+
+	@Override
+	public Column getSoftDeleteColumn() {
+		return softDeleteColumn;
 	}
 
 	@Override

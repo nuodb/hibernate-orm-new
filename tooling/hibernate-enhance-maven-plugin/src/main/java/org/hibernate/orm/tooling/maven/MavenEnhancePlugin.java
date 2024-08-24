@@ -15,10 +15,8 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.nio.file.Path;
+import java.util.*;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -67,6 +65,9 @@ public class MavenEnhancePlugin extends AbstractMojo {
 	@Parameter(property = "dir", defaultValue = "${project.build.outputDirectory}")
 	private String dir;
 
+	@Parameter(property = "classNames", defaultValue = "")
+	private String classNames;
+
 	@Parameter(property = "failOnError", defaultValue = "true")
 	private boolean failOnError = true;
 
@@ -108,6 +109,11 @@ public class MavenEnhancePlugin extends AbstractMojo {
 		if ( sourceSet.isEmpty() ) {
 			log.info( "Skipping Hibernate enhancement plugin execution since there are no classes to enhance on " + dir );
 			return;
+		}
+
+		List<String> classesToEnhance = new ArrayList<>();
+		if(classNames != null && classNames.length() >= 1) {
+			classesToEnhance = Arrays.asList(classNames.split(","));
 		}
 
 		log.info( "Starting Hibernate enhancement for classes on " + dir );
@@ -161,6 +167,18 @@ public class MavenEnhancePlugin extends AbstractMojo {
 			final Enhancer enhancer = bytecodeProvider.getEnhancer( enhancementContext );
 
 			for ( File file : sourceSet ) {
+				discoverTypes( file, enhancer );
+				if ( log.isDebugEnabled() ) {
+					log.debug( "Successfully discovered types for class [" + file + "]" );
+				}
+			}
+			for ( File file : sourceSet ) {
+
+				String className = determineClassName(root, file);
+
+				if(! (classesToEnhance.size()==0 || classesToEnhance.contains(className))) {
+					continue;
+				}
 
 				final byte[] enhancedBytecode = doEnhancement( file, enhancer );
 
@@ -252,6 +270,35 @@ public class MavenEnhancePlugin extends AbstractMojo {
 		}
 	}
 
+	private void discoverTypes(File javaClassFile, Enhancer enhancer) throws MojoExecutionException {
+		try {
+			String className = javaClassFile.getAbsolutePath().substring(
+					base.length() + 1,
+					javaClassFile.getAbsolutePath().length() - ".class".length()
+			).replace( File.separatorChar, '.' );
+			ByteArrayOutputStream originalBytes = new ByteArrayOutputStream();
+			FileInputStream fileInputStream = new FileInputStream( javaClassFile );
+			try {
+				byte[] buffer = new byte[1024];
+				int length;
+				while ( ( length = fileInputStream.read( buffer ) ) != -1 ) {
+					originalBytes.write( buffer, 0, length );
+				}
+			}
+			finally {
+				fileInputStream.close();
+			}
+			enhancer.discoverTypes( className, originalBytes.toByteArray() );
+		}
+		catch (Exception e) {
+			String msg = "Unable to discover types for class: " + javaClassFile.getName();
+			if ( failOnError ) {
+				throw new MojoExecutionException( msg, e );
+			}
+			buildContext.addMessage( javaClassFile, 0, 0, msg, BuildContext.SEVERITY_WARNING, e );
+		}
+	}
+
 	/**
 	 * Expects a directory.
 	 */
@@ -319,5 +366,15 @@ public class MavenEnhancePlugin extends AbstractMojo {
 			catch (IOException ignore) {
 			}
 		}
+	}
+
+	private String determineClassName(File root, File javaClassFile) {
+		final Path relativeClassPath = root.toPath().relativize( javaClassFile.toPath() );
+		final String relativeClassPathString = relativeClassPath.toString();
+		final String classNameBase = relativeClassPathString.substring(
+				0,
+				relativeClassPathString.length() - ".class".length()
+		);
+		return classNameBase.replace( File.separatorChar, '.' );
 	}
 }

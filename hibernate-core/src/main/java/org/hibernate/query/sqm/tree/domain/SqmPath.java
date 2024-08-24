@@ -11,12 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.metamodel.MapAttribute;
 import jakarta.persistence.metamodel.PluralAttribute;
 import jakarta.persistence.metamodel.SingularAttribute;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import org.hibernate.metamodel.model.domain.EntityDomainType;
-import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.SemanticException;
 import org.hibernate.query.criteria.JpaPath;
 import org.hibernate.query.hql.spi.SemanticPathPart;
@@ -27,7 +28,12 @@ import org.hibernate.query.sqm.SqmPathSource;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.expression.SqmExpression;
 import org.hibernate.query.sqm.tree.from.SqmRoot;
+import org.hibernate.spi.NavigablePath;
 import org.hibernate.type.descriptor.java.JavaType;
+
+import jakarta.persistence.metamodel.MapAttribute;
+import jakarta.persistence.metamodel.PluralAttribute;
+import jakarta.persistence.metamodel.SingularAttribute;
 
 /**
  * Models a reference to a part of the application's domain model as part of an SQM tree.
@@ -104,7 +110,7 @@ public interface SqmPath<T> extends SqmExpression<T>, SemanticPathPart, JpaPath<
 	SqmPathSource<T> getNodeType();
 
 	@Override
-	default void applyInferableType(SqmExpressible<?> type) {
+	default void applyInferableType(@Nullable SqmExpressible<?> type) {
 		// do nothing
 	}
 
@@ -114,10 +120,18 @@ public interface SqmPath<T> extends SqmExpression<T>, SemanticPathPart, JpaPath<
 	}
 
 	@Override
-	<S extends T> SqmPath<S> treatAs(Class<S> treatJavaType);
+	<S extends T> SqmTreatedPath<T,S> treatAs(Class<S> treatJavaType);
 
 	@Override
-	<S extends T> SqmPath<S> treatAs(EntityDomainType<S> treatTarget);
+	<S extends T> SqmTreatedPath<T,S> treatAs(EntityDomainType<S> treatTarget);
+
+	<S extends T> SqmTreatedPath<T,S> treatAs(Class<S> treatJavaType, String alias);
+
+	<S extends T> SqmTreatedPath<T,S> treatAs(EntityDomainType<S> treatTarget, String alias);
+
+	<S extends T> SqmTreatedPath<T,S> treatAs(Class<S> treatJavaType, String alias, boolean fetch);
+
+	<S extends T> SqmTreatedPath<T,S> treatAs(EntityDomainType<S> treatTarget, String alias, boolean fetch);
 
 	default SqmRoot<?> findRoot() {
 		final SqmPath<?> lhs = getLhs();
@@ -138,8 +152,14 @@ public interface SqmPath<T> extends SqmExpression<T>, SemanticPathPart, JpaPath<
 			SqmExpression<?> selector,
 			boolean isTerminal,
 			SqmCreationState creationState) {
-		throw new SemanticException( "Non-plural path [" + getNavigablePath() + "] cannot be index-accessed" );
+		throw new SemanticException( "Index operator applied to non-plural path '" + getNavigablePath() + "'" );
 	}
+
+	/**
+	 * Get this path's actual resolved model, i.e. the concrete type for generic attributes.
+	 */
+	SqmPathSource<?> getResolvedModel();
+
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 	// Covariant overrides
 
@@ -147,10 +167,10 @@ public interface SqmPath<T> extends SqmExpression<T>, SemanticPathPart, JpaPath<
 	<Y> SqmPath<Y> get(SingularAttribute<? super T, Y> attribute);
 
 	@Override
-	<E, C extends Collection<E>> SqmExpression<C> get(PluralAttribute<T, C, E> collection);
+	<E, C extends Collection<E>> SqmExpression<C> get(PluralAttribute<? super T, C, E> collection);
 
 	@Override
-	<K, V, M extends Map<K, V>> SqmExpression<M> get(MapAttribute<T, K, V> map);
+	<K, V, M extends Map<K, V>> SqmExpression<M> get(MapAttribute<? super T, K, V> map);
 
 	@Override
 	SqmExpression<Class<? extends T>> type();
@@ -160,4 +180,6 @@ public interface SqmPath<T> extends SqmExpression<T>, SemanticPathPart, JpaPath<
 
 	@Override
 	SqmPath<T> copy(SqmCopyContext context);
+
+
 }

@@ -13,6 +13,8 @@ import org.hibernate.query.sqm.SqmExpressible;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.type.descriptor.java.JavaType;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * Represents a literal value in the sqm, e.g.<ul>
  *     <li>1</li>
@@ -27,7 +29,7 @@ import org.hibernate.type.descriptor.java.JavaType;
 public class SqmLiteral<T> extends AbstractSqmExpression<T> {
 	private final T value;
 
-	public SqmLiteral(T value, SqmExpressible<? extends T> inherentType, NodeBuilder nodeBuilder) {
+	public SqmLiteral(T value, SqmExpressible<? super T> inherentType, NodeBuilder nodeBuilder) {
 		super( inherentType, nodeBuilder );
 		assert value != null && ( inherentType == null || inherentType.getExpressibleJavaType().isInstance( value ) );
 		this.value = value;
@@ -67,21 +69,26 @@ public class SqmLiteral<T> extends AbstractSqmExpression<T> {
 
 	@Override
 	public String asLoggableText() {
-		return "Literal( " + value + ")";
+		return "Literal( " + getLiteralValue() + ")";
 	}
 
 	@Override
 	public void appendHqlString(StringBuilder sb) {
-		appendHqlString( sb, getJavaTypeDescriptor(), value );
+		appendHqlString( sb, getJavaTypeDescriptor(), getLiteralValue() );
 	}
 
-	public static <T> void appendHqlString(StringBuilder sb, JavaType<T> javaType, T value) {
-		final String string = javaType.toString( value );
-		if ( javaType.getJavaTypeClass() == String.class ) {
-			QueryLiteralHelper.appendStringLiteral( sb, string );
+	public static <T> void appendHqlString(StringBuilder sb, JavaType<T> javaType, @Nullable T value) {
+		if ( value == null ) {
+			sb.append( "null" );
 		}
 		else {
-			sb.append( string );
+			final String string = javaType.toString( value );
+			if ( javaType.getJavaTypeClass() == String.class ) {
+				QueryLiteralHelper.appendStringLiteral( sb, string );
+			}
+			else {
+				sb.append( string );
+			}
 		}
 	}
 

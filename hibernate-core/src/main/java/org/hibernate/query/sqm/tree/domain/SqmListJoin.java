@@ -10,6 +10,8 @@ import java.util.List;
 
 import org.hibernate.metamodel.model.domain.EntityDomainType;
 import org.hibernate.metamodel.model.domain.ListPersistentAttribute;
+import org.hibernate.metamodel.model.domain.ManagedDomainType;
+import org.hibernate.metamodel.model.domain.TreatableDomainType;
 import org.hibernate.query.sqm.SemanticQueryWalker;
 import org.hibernate.spi.NavigablePath;
 import org.hibernate.query.criteria.JpaExpression;
@@ -59,15 +61,16 @@ public class SqmListJoin<O,E>
 		if ( existing != null ) {
 			return existing;
 		}
+		final SqmFrom<?, O> lhsCopy = getLhs().copy( context );
 		final SqmListJoin<O, E> path = context.registerCopy(
 				this,
 				new SqmListJoin<>(
-						getLhs().copy( context ),
-						getNavigablePath(),
-						getReferencedPathSource(),
+						lhsCopy,
+						getNavigablePathCopy( lhsCopy ),
+						getAttribute(),
 						getExplicitAlias(),
 						getSqmJoinType(),
-						isFetched(),
+						context.copyFetchedFlag() && isFetched(),
 						nodeBuilder()
 				)
 		);
@@ -76,13 +79,8 @@ public class SqmListJoin<O,E>
 	}
 
 	@Override
-	public ListPersistentAttribute<O, E> getReferencedPathSource() {
-		return (ListPersistentAttribute<O, E>) super.getReferencedPathSource();
-	}
-
-	@Override
 	public ListPersistentAttribute<O, E> getModel() {
-		return getReferencedPathSource();
+		return (ListPersistentAttribute<O, E>) super.getModel();
 	}
 
 	@Override
@@ -92,13 +90,12 @@ public class SqmListJoin<O,E>
 
 	@Override
 	public ListPersistentAttribute<O,E> getAttribute() {
-		//noinspection unchecked
-		return (ListPersistentAttribute<O, E>) super.getAttribute();
+		return getModel();
 	}
 
 	@Override
 	public SqmPath<Integer> index() {
-		final SqmPathSource<Integer> indexPathSource = getReferencedPathSource().getIndexPathSource();
+		final SqmPathSource<Integer> indexPathSource = getAttribute().getIndexPathSource();
 		return resolvePath( indexPathSource.getPathName(), indexPathSource );
 	}
 
@@ -128,8 +125,8 @@ public class SqmListJoin<O,E>
 	}
 
 	@Override
-	public <S extends E> SqmTreatedListJoin<O,E,S> treatAs(Class<S> treatAsType) {
-		return treatAs( nodeBuilder().getDomainModel().entity( treatAsType ), null );
+	public <S extends E> SqmTreatedListJoin<O,E,S> treatAs(Class<S> treatJavaType) {
+		return treatAs( treatJavaType, null );
 	}
 
 	@Override
@@ -139,14 +136,34 @@ public class SqmListJoin<O,E>
 
 	@Override
 	public <S extends E> SqmTreatedListJoin<O,E,S> treatAs(Class<S> treatJavaType, String alias) {
-		return treatAs( nodeBuilder().getDomainModel().entity( treatJavaType ), alias );
+		return treatAs( treatJavaType, alias, false );
 	}
 
 	@Override
 	public <S extends E> SqmTreatedListJoin<O,E,S> treatAs(EntityDomainType<S> treatTarget, String alias) {
+		return treatAs( treatTarget, alias, false );
+	}
+
+	@Override
+	public <S extends E> SqmTreatedListJoin<O, E, S> treatAs(Class<S> treatJavaType, String alias, boolean fetch) {
+		final ManagedDomainType<S> treatTarget = nodeBuilder().getDomainModel().managedType( treatJavaType );
+		final SqmTreatedListJoin<O, E, S> treat = findTreat( treatTarget, alias );
+		if ( treat == null ) {
+			if ( treatTarget instanceof TreatableDomainType<?> ) {
+				return addTreat( new SqmTreatedListJoin<>( this, (TreatableDomainType<S>) treatTarget, alias, fetch ) );
+			}
+			else {
+				throw new IllegalArgumentException( "Not a treatable type: " + treatJavaType.getName() );
+			}
+		}
+		return treat;
+	}
+
+	@Override
+	public <S extends E> SqmTreatedListJoin<O,E,S> treatAs(EntityDomainType<S> treatTarget, String alias, boolean fetch) {
 		final SqmTreatedListJoin<O,E,S> treat = findTreat( treatTarget, alias );
 		if ( treat == null ) {
-			return addTreat( new SqmTreatedListJoin<>( this, treatTarget, alias ) );
+			return addTreat( new SqmTreatedListJoin<>( this, treatTarget, alias, fetch ) );
 		}
 		return treat;
 	}
@@ -155,7 +172,7 @@ public class SqmListJoin<O,E>
 	public SqmAttributeJoin<O, E> makeCopy(SqmCreationProcessingState creationProcessingState) {
 		return new SqmListJoin<>(
 				creationProcessingState.getPathRegistry().findFromByPath( getLhs().getNavigablePath() ),
-				getReferencedPathSource(),
+				getAttribute(),
 				getExplicitAlias(),
 				getSqmJoinType(),
 				isFetched(),

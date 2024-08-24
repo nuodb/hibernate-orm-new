@@ -34,12 +34,13 @@ public class SqmEntityValuedSimplePath<T> extends AbstractSqmSimplePath<T> {
 			return existing;
 		}
 
+		final SqmPath<?> lhsCopy = getLhs().copy( context );
 		final SqmEntityValuedSimplePath<T> path = context.registerCopy(
 				this,
 				new SqmEntityValuedSimplePath<>(
-						getNavigablePath(),
-						getReferencedPathSource(),
-						getLhs().copy( context ),
+						getNavigablePathCopy( lhsCopy ),
+						getModel(),
+						lhsCopy,
 						nodeBuilder()
 				)
 		);
@@ -77,8 +78,8 @@ public class SqmEntityValuedSimplePath<T> extends AbstractSqmSimplePath<T> {
 //	}
 
 	@Override
-	public <S extends T> SqmTreatedSimplePath<T,S> treatAs(Class<S> treatJavaType) throws PathException {
-		return (SqmTreatedSimplePath<T, S>) treatAs( nodeBuilder().getDomainModel().entity( treatJavaType ) );
+	public <S extends T> SqmTreatedEntityValuedSimplePath<T,S> treatAs(Class<S> treatJavaType) throws PathException {
+		return (SqmTreatedEntityValuedSimplePath<T, S>) treatAs( nodeBuilder().getDomainModel().entity( treatJavaType ) );
 	}
 
 	@Override

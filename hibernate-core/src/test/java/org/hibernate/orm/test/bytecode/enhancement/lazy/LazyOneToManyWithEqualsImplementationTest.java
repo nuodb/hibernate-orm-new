@@ -6,15 +6,18 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.lazy;
 
-import org.hibernate.annotations.LazyToOne;
-import org.hibernate.annotations.LazyToOneOption;
-import org.hibernate.orm.test.jpa.BaseEntityManagerFunctionalTestCase;
-import org.hibernate.testing.TestForIssue;
-import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.hibernate.testing.bytecode.enhancement.extension.BytecodeEnhanced;
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.JiraKey;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.Basic;
 import jakarta.persistence.Entity;
@@ -24,28 +27,23 @@ import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
 
-import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
-import static org.junit.Assert.assertEquals;
-
-@TestForIssue(jiraKey = "HHH-13380")
-@RunWith( BytecodeEnhancerRunner.class )
-public class LazyOneToManyWithEqualsImplementationTest
-        extends BaseEntityManagerFunctionalTestCase {
+@SuppressWarnings("JUnitMalformedDeclaration")
+@JiraKey("HHH-13380")
+@DomainModel(
+        annotatedClasses = {
+                LazyOneToManyWithEqualsImplementationTest.Person.class, LazyOneToManyWithEqualsImplementationTest.Course.class
+        }
+)
+@SessionFactory
+@BytecodeEnhanced
+public class LazyOneToManyWithEqualsImplementationTest {
 
     private Long personId;
 
-    @Override
-    protected Class<?>[] getAnnotatedClasses() {
-        return new Class<?>[] { Person.class, Course.class };
-    }
-
-    @Before
-    public void setUp() {
-        doInJPA( this::entityManagerFactory, entityManager -> {
+    @BeforeEach
+    public void setUp(SessionFactoryScope scope) {
+        scope.inTransaction( entityManager -> {
             Person p = new Person();
             entityManager.persist(p);
             personId = p.getId();
@@ -62,12 +60,12 @@ public class LazyOneToManyWithEqualsImplementationTest
 
 
     @Test
-    public void testRetrievalOfOneToMany() {
-        doInJPA(this::entityManagerFactory, entityManager -> {
+    public void testRetrievalOfOneToMany(SessionFactoryScope scope) {
+        scope.inTransaction( entityManager -> {
             Person p = entityManager.find( Person.class, personId );
 
             Set<Course> courses = p.getCourses();
-            assertEquals( courses.size(), 2 );
+            Assertions.assertEquals( courses.size(), 2 );
         });
     }
 
@@ -100,7 +98,6 @@ public class LazyOneToManyWithEqualsImplementationTest
         public String getTitle() { return title; }
 
         @ManyToOne(fetch = FetchType.LAZY)
-        @LazyToOne(LazyToOneOption.NO_PROXY)
         private Person person;
         public Person getPerson() { return person; }
 

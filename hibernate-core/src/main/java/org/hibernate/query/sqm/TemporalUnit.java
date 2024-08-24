@@ -178,7 +178,7 @@ public enum TemporalUnit {
 		}
 
 		if ( unit.normalized() != normalized() ) {
-			throw new SemanticException("illegal unit conversion " + this + " to " + unit);
+			throw new SemanticException("Illegal unit conversion " + this + " to " + unit);
 		}
 
 		long from = normalizationFactor( dialect );
@@ -194,6 +194,33 @@ public enum TemporalUnit {
 			// need to use division)
 			return (from < to ? "/" : "*")
 					+ factorAsString(from < to ? to / from : from / to);
+		}
+	}
+
+	public String conversionFactorFull(TemporalUnit unit, Dialect dialect) {
+
+		if ( unit == this ) {
+			//same unit, nothing to do
+			return "";
+		}
+
+		if ( unit.normalized() != normalized() ) {
+			throw new SemanticException("Illegal unit conversion " + this + " to " + unit);
+		}
+
+		long from = normalizationFactor( dialect );
+		long to = unit.normalizationFactor( dialect );
+		if ( from == to ) {
+			// the units represent the same amount of time
+			return "";
+		}
+		else {
+			// if from < to, then this unit represents a
+			// smaller amount of time than the given unit
+			// we are converting to (so we're going to
+			// need to use division)
+			return (from < to ? "/" : "*")
+					+ (from < to ? to / from : from / to);
 		}
 	}
 
@@ -229,7 +256,7 @@ public enum TemporalUnit {
 				factor *= dialect.getFractionalSecondPrecisionInNanos();
 				break;
 			default:
-				throw new SemanticException("inconvertible unit " + this);
+				throw new SemanticException("Inconvertible unit " + this);
 		}
 		return factor;
 	}
@@ -319,7 +346,7 @@ public enum TemporalUnit {
 			case MONTH:
 				return MONTH;
 			default:
-				throw new SemanticException("illegal unit " + this);
+				throw new SemanticException("Illegal unit " + this);
 		}
 	}
 

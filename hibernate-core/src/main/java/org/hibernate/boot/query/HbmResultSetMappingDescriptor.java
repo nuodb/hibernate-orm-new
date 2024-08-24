@@ -402,7 +402,7 @@ public class HbmResultSetMappingDescriptor implements NamedResultSetMappingDescr
 				}
 
 				discriminatorMemento = new FetchMementoBasicStandard(
-						entityPath.append( EntityDiscriminatorMapping.ROLE_NAME ),
+						entityPath.append( EntityDiscriminatorMapping.DISCRIMINATOR_ROLE_NAME ),
 						entityDescriptor.getDiscriminatorMapping(),
 						discriminatorColumnAlias
 				);
@@ -674,10 +674,11 @@ public class HbmResultSetMappingDescriptor implements NamedResultSetMappingDescr
 				navigablePath = navigablePath.append( fetchable.getFetchableName() );
 			}
 
-			if ( fetchable instanceof BasicValuedModelPart ) {
+			final BasicValuedModelPart basicPart = fetchable.asBasicValuedModelPart();
+			if ( basicPart != null ) {
 				return new FetchMementoBasicStandard(
 						navigablePath,
-						(BasicValuedModelPart) fetchable,
+						basicPart,
 						columnAliases.get( 0 )
 				);
 			}

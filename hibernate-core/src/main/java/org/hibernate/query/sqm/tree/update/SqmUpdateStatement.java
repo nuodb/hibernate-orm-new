@@ -6,11 +6,20 @@
  */
 package org.hibernate.query.sqm.tree.update;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.hibernate.HibernateException;
+import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.internal.CoreLogging;
+import org.hibernate.internal.CoreMessageLogger;
+import org.hibernate.persister.entity.EntityPersister;
+import org.hibernate.query.ImmutableEntityUpdateQueryHandlingMode;
+import org.hibernate.query.SemanticException;
 import org.hibernate.query.criteria.JpaCriteriaUpdate;
+import org.hibernate.query.criteria.JpaRoot;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.SemanticQueryWalker;
 import org.hibernate.query.sqm.SqmQuerySource;
@@ -20,14 +29,23 @@ import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.SqmDeleteOrUpdateStatement;
 import org.hibernate.query.sqm.tree.cte.SqmCteStatement;
 import org.hibernate.query.sqm.tree.domain.SqmPath;
+import org.hibernate.query.sqm.tree.domain.SqmPolymorphicRootDescriptor;
 import org.hibernate.query.sqm.tree.expression.SqmExpression;
 import org.hibernate.query.sqm.tree.expression.SqmParameter;
+import org.hibernate.query.sqm.tree.from.SqmFromClause;
 import org.hibernate.query.sqm.tree.from.SqmRoot;
+import org.hibernate.query.sqm.tree.select.SqmSubQuery;
 
 import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.ParameterExpression;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Subquery;
+import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.SingularAttribute;
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+import static org.hibernate.query.sqm.internal.TypecheckUtil.assertAssignable;
 
 /**
  * @author Steve Ebersole
@@ -35,23 +53,38 @@ import jakarta.persistence.metamodel.SingularAttribute;
 public class SqmUpdateStatement<T>
 		extends AbstractSqmRestrictedDmlStatement<T>
 		implements SqmDeleteOrUpdateStatement<T>, JpaCriteriaUpdate<T> {
+
+	private static final CoreMessageLogger LOG = CoreLogging.messageLogger( SqmUpdateStatement.class );
+
 	private boolean versioned;
 	private SqmSetClause setClause;
 
-	public SqmUpdateStatement(SqmRoot<T> target, NodeBuilder nodeBuilder) {
-		this( target, SqmQuerySource.HQL, nodeBuilder );
+	public SqmUpdateStatement(NodeBuilder nodeBuilder) {
+		super( SqmQuerySource.HQL, nodeBuilder );
 	}
 
+	/**
+	 * @deprecated was previously used for HQL. Use {@link SqmUpdateStatement#SqmUpdateStatement(NodeBuilder)} instead
+	 */
+	@Deprecated(forRemoval = true)
+	public SqmUpdateStatement(SqmRoot<T> target, NodeBuilder nodeBuilder) {
+		super( target, SqmQuerySource.HQL, nodeBuilder );
+	}
+
+	/**
+	 * @deprecated was previously used for Criteria. Use {@link SqmUpdateStatement#SqmUpdateStatement(Class, SqmCriteriaNodeBuilder)} instead.
+	 */
+	@Deprecated(forRemoval = true)
 	public SqmUpdateStatement(SqmRoot<T> target, SqmQuerySource querySource, NodeBuilder nodeBuilder) {
 		super( target, querySource, nodeBuilder );
 	}
 
 	public SqmUpdateStatement(Class<T> targetEntity, SqmCriteriaNodeBuilder nodeBuilder) {
-		this(
+		super(
 				new SqmRoot<>(
 						nodeBuilder.getDomainModel().entity( targetEntity ),
 						null,
-						false,
+						!nodeBuilder.isJpaQueryComplianceEnabled(),
 						nodeBuilder
 				),
 				SqmQuerySource.CRITERIA,
@@ -92,6 +125,46 @@ public class SqmUpdateStatement<T>
 		return statement;
 	}
 
+	@Override
+	public void validate(@Nullable String hql) {
+		verifyImmutableEntityUpdate( hql );
+		if ( getSetClause() == null || getSetClause().getAssignments().isEmpty() ) {
+			throw new IllegalArgumentException( "No assignments specified as part of UPDATE criteria" );
+		}
+		verifyUpdateTypesMatch();
+	}
+
+	private void verifyImmutableEntityUpdate(String hql) {
+		final SessionFactoryImplementor factory = nodeBuilder().getSessionFactory();
+		final EntityPersister persister =
+				factory.getMappingMetamodel().getEntityDescriptor( getTarget().getEntityName() );
+		if ( !persister.isMutable() ) {
+			final ImmutableEntityUpdateQueryHandlingMode mode =
+					factory.getSessionFactoryOptions().getImmutableEntityUpdateQueryHandlingMode();
+			final String querySpaces = Arrays.toString( persister.getQuerySpaces() );
+			switch ( mode ) {
+				case WARNING:
+					LOG.immutableEntityUpdateQuery( hql, querySpaces );
+					break;
+				case EXCEPTION:
+					throw new HibernateException( "The query attempts to update an immutable entity: " + querySpaces );
+				default:
+					throw new UnsupportedOperationException( "The " + mode + " is not supported" );
+			}
+		}
+	}
+
+	private void verifyUpdateTypesMatch() {
+		final SessionFactoryImplementor factory = nodeBuilder().getSessionFactory();
+		final List<SqmAssignment<?>> assignments = getSetClause().getAssignments();
+		for ( int i = 0; i < assignments.size(); i++ ) {
+			final SqmAssignment<?> assignment = assignments.get( i );
+			final SqmPath<?> targetPath = assignment.getTargetPath();
+			final SqmExpression<?> expression = assignment.getValue();
+			assertAssignable( null, targetPath, expression, factory );
+		}
+	}
+
 	public SqmSetClause getSetClause() {
 		return setClause;
 	}
@@ -102,35 +175,40 @@ public class SqmUpdateStatement<T>
 
 	@Override
 	public <Y, X extends Y> SqmUpdateStatement<T> set(SingularAttribute<? super T, Y> attribute, X value) {
-		applyAssignment( getTarget().get( attribute ), nodeBuilder().value( value ) );
+		applyAssignment( getTarget().get( attribute ), (SqmExpression<? extends Y>) nodeBuilder().value( value ) );
 		return this;
 	}
 
 	@Override
 	public <Y> SqmUpdateStatement<T> set(SingularAttribute<? super T, Y> attribute, Expression<? extends Y> value) {
-		//noinspection unchecked
 		applyAssignment( getTarget().get( attribute ), (SqmExpression<? extends Y>) value );
 		return this;
 	}
 
 	@Override
 	public <Y, X extends Y> SqmUpdateStatement<T> set(Path<Y> attribute, X value) {
-		applyAssignment( (SqmPath<Y>) attribute, nodeBuilder().value( value ) );
+		applyAssignment( (SqmPath<Y>) attribute, (SqmExpression<? extends Y>) nodeBuilder().value( value ) );
 		return this;
 	}
 
 	@Override
 	public <Y> SqmUpdateStatement<T> set(Path<Y> attribute, Expression<? extends Y> value) {
-		//noinspection unchecked
 		applyAssignment( (SqmPath<Y>) attribute, (SqmExpression<? extends Y>) value );
 		return this;
 	}
 
-	@Override
+	@Override @SuppressWarnings({"rawtypes", "unchecked"})
 	public SqmUpdateStatement<T> set(String attributeName, Object value) {
-		//noinspection unchecked
-		final SqmPath<Object> sqmPath = (SqmPath<Object>) getTarget().get( attributeName );
-		applyAssignment( sqmPath, nodeBuilder().value( value ) );
+		final SqmPath sqmPath = getTarget().get(attributeName);
+		final SqmExpression expression;
+		if ( value instanceof SqmExpression ) {
+			expression = (SqmExpression) value;
+		}
+		else {
+			expression = (SqmExpression) nodeBuilder().value( value );
+		}
+		assertAssignable( null, sqmPath, expression, nodeBuilder().getSessionFactory() );
+		applyAssignment( sqmPath, expression );
 		return this;
 	}
 
@@ -152,6 +230,19 @@ public class SqmUpdateStatement<T>
 	}
 
 	@Override
+	public void setTarget(JpaRoot<T> root) {
+		if ( root.getModel() instanceof SqmPolymorphicRootDescriptor<?> ) {
+			throw new SemanticException(
+					String.format(
+							"Target type '%s' is not an entity",
+							root.getModel().getHibernateEntityName()
+					)
+			);
+		}
+		super.setTarget( root );
+	}
+
+	@Override
 	public SqmUpdateStatement<T> where(Expression<Boolean> restriction) {
 		setWhere( restriction );
 		return this;
@@ -168,11 +259,20 @@ public class SqmUpdateStatement<T>
 		return walker.visitUpdateStatement( this );
 	}
 
+	@Override
+	public <U> SqmSubQuery<U> subquery(EntityType<U> type) {
+		return new SqmSubQuery<>( this, type, nodeBuilder() );
+	}
+
 	public <Y> void applyAssignment(SqmPath<Y> targetPath, SqmExpression<? extends Y> value) {
+		applyAssignment( new SqmAssignment<>( targetPath, value ) );
+	}
+
+	public <Y> void applyAssignment(SqmAssignment<Y> assignment) {
 		if ( setClause == null ) {
 			setClause = new SqmSetClause();
 		}
-		setClause.addAssignment( new SqmAssignment<>( targetPath, value ) );
+		setClause.addAssignment( assignment );
 	}
 
 	@Override
@@ -182,22 +282,13 @@ public class SqmUpdateStatement<T>
 		if ( versioned ) {
 			sb.append( "versioned " );
 		}
-		sb.append( getTarget().getEntityName() );
-		sb.append( ' ' ).append( getTarget().resolveAlias() );
-		sb.append( " set " );
-		final List<SqmAssignment<?>> assignments = setClause.getAssignments();
-		appendAssignment( assignments.get( 0 ), sb );
-		for ( int i = 1; i < assignments.size(); i++ ) {
-			sb.append( ", " );
-			appendAssignment( assignments.get( i ), sb );
-		}
+		final SqmRoot<T> root = getTarget();
+		sb.append( root.getEntityName() );
+		sb.append( ' ' ).append( root.resolveAlias() );
+		SqmFromClause.appendJoins( root, sb );
+		SqmFromClause.appendTreatJoins( root, sb );
+		setClause.appendHqlString( sb );
 
 		super.appendHqlString( sb );
-	}
-
-	private static void appendAssignment(SqmAssignment<?> sqmAssignment, StringBuilder sb) {
-		sqmAssignment.getTargetPath().appendHqlString( sb );
-		sb.append( " = " );
-		sqmAssignment.getValue().appendHqlString( sb );
 	}
 }

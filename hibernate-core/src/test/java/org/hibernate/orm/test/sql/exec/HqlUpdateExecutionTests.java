@@ -59,11 +59,23 @@ public class HqlUpdateExecutionTests {
 	}
 
 	@Test
+	@TestForIssue( jiraKey = "HHH-15939" )
+	public void testNumericUpdate(SessionFactoryScope scope) {
+		scope.inTransaction( session -> {
+			session.createMutationQuery( "update EntityOfBasics set theShort = 69" )
+					.executeUpdate();
+			session.createMutationQuery( "update EntityOfBasics set theShort = ?1" )
+					.setParameter( 1, 69 )
+					.executeUpdate();
+		} );
+	}
+
+	@Test
 	public void testSimpleUpdateWithData(SessionFactoryScope scope) {
 		scope.inTransaction(
 				session -> {
-					session.save( new BasicEntity( 1, "abc" ) );
-					session.save( new BasicEntity( 2, "def" ) );
+					session.persist( new BasicEntity( 1, "abc" ) );
+					session.persist( new BasicEntity( 2, "def" ) );
 				}
 		);
 
@@ -105,8 +117,8 @@ public class HqlUpdateExecutionTests {
 	public void testSimpleRestrictedUpdateWithData(SessionFactoryScope scope) {
 		scope.inTransaction(
 				session -> {
-					session.save( new BasicEntity( 1, "abc" ) );
-					session.save( new BasicEntity( 2, "def" ) );
+					session.persist( new BasicEntity( 1, "abc" ) );
+					session.persist( new BasicEntity( 2, "def" ) );
 				}
 		);
 

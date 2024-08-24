@@ -22,8 +22,10 @@ public class BitronixJtaPlatform extends AbstractJtaPlatform {
 	@Override
 	protected TransactionManager locateTransactionManager() {
 		try {
-			Class transactionManagerServicesClass = serviceRegistry().getService( ClassLoaderService.class ).classForName( TM_CLASS_NAME );
-			final Method getTransactionManagerMethod = transactionManagerServicesClass.getMethod( "getTransactionManager" );
+			final Method getTransactionManagerMethod =
+					serviceRegistry().requireService( ClassLoaderService.class )
+							.classForName( TM_CLASS_NAME )
+							.getMethod( "getTransactionManager" );
 			return (TransactionManager) getTransactionManagerMethod.invoke( null );
 		}
 		catch (Exception e) {

@@ -6,7 +6,8 @@
  */
 package org.hibernate.orm.test.jpa.naturalid;
 
-import org.hibernate.dialect.AbstractHANADialect;
+import org.hibernate.community.dialect.AltibaseDialect;
+import org.hibernate.dialect.HANADialect;
 import org.hibernate.dialect.OracleDialect;
 
 import org.hibernate.testing.TestForIssue;
@@ -23,8 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SkipForDialect(dialectClass = OracleDialect.class, matchSubTypes = true,
 		reason = "Oracle do not support identity key generation")
-@SkipForDialect(dialectClass = AbstractHANADialect.class, matchSubTypes = true,
+@SkipForDialect(dialectClass = HANADialect.class, matchSubTypes = true,
 		reason = "Hana do not support identity key generation")
+@SkipForDialect(dialectClass = AltibaseDialect.class,
+		reason = "Altibase do not support identity key generation")
 public class MutableNaturalIdTest extends AbstractJPATest {
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
@@ -66,7 +69,7 @@ public class MutableNaturalIdTest extends AbstractJPATest {
 				session -> {
 					ClassWithIdentityColumn e = new ClassWithIdentityColumn();
 					e.setName( "Dampf" );
-					session.save( e );
+					session.persist( e );
 					e.setName( "Klein" );
 					assertNotNull( session.bySimpleNaturalId( ClassWithIdentityColumn.class ).load( "Klein" ) );
 				}

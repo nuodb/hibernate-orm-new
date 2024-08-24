@@ -6,13 +6,13 @@
  */
 package org.hibernate.dialect;
 
-import java.time.Duration;
-
 import org.hibernate.LockOptions;
 import org.hibernate.dialect.sequence.SequenceSupport;
 import org.hibernate.dialect.sequence.TiDBSequenceSupport;
 import org.hibernate.engine.jdbc.dialect.spi.DialectResolutionInfo;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
+import org.hibernate.query.sqm.IntervalType;
+import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.sql.ast.SqlAstTranslator;
 import org.hibernate.sql.ast.SqlAstTranslatorFactory;
 import org.hibernate.sql.ast.spi.StandardSqlAstTranslatorFactory;
@@ -20,6 +20,8 @@ import org.hibernate.sql.ast.tree.Statement;
 import org.hibernate.sql.exec.spi.JdbcOperation;
 import org.hibernate.tool.schema.extract.internal.SequenceInformationExtractorTiDBDatabaseImpl;
 import org.hibernate.tool.schema.extract.spi.SequenceInformationExtractor;
+
+import jakarta.persistence.TemporalType;
 
 /**
  * A {@linkplain Dialect SQL dialect} for TiDB.
@@ -30,16 +32,18 @@ public class TiDBDialect extends MySQLDialect {
 
 	private static final DatabaseVersion VERSION57 = DatabaseVersion.make( 5, 7 );
 
+	private static final DatabaseVersion MINIMUM_VERSION = DatabaseVersion.make( 5, 4 );
+
 	public TiDBDialect() {
-		this( DatabaseVersion.make(5, 4) );
+		this( MINIMUM_VERSION );
 	}
 
 	public TiDBDialect(DatabaseVersion version) {
-		super(version);
+		super( version );
 	}
 
 	public TiDBDialect(DialectResolutionInfo info) {
-		super(createVersion( info ), MySQLServerConfiguration.fromDatabaseMetadata( info.getDatabaseMetadata() ));
+		super( createVersion( info ), MySQLServerConfiguration.fromDialectResolutionInfo( info ) );
 		registerKeywords( info );
 	}
 
@@ -47,6 +51,11 @@ public class TiDBDialect extends MySQLDialect {
 	public DatabaseVersion getMySQLVersion() {
 		// For simplicity’s sake, configure MySQL 5.7 compatibility
 		return VERSION57;
+	}
+
+	@Override
+	protected DatabaseVersion getMinimumSupportedVersion() {
+		return MINIMUM_VERSION;
 	}
 
 	@Override
@@ -105,6 +114,11 @@ public class TiDBDialect extends MySQLDialect {
 	}
 
 	@Override
+	public boolean supportsSkipLocked() {
+		return false;
+	}
+
+	@Override
 	public boolean supportsNoWait() {
 		return true;
 	}
@@ -112,6 +126,16 @@ public class TiDBDialect extends MySQLDialect {
 	@Override
 	public boolean supportsWait() {
 		return true;
+	}
+
+	@Override
+	boolean supportsForShare() {
+		return false;
+	}
+
+	@Override
+	boolean supportsAliasLocks() {
+		return false;
 	}
 
 	@Override
@@ -137,7 +161,7 @@ public class TiDBDialect extends MySQLDialect {
 		}
 
 		if ( timeout > 0 ) {
-			return getForUpdateString() + " wait " + getLockWaitTimeoutInSeconds( timeout );
+			return getForUpdateString() + " wait " + getTimeoutInSeconds( timeout );
 		}
 
 		return getForUpdateString();
@@ -153,8 +177,17 @@ public class TiDBDialect extends MySQLDialect {
 		return getForUpdateString( aliases ) + " nowait";
 	}
 
-	private static long getLockWaitTimeoutInSeconds(int timeoutInMilliseconds) {
-		Duration duration = Duration.ofMillis( timeoutInMilliseconds );
-		return duration.getSeconds();
+	@Override
+	public FunctionalDependencyAnalysisSupport getFunctionalDependencyAnalysisSupport() {
+		return FunctionalDependencyAnalysisSupportImpl.TABLE_REFERENCE;
+	}
+
+	@Override
+	public String timestampaddPattern(TemporalUnit unit, TemporalType temporalType, IntervalType intervalType) {
+		if ( unit == TemporalUnit.SECOND && intervalType == null ) {
+			// TiDB doesn't natively support adding fractional seconds
+			return "timestampadd(microsecond,?2*1e6,?3)";
+		}
+		return super.timestampaddPattern( unit, temporalType, intervalType );
 	}
 }

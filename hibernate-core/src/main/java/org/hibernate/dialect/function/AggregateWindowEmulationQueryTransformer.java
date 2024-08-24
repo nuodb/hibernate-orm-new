@@ -129,7 +129,7 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 			if ( expression == windowFunction ) {
 				finalExpression = new SelfRenderingAggregateFunctionSqlAstExpression(
 						"min",
-						(sqlAppender, sqlAstArguments, walker1) -> {
+						(sqlAppender, sqlAstArguments, returnType, walker1) -> {
 							sqlAppender.appendSql( "min(" );
 							sqlAstArguments.get( 0 ).accept( walker1 );
 							sqlAppender.append( ')' );
@@ -147,7 +147,6 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 			columnNames.add( columnName );
 			selectClause.addSqlSelection(
 					new ResolvedSqlSelection(
-							i + 1,
 							i,
 							finalExpression,
 							(BasicType<Object>) mapping.getJdbcMapping()
@@ -193,7 +192,6 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 					);
 					final int subValuesPosition = subSelectClause.getSqlSelections().size();
 					final SqlSelection subSelection = new ResolvedSqlSelection(
-							subValuesPosition + 1,
 							subValuesPosition,
 							realExpression,
 							(BasicType<Object>) jdbcMapping
@@ -254,7 +252,6 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 							);
 							final int subValuesPosition = subSelectClause.getSqlSelections().size();
 							final SqlSelection subSelection = new ResolvedSqlSelection(
-									subValuesPosition + 1,
 									subValuesPosition,
 									realExpression,
 									(BasicType<Object>) jdbcMapping
@@ -312,7 +309,6 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 						);
 						final int subValuesPosition = subSelectClause.getSqlSelections().size();
 						final SqlSelection subSelection = new ResolvedSqlSelection(
-								subValuesPosition + 1,
 								subValuesPosition,
 								realExpression,
 								(BasicType<Object>) jdbcMapping
@@ -352,7 +348,6 @@ public class AggregateWindowEmulationQueryTransformer implements QueryTransforme
 			columnNames.add( columnName );
 			subSelectClause.addSqlSelection(
 					new ResolvedSqlSelection(
-							oldValueIndex + 1,
 							oldValueIndex,
 							sortExpression,
 							(BasicType<Object>) mapping.getJdbcMapping()

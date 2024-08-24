@@ -19,6 +19,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
+import jakarta.persistence.metamodel.Attribute;
 import org.hibernate.bytecode.enhance.spi.interceptor.BytecodeLazyAttributeInterceptor;
 import org.hibernate.bytecode.enhance.spi.interceptor.EnhancementAsProxyLazinessInterceptor;
 import org.hibernate.collection.spi.PersistentBag;
@@ -53,7 +54,7 @@ import static org.hibernate.proxy.HibernateProxy.extractLazyInitializer;
  * bytecode tricks. The tricks used depend on whether build-time bytecode enhancement
  * is enabled.
  * <p>
- * When bytecode enhancement is <em>not</em> used, an unfetched lazy association* is
+ * When bytecode enhancement is <em>not</em> used, an unfetched lazy association is
  * represented by a <em>proxy object</em> which holds the identifier (foreign key) of
  * the associated entity instance.
  * <ul>
@@ -259,6 +260,32 @@ public final class Hibernate {
 	}
 
 	/**
+	 * Get the true, underlying class of a proxied entity. 
+	 * <p/>
+	 * Like {@link #getClass}, this operation might initialize a proxy by side effect.
+	 * However, here the initialization is avoided if possible.  If the entity type is 
+	 * defined with subclasses, the proxy will need to be initialized to properly
+	 * determine the class.
+	 *
+	 * @param proxy an entity instance or proxy
+	 * @return the true class of the instance
+	 *
+	 * @since 6.3
+	 */
+	@SuppressWarnings("unchecked")
+	public static <T> Class<? extends T> getClassLazy(T proxy) {
+		Class<?> result;
+		final LazyInitializer lazyInitializer = extractLazyInitializer( proxy );
+		if ( lazyInitializer != null ) {
+			result = lazyInitializer.getImplementationClass();
+		}
+		else {
+			result = proxy.getClass();
+		}
+		return (Class<? extends T>) result;
+	}
+
+	/**
 	 * Determine if the true, underlying class of the proxied entity is assignable
 	 * to the given class. This operation will initialize a proxy by side effect.
 	 *
@@ -273,18 +300,30 @@ public final class Hibernate {
 	}
 
 	/**
+	 * Determines if the given attribute of the given entity instance is initialized.
+	 *
+	 * @param entity The entity instance or proxy
+	 * @param attribute A persistent attribute of the entity
+	 * @return true if the named property of the object is not listed as uninitialized;
+	 *         false otherwise
+	 */
+	public <E> boolean isPropertyInitialized(E entity, Attribute<? super E, ?> attribute) {
+		return isPropertyInitialized( entity, attribute.getName() );
+	}
+
+	/**
 	 * Determines if the property with the given name of the given entity instance is
 	 * initialized. If the named property does not exist or is not persistent, this
 	 * method always returns {@code true}.
 	 * <p>
 	 * This operation is equivalent to {@link jakarta.persistence.PersistenceUtil#isLoaded(Object, String)}.
 	 *
-	 * @param proxy The potential proxy
-	 * @param propertyName the name of a persistent attribute of the object
+	 * @param proxy The entity instance or proxy
+	 * @param attributeName the name of a persistent attribute of the object
 	 * @return true if the named property of the object is not listed as uninitialized;
 	 *         false otherwise
 	 */
-	public static boolean isPropertyInitialized(Object proxy, String propertyName) {
+	public static boolean isPropertyInitialized(Object proxy, String attributeName) {
 		final Object entity;
 		final LazyInitializer lazyInitializer = extractLazyInitializer( proxy );
 		if ( lazyInitializer != null ) {
@@ -300,13 +339,39 @@ public final class Hibernate {
 		}
 
 		if ( isPersistentAttributeInterceptable( entity ) ) {
-			PersistentAttributeInterceptor interceptor = asPersistentAttributeInterceptable( entity ).$$_hibernate_getInterceptor();
+			PersistentAttributeInterceptor interceptor =
+					asPersistentAttributeInterceptable( entity ).$$_hibernate_getInterceptor();
 			if ( interceptor instanceof BytecodeLazyAttributeInterceptor ) {
-				return ( (BytecodeLazyAttributeInterceptor) interceptor ).isAttributeLoaded( propertyName );
+				return ( (BytecodeLazyAttributeInterceptor) interceptor ).isAttributeLoaded( attributeName );
 			}
 		}
 
 		return true;
+	}
+
+	/**
+	 * Initializes the property with the given name of the given entity instance.
+	 * <p>
+	 * This operation is equivalent to {@link jakarta.persistence.PersistenceUnitUtil#load(Object, String)}.
+	 *
+	 * @param proxy The entity instance or proxy
+	 * @param attributeName the name of a persistent attribute of the object
+	 */
+	public static void initializeProperty(Object proxy, String attributeName) {
+		final Object entity;
+		final LazyInitializer lazyInitializer = extractLazyInitializer( proxy );
+		if ( lazyInitializer != null ) {
+			entity = lazyInitializer.getImplementation();
+		}
+		else {
+			entity = proxy;
+		}
+
+		if ( isPersistentAttributeInterceptable( entity ) ) {
+			PersistentAttributeInterceptor interceptor =
+					asPersistentAttributeInterceptable( entity ).$$_hibernate_getInterceptor();
+			interceptor.readObject( entity, attributeName, null );
+		}
 	}
 
     /**

@@ -59,9 +59,9 @@ import org.hibernate.metamodel.spi.MetamodelImplementor;
 import org.hibernate.metamodel.spi.RuntimeModelCreationContext;
 import org.hibernate.persister.collection.CollectionPersister;
 import org.hibernate.persister.entity.EntityPersister;
-import org.hibernate.persister.entity.Queryable;
 import org.hibernate.persister.spi.PersisterFactory;
 import org.hibernate.query.BindableType;
+import org.hibernate.query.derived.AnonymousTupleSqmPathSource;
 import org.hibernate.query.sqm.SqmExpressible;
 import org.hibernate.query.sqm.tree.domain.SqmPath;
 import org.hibernate.query.sqm.tree.expression.SqmFieldLiteral;
@@ -71,11 +71,13 @@ import org.hibernate.sql.ast.tree.from.TableGroup;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.ComponentType;
 import org.hibernate.type.Type;
+import org.hibernate.type.descriptor.java.EnumJavaType;
 import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.descriptor.java.spi.JavaTypeRegistry;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.spi.TypeConfiguration;
 
+import jakarta.persistence.EntityGraph;
 import jakarta.persistence.metamodel.EmbeddableType;
 import jakarta.persistence.metamodel.EntityType;
 import jakarta.persistence.metamodel.ManagedType;
@@ -158,16 +160,11 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 //	private final Map<Class<?>, EmbeddableDomainType<?>> jpaEmbeddableTypeMap = new ConcurrentHashMap<>();
 	// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	private final ServiceRegistry serviceRegistry;
-	private final TypeConfiguration typeConfiguration;
-
 	private final Map<String, String[]> implementorsCache = new ConcurrentHashMap<>();
 	private final Map<TupleType<?>, MappingModelExpressible<?>> tupleTypeCache = new ConcurrentHashMap<>();
 
 	public MappingMetamodelImpl(TypeConfiguration typeConfiguration, ServiceRegistry serviceRegistry) {
-		this.serviceRegistry = serviceRegistry;
-		this.typeConfiguration = typeConfiguration;
-		this.jpaMetamodel = new JpaMetamodelImpl( typeConfiguration, this, serviceRegistry );
+		jpaMetamodel = new JpaMetamodelImpl( typeConfiguration, this, serviceRegistry );
 	}
 
 	public JpaMetamodelImplementor getJpaMetamodel() {
@@ -180,7 +177,8 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 		bootModel.getMappedSuperclassMappingsCopy().forEach( MappedSuperclass::prepareForMappingModel );
 		bootModel.getEntityBindings().forEach( persistentClass -> persistentClass.prepareForMappingModel( context ) );
 
-		final PersisterFactory persisterFactory = serviceRegistry.getService( PersisterFactory.class );
+		final PersisterFactory persisterFactory =
+				jpaMetamodel.getServiceRegistry().requireService( PersisterFactory.class );
 		final CacheImplementor cache = context.getCache();
 		processBootEntities(
 				bootModel.getEntityBindings(),
@@ -203,6 +201,10 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 		for ( EntityPersister persister : entityPersisterMap.values() ) {
 			persister.postInstantiate();
 			registerEntityNameResolvers( persister, entityNameResolvers );
+		}
+
+		for ( EntityPersister persister : entityPersisterMap.values() ) {
+			persister.prepareLoaders();
 		}
 
 		collectionPersisterMap.values().forEach( CollectionPersister::postInstantiate );
@@ -313,9 +315,9 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 					modelCreationContext
 			);
 			collectionPersisterMap.put( model.getRole(), persister );
-			Type indexType = persister.getIndexType();
-			if ( indexType != null && indexType.isEntityType() && !indexType.isAnyType() ) {
-				String entityName = ( (org.hibernate.type.EntityType) indexType ).getAssociatedEntityName();
+			final Type indexType = persister.getIndexType();
+			if ( indexType instanceof org.hibernate.type.EntityType ) {
+				final String entityName = ( (org.hibernate.type.EntityType) indexType ).getAssociatedEntityName();
 				Set<String> roles = collectionRolesByEntityParticipant.get( entityName );
 				//noinspection Java8MapApi
 				if ( roles == null ) {
@@ -324,9 +326,9 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 				}
 				roles.add( persister.getRole() );
 			}
-			Type elementType = persister.getElementType();
-			if ( elementType.isEntityType() && !elementType.isAnyType() ) {
-				String entityName = ( (org.hibernate.type.EntityType) elementType ).getAssociatedEntityName();
+			final Type elementType = persister.getElementType();
+			if ( elementType instanceof org.hibernate.type.EntityType ) {
+				final String entityName = ( (org.hibernate.type.EntityType) elementType ).getAssociatedEntityName();
 				Set<String> roles = collectionRolesByEntityParticipant.get( entityName );
 				//noinspection Java8MapApi
 				if ( roles == null ) {
@@ -360,7 +362,7 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 
 	@Override
 	public TypeConfiguration getTypeConfiguration() {
-		return typeConfiguration;
+		return jpaMetamodel.getTypeConfiguration();
 	}
 
 	@Override
@@ -370,7 +372,7 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 
 	@Override
 	public ServiceRegistry getServiceRegistry() {
-		return serviceRegistry;
+		return jpaMetamodel.getServiceRegistry();
 	}
 
 	@Override
@@ -488,8 +490,18 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 	}
 
 	@Override
-	public <X> EntityDomainType<X> entity(String entityName) {
+	public <X> ManagedDomainType<X> managedType(String typeName) {
+		return jpaMetamodel.managedType( typeName );
+	}
+
+	@Override
+	public EntityDomainType<?> entity(String entityName) {
 		return jpaMetamodel.entity( entityName );
+	}
+
+	@Override
+	public EmbeddableDomainType<?> embeddable(String embeddableName) {
+		return jpaMetamodel.embeddable( embeddableName );
 	}
 
 	@Override
@@ -518,8 +530,28 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 	}
 
 	@Override
-	public Map<String, Map<Class<?>, Enum<?>>> getAllowedEnumLiteralTexts() {
-		return jpaMetamodel.getAllowedEnumLiteralTexts();
+	public Set<String> getEnumTypesForValue(String enumValue) {
+		return jpaMetamodel.getEnumTypesForValue(enumValue);
+	}
+
+	@Override
+	public JavaType<?> getJavaConstantType(String className, String fieldName) {
+		return jpaMetamodel.getJavaConstantType( className, fieldName );
+	}
+
+	@Override
+	public <T> T getJavaConstant(String className, String fieldName) {
+		return jpaMetamodel.getJavaConstant( className, fieldName );
+	}
+
+	@Override
+	public EnumJavaType<?> getEnumType(String className) {
+		return jpaMetamodel.getEnumType(className);
+	}
+
+	@Override
+	public <E extends Enum<E>> E enumValue(EnumJavaType<E> enumType, String enumValueName) {
+		return jpaMetamodel.enumValue( enumType, enumValueName );
 	}
 
 	@Override
@@ -532,7 +564,9 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 		}
 
 		try {
-			final Class<?> clazz = serviceRegistry.getService( ClassLoaderService.class ).classForName( className );
+			final Class<?> clazz =
+					jpaMetamodel.getServiceRegistry().requireService( ClassLoaderService.class )
+							.classForName( className );
 			implementors = doGetImplementors( clazz );
 			if ( implementors.length > 0 ) {
 				implementorsCache.putIfAbsent( className, implementors );
@@ -655,6 +689,11 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 	}
 
 	@Override
+	public <T> Map<String, EntityGraph<? extends T>> getNamedEntityGraphs(Class<T> entityType) {
+		return jpaMetamodel.getNamedEntityGraphs( entityType );
+	}
+
+	@Override
 	public <T> List<RootGraphImplementor<? super T>> findEntityGraphsByJavaType(Class<T> entityClass) {
 		return jpaMetamodel.findEntityGraphsByJavaType( entityClass );
 	}
@@ -715,36 +754,27 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 	}
 
 	private String[] doGetImplementors(Class<?> clazz) throws MappingException {
-		ArrayList<String> results = new ArrayList<>();
+		final ArrayList<String> results = new ArrayList<>();
 		for ( EntityPersister checkPersister : entityPersisters().values() ) {
-			if ( checkPersister instanceof Queryable ) {
-				final String checkQueryableEntityName = ((EntityMappingType) checkPersister).getEntityName();
-				final boolean isMappedClass = clazz.getName().equals( checkQueryableEntityName );
-				if ( checkPersister.isExplicitPolymorphism() ) {
-					if ( isMappedClass ) {
-						return new String[] { clazz.getName() }; // NOTE EARLY EXIT
-					}
-				}
-				else {
-					if ( isMappedClass ) {
-						results.add( checkQueryableEntityName );
+			final String checkQueryableEntityName = ((EntityMappingType) checkPersister).getEntityName();
+			final boolean isMappedClass = clazz.getName().equals( checkQueryableEntityName );
+			if ( isMappedClass ) {
+				results.add( checkQueryableEntityName );
+			}
+			else {
+				final Class<?> mappedClass = checkPersister.getMappedClass();
+				if ( mappedClass != null && clazz.isAssignableFrom( mappedClass ) ) {
+					final boolean assignableSuperclass;
+					if ( checkPersister.isInherited() ) {
+						final String superTypeName = checkPersister.getSuperMappingType().getEntityName();
+						final Class<?> mappedSuperclass = getEntityDescriptor( superTypeName ).getMappedClass();
+						assignableSuperclass = clazz.isAssignableFrom( mappedSuperclass );
 					}
 					else {
-						final Class<?> mappedClass = checkPersister.getMappedClass();
-						if ( mappedClass != null && clazz.isAssignableFrom( mappedClass ) ) {
-							final boolean assignableSuperclass;
-							if ( checkPersister.isInherited() ) {
-								final String superTypeName = checkPersister.getSuperMappingType().getEntityName();
-								Class<?> mappedSuperclass = getEntityDescriptor( superTypeName ).getMappedClass();
-								assignableSuperclass = clazz.isAssignableFrom( mappedSuperclass );
-							}
-							else {
-								assignableSuperclass = false;
-							}
-							if ( !assignableSuperclass ) {
-								results.add( checkQueryableEntityName );
-							}
-						}
+						assignableSuperclass = false;
+					}
+					if ( !assignableSuperclass ) {
+						results.add( checkQueryableEntityName );
 					}
 				}
 			}
@@ -756,8 +786,7 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 	@Override
 	public MappingModelExpressible<?> resolveMappingExpressible(
 			SqmExpressible<?> sqmExpressible,
-			Function<NavigablePath,
-					TableGroup> tableGroupLocator) {
+			Function<NavigablePath, TableGroup> tableGroupLocator) {
 		if ( sqmExpressible instanceof SqmPath ) {
 			final SqmPath<?> sqmPath = (SqmPath<?>) sqmExpressible;
 			final NavigablePath navigablePath = sqmPath.getNavigablePath();
@@ -772,13 +801,12 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 			return (BasicType<?>) sqmExpressible;
 		}
 
-		if ( sqmExpressible instanceof BasicDomainType ) {
-			final BasicDomainType<?> domainType = (BasicDomainType<?>) sqmExpressible;
-			return getTypeConfiguration().getBasicTypeForJavaType( domainType.getExpressibleJavaType().getJavaTypeClass() );
+		if ( sqmExpressible instanceof BasicDomainType<?> ) {
+			return getTypeConfiguration().getBasicTypeForJavaType( sqmExpressible.getRelationalJavaType().getJavaType() );
 		}
 
 		if ( sqmExpressible instanceof BasicSqmPathSource<?> ) {
-			return getTypeConfiguration().getBasicTypeForJavaType(((BasicSqmPathSource<?>) sqmExpressible).getJavaType());
+			return resolveMappingExpressible( sqmExpressible.getSqmType(), tableGroupLocator );
 		}
 
 		if ( sqmExpressible instanceof SqmFieldLiteral ) {
@@ -787,6 +815,13 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 
 		if ( sqmExpressible instanceof CompositeSqmPathSource ) {
 			throw new UnsupportedOperationException( "Resolution of embedded-valued SqmExpressible nodes not yet implemented" );
+		}
+
+		if ( sqmExpressible instanceof AnonymousTupleSqmPathSource<?> ) {
+			return resolveMappingExpressible(
+					( (AnonymousTupleSqmPathSource<?>) sqmExpressible ).getSqmPathType(),
+					tableGroupLocator
+			);
 		}
 
 		if ( sqmExpressible instanceof EmbeddableTypeImpl ) {
@@ -835,23 +870,19 @@ public class MappingMetamodelImpl extends QueryParameterBindingTypeResolverImpl
 		final JavaTypeRegistry javaTypeRegistry = getTypeConfiguration().getJavaTypeRegistry();
 		final JavaType<T> javaType = javaTypeRegistry.findDescriptor( javaClass );
 		if ( javaType != null ) {
-			final JdbcType recommendedJdbcType = javaType.getRecommendedJdbcType( getTypeConfiguration().getCurrentBaseSqlTypeIndicators() );
+			final JdbcType recommendedJdbcType =
+					javaType.getRecommendedJdbcType( getTypeConfiguration().getCurrentBaseSqlTypeIndicators() );
 			if ( recommendedJdbcType != null ) {
-				return getTypeConfiguration().getBasicTypeRegistry().resolve(
-						javaType,
-						recommendedJdbcType
-				);
+				return getTypeConfiguration().getBasicTypeRegistry().resolve( javaType, recommendedJdbcType );
 			}
 		}
 
 		if ( javaClass.isArray() && javaTypeRegistry.findDescriptor( javaClass.getComponentType() ) != null ) {
 			final JavaType<T> resolvedJavaType = javaTypeRegistry.resolveDescriptor( javaClass );
-			final JdbcType recommendedJdbcType = resolvedJavaType.getRecommendedJdbcType( getTypeConfiguration().getCurrentBaseSqlTypeIndicators() );
+			final JdbcType recommendedJdbcType =
+					resolvedJavaType.getRecommendedJdbcType( getTypeConfiguration().getCurrentBaseSqlTypeIndicators() );
 			if ( recommendedJdbcType != null ) {
-				return getTypeConfiguration().getBasicTypeRegistry().resolve(
-						resolvedJavaType,
-						recommendedJdbcType
-				);
+				return getTypeConfiguration().getBasicTypeRegistry().resolve( resolvedJavaType, recommendedJdbcType );
 			}
 		}
 

@@ -6,7 +6,7 @@
  */
 package org.hibernate.engine.spi;
 
-import java.io.Serializable;
+import java.util.Collection;
 
 import org.hibernate.CustomEntityDirtinessStrategy;
 import org.hibernate.HibernateException;
@@ -36,6 +36,7 @@ import org.hibernate.sql.ast.spi.SqlAstCreationContext;
 import org.hibernate.stat.spi.StatisticsImplementor;
 import org.hibernate.generator.Generator;
 import org.hibernate.type.descriptor.WrapperOptions;
+import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.spi.TypeConfiguration;
 
 /**
@@ -143,7 +144,14 @@ public interface SessionFactoryImplementor
 	CustomEntityDirtinessStrategy getCustomEntityDirtinessStrategy();
 
 	//todo make a Service ?
-	CurrentTenantIdentifierResolver getCurrentTenantIdentifierResolver();
+	CurrentTenantIdentifierResolver<Object> getCurrentTenantIdentifierResolver();
+
+	/**
+	 * The java type to use for a tenant identifier.
+	 *
+	 * @since 6.4
+	 */
+	JavaType<Object> getTenantIdentifierJavaType();
 
 	/**
 	 * @return the FastSessionServices instance associated with this SessionFactory
@@ -155,6 +163,8 @@ public interface SessionFactoryImplementor
 	SessionFactoryOptions getSessionFactoryOptions();
 
 	FilterDefinition getFilterDefinition(String filterName);
+
+	Collection<FilterDefinition> getAutoEnabledFilters();
 
 
 
@@ -192,22 +202,6 @@ public interface SessionFactoryImplementor
 	IdentifierGenerator getIdentifierGenerator(String rootEntityName);
 
 	/**
-	 * Contract for resolving this SessionFactory on deserialization
-	 *
-	 * @deprecated this is no longer used
-	 */
-	@Deprecated(since = "6.2", forRemoval = true)
-	interface DeserializationResolver<T extends SessionFactoryImplementor> extends Serializable {
-		T resolve();
-	}
-
-	/**
-	 * @deprecated this is never called
-	 */
-	@Deprecated(since = "6.2", forRemoval = true)
-	DeserializationResolver<?> getDeserializationResolver();
-
-	/**
 	 * @deprecated no longer for internal use, use {@link #getMappingMetamodel()} or {@link #getJpaMetamodel()}
 	 */
 	@Override @Deprecated
@@ -217,7 +211,7 @@ public interface SessionFactoryImplementor
 	 * @deprecated Use {@link #getMappingMetamodel()}.{@link MappingMetamodelImplementor#resolveParameterBindType(Object)}
 	 */
 	@Override @Deprecated(since = "6.2", forRemoval = true)
-	<T> BindableType<? extends T> resolveParameterBindType(T bindValue);
+	<T> BindableType<? super T> resolveParameterBindType(T bindValue);
 
 	/**
 	 * @deprecated Use {@link #getMappingMetamodel()}.{@link MappingMetamodelImplementor#resolveParameterBindType(Class)}

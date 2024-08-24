@@ -6,43 +6,37 @@
  */
 package org.hibernate.metamodel.model.domain.internal;
 
-import java.util.List;
-
-import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.mapping.Any;
 import org.hibernate.mapping.Column;
-import org.hibernate.metamodel.MappingMetamodel;
-import org.hibernate.metamodel.mapping.DiscriminatorConverter;
-import org.hibernate.metamodel.mapping.internal.AnyDiscriminatorPart;
+import org.hibernate.metamodel.mapping.DefaultDiscriminatorConverter;
+import org.hibernate.metamodel.mapping.MappedDiscriminatorConverter;
 import org.hibernate.metamodel.model.domain.AnyMappingDomainType;
 import org.hibernate.metamodel.model.domain.NavigableRole;
 import org.hibernate.metamodel.model.domain.SimpleDomainType;
+import org.hibernate.metamodel.spi.MappingMetamodelImplementor;
 import org.hibernate.type.AnyType;
 import org.hibernate.type.BasicType;
 import org.hibernate.type.MetaType;
-import org.hibernate.type.descriptor.converter.spi.BasicValueConverter;
 import org.hibernate.type.descriptor.java.ClassJavaType;
 import org.hibernate.type.descriptor.java.JavaType;
-import org.hibernate.type.descriptor.java.ObjectJavaType;
 import org.hibernate.type.internal.ConvertedBasicTypeImpl;
-import org.hibernate.type.spi.TypeConfiguration;
+
+import java.util.List;
 
 /**
  * @author Steve Ebersole
  */
-public class AnyMappingDomainTypeImpl implements AnyMappingDomainType<Class> {
+public class AnyMappingDomainTypeImpl<T> implements AnyMappingDomainType<T> {
 	private final AnyType anyType;
-	private final JavaType<Class> baseJtd;
-	private final BasicType<Class> anyDiscriminatorType;
+	private final JavaType<T> baseJtd;
+	private final BasicType<Class<?>> anyDiscriminatorType;
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public AnyMappingDomainTypeImpl(
 			Any bootAnyMapping,
 			AnyType anyType,
-			JavaType<Class> baseJtd,
-			TypeConfiguration typeConfiguration,
-			MappingMetamodel mappingMetamodel,
-			SessionFactoryImplementor sessionFactory) {
+			JavaType<T> baseJtd,
+			MappingMetamodelImplementor mappingMetamodel) {
 		this.anyType = anyType;
 		this.baseJtd = baseJtd;
 
@@ -53,12 +47,19 @@ public class AnyMappingDomainTypeImpl implements AnyMappingDomainType<Class> {
 		anyDiscriminatorType = new ConvertedBasicTypeImpl<>(
 				navigableRole.getFullPath(),
 				discriminatorBaseType.getJdbcType(),
-				DiscriminatorConverter.fromValueMappings(
+				bootAnyMapping.getMetaValues().isEmpty()
+				? DefaultDiscriminatorConverter.fromMappingMetamodel(
 						navigableRole,
-						(JavaType) ClassJavaType.INSTANCE,
+						ClassJavaType.INSTANCE,
+						discriminatorBaseType,
+						mappingMetamodel
+				)
+				: MappedDiscriminatorConverter.fromValueMappings(
+						navigableRole,
+						ClassJavaType.INSTANCE,
 						discriminatorBaseType,
 						bootAnyMapping.getMetaValues(),
-						sessionFactory
+						mappingMetamodel
 				)
 		);
 	}
@@ -89,23 +90,22 @@ public class AnyMappingDomainTypeImpl implements AnyMappingDomainType<Class> {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
-	public Class<Class> getJavaType() {
-		return (Class<Class>) anyType.getReturnedClass();
+	public Class<T> getJavaType() {
+		return baseJtd.getJavaTypeClass();
 	}
 
 	@Override
-	public JavaType<Class> getExpressibleJavaType() {
+	public JavaType<T> getExpressibleJavaType() {
 		return baseJtd;
 	}
 
 	@Override
-	public BasicType<Class> getDiscriminatorType() {
+	public BasicType<Class<?>> getDiscriminatorType() {
 		return anyDiscriminatorType;
 	}
 
 	@Override
-	public SimpleDomainType getKeyType() {
+	public SimpleDomainType<?> getKeyType() {
 		return (BasicType<?>) anyType.getIdentifierType();
 	}
 

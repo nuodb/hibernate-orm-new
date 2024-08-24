@@ -8,14 +8,15 @@ dependencies {
 
     testImplementation project( ':hibernate-testing' )
 
-    testAnnotationProcessor project( ':hibernate-jpamodelgen' )
+    testAnnotationProcessor project( ':hibernate-processor' )
+    testCompileOnly jakartaLibs.annotation
 }
 
 sourceSets {
     // resources inherently exclude sources
     test {
         resources {
-            setSrcDirs( ['src/test/java','src/test/resources'] )
+            setSrcDirs( ['src/test/resources'] )
         }
     }
 }

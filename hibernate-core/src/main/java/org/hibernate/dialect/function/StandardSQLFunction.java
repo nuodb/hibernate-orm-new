@@ -13,10 +13,13 @@ import org.hibernate.metamodel.mapping.BasicValuedMapping;
 import org.hibernate.query.ReturnableType;
 import org.hibernate.query.sqm.function.NamedSqmFunctionDescriptor;
 import org.hibernate.query.sqm.produce.function.FunctionReturnTypeResolver;
+import org.hibernate.query.sqm.sql.SqmToSqlAstConverter;
 import org.hibernate.query.sqm.tree.SqmTypedNode;
 import org.hibernate.sql.ast.tree.SqlAstNode;
 import org.hibernate.type.BasicTypeReference;
 import org.hibernate.type.spi.TypeConfiguration;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Simplified API allowing users to contribute
@@ -41,6 +44,7 @@ public class StandardSQLFunction extends NamedSqmFunctionDescriptor {
 			@Override
 			public ReturnableType<?> resolveFunctionReturnType(
 					ReturnableType<?> impliedType,
+					@Nullable SqmToSqlAstConverter converter,
 					List<? extends SqmTypedNode<?>> arguments,
 					TypeConfiguration typeConfiguration) {
 				return type == null ? null : typeConfiguration.getBasicTypeRegistry().resolve( type );

@@ -9,22 +9,20 @@ package org.hibernate.boot.spi;
 import java.util.List;
 
 import org.hibernate.TimeZoneStorageStrategy;
-import org.hibernate.boot.model.IdGeneratorStrategyInterpreter;
 import org.hibernate.boot.model.naming.ImplicitNamingStrategy;
 import org.hibernate.boot.model.naming.PhysicalNamingStrategy;
 import org.hibernate.boot.model.relational.ColumnOrderingStrategy;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.cache.spi.access.AccessType;
-import org.hibernate.cfg.MetadataSourceType;
 import org.hibernate.collection.internal.StandardCollectionSemanticsResolver;
 import org.hibernate.collection.spi.CollectionSemanticsResolver;
 import org.hibernate.dialect.TimeZoneSupport;
 import org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider;
-import org.hibernate.id.factory.IdentifierGeneratorFactory;
 import org.hibernate.metamodel.internal.ManagedTypeRepresentationResolverStandard;
 import org.hibernate.metamodel.spi.ManagedTypeRepresentationResolver;
 import org.hibernate.type.WrapperArrayHandling;
 import org.hibernate.type.spi.TypeConfiguration;
+import org.hibernate.usertype.CompositeUserType;
 
 import jakarta.persistence.SharedCacheMode;
 
@@ -46,13 +44,6 @@ public interface MetadataBuildingOptions {
 	 * Access to the {@link MappingDefaults}.
 	 */
 	MappingDefaults getMappingDefaults();
-
-	/**
-	 * The service implementing {@link IdentifierGeneratorFactory}.
-	 * <p>
-	 * @implNote Almost always a {@link org.hibernate.id.factory.internal.StandardIdentifierGeneratorFactory}.
-	 */
-	IdentifierGeneratorFactory getIdentifierGeneratorFactory();
 
 	/**
 	 * @return the {@link TimeZoneStorageStrategy} determined by the global configuration
@@ -78,6 +69,10 @@ public interface MetadataBuildingOptions {
 	 */
 	WrapperArrayHandling getWrapperArrayHandling();
 
+	/**
+	 * @deprecated no longer called
+	 */
+	@Deprecated(since="7.0", forRemoval = true)
 	default ManagedTypeRepresentationResolver getManagedTypeRepresentationResolver() {
 		// for now always return the standard one
 		return ManagedTypeRepresentationResolverStandard.INSTANCE;
@@ -101,6 +96,11 @@ public interface MetadataBuildingOptions {
 	 * @return The {@code BasicTypes} registrations
 	 */
 	List<BasicTypeRegistration> getBasicTypeRegistrations();
+
+	/**
+	 * Access the list of {@link CompositeUserType} registrations.
+	 */
+	List<CompositeUserType<?>> getCompositeUserTypes();
 
 	/**
 	 * @see org.hibernate.cfg.AvailableSettings#IMPLICIT_NAMING_STRATEGY
@@ -145,12 +145,6 @@ public interface MetadataBuildingOptions {
 	 * @see org.hibernate.cfg.AvailableSettings#MULTI_TENANT_CONNECTION_PROVIDER
 	 */
 	boolean isMultiTenancyEnabled();
-
-	/**
-	 * @deprecated since {@link IdGeneratorStrategyInterpreter} is deprecated
-	 */
-	@Deprecated(since = "6")
-	IdGeneratorStrategyInterpreter getIdGenerationTypeInterpreter();
 
 	/**
 	 * @return the {@link TypeConfiguration} belonging to the {@link BootstrapContext}
@@ -218,15 +212,6 @@ public interface MetadataBuildingOptions {
 	boolean isNoConstraintByDefault();
 
 	/**
-	 * Retrieve the ordering in which {@linkplain MetadataSourceType sources} should be processed.
-	 *
-	 * @return The order in which sources should be processed.
-	 *
-	 * @see org.hibernate.cfg.AvailableSettings#ARTIFACT_PROCESSING_ORDER
-	 */
-	List<MetadataSourceType> getSourceProcessOrdering();
-
-	/**
 	 * @see org.hibernate.cfg.AvailableSettings#HBM2DDL_CHARSET_NAME
 	 */
 	default String getSchemaCharset() {
@@ -243,5 +228,5 @@ public interface MetadataBuildingOptions {
 	/**
 	 * Check to see if extensions can be hosted in CDI
 	 */
-	boolean disallowExtensionsInCdi();
+	boolean isAllowExtensionsInCdi();
 }

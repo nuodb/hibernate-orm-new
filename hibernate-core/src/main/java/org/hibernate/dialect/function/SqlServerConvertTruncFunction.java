@@ -20,7 +20,8 @@ import org.hibernate.sql.ast.tree.SqlAstNode;
 import org.hibernate.type.spi.TypeConfiguration;
 
 /**
- * Custom {@link TruncFunction} for SQL Server versions < 16 which uses the custom {@link DateTruncConvertEmulation}
+ * Custom {@link TruncFunction} for SQL Server versions before 16,
+ * which uses the custom {@link DateTruncConvertEmulation}
  *
  * @author Marco Belladelli
  */
@@ -42,16 +43,14 @@ public class SqlServerConvertTruncFunction extends TruncFunction {
 	protected <T> SelfRenderingSqmFunction<T> generateSqmFunctionExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		final List<SqmTypedNode<?>> args = new ArrayList<>( arguments );
 		if ( arguments.size() == 2 && arguments.get( 1 ) instanceof SqmExtractUnit ) {
 			// datetime truncation
 			return dateTruncEmulation.generateSqmExpression(
 					arguments,
 					impliedResultType,
-					queryEngine,
-					typeConfiguration
+					queryEngine
 			);
 		}
 		// numeric truncation
@@ -81,6 +80,7 @@ public class SqlServerConvertTruncFunction extends TruncFunction {
 		public void render(
 				SqlAppender sqlAppender,
 				List<? extends SqlAstNode> sqlAstArguments,
+				ReturnableType<?> returnType,
 				SqlAstTranslator<?> walker) {
 			sqlAppender.appendSql( toDateFunction );
 			sqlAppender.append( '(' );

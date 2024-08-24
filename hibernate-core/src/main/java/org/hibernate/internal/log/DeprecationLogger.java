@@ -6,6 +6,8 @@
  */
 package org.hibernate.internal.log;
 
+import java.lang.annotation.Annotation;
+
 import org.hibernate.boot.jaxb.SourceType;
 import org.hibernate.cfg.AvailableSettings;
 
@@ -15,6 +17,8 @@ import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.ValidIdRange;
+
+import jakarta.persistence.Temporal;
 
 import static org.jboss.logging.Logger.Level.WARN;
 
@@ -283,4 +287,24 @@ public interface DeprecationLogger extends BasicLogger {
 	)
 	void deprecatedSettingNoReplacement(String settingName);
 
+	@LogMessage(level = WARN)
+	@Message(
+			id = 90000031,
+			value = "The native query colon escaping used for the [%s] operator is deprecated and will be removed. Use [%s] instead."
+	)
+	void deprecatedNativeQueryColonEscaping(String oldOperator, String newOperator);
+
+	@LogMessage(level = WARN)
+	@Message(
+			id = 90000032,
+			value = "The support for passing arrays to array_contains() is deprecated and will be removed. Use array_includes() instead."
+	)
+	void deprecatedArrayContainsWithArray();
+
+	@LogMessage(level = WARN)
+	@Message(
+			id = 90000033,
+			value = "Encountered use of deprecated annotation [%s] at %s."
+	)
+	void deprecatedAnnotation(Class<? extends Annotation> annotationType, String locationDescription);
 }

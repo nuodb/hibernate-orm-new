@@ -10,17 +10,16 @@ import java.util.List;
 
 import org.hibernate.HibernateException;
 import org.hibernate.TimeZoneStorageStrategy;
-import org.hibernate.boot.model.IdGeneratorStrategyInterpreter;
 import org.hibernate.boot.model.naming.ImplicitNamingStrategy;
 import org.hibernate.boot.model.naming.PhysicalNamingStrategy;
 import org.hibernate.boot.model.relational.ColumnOrderingStrategy;
+import org.hibernate.boot.models.xml.spi.PersistenceUnitMetadata;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.cache.spi.access.AccessType;
-import org.hibernate.cfg.MetadataSourceType;
 import org.hibernate.dialect.TimeZoneSupport;
-import org.hibernate.id.factory.IdentifierGeneratorFactory;
 import org.hibernate.type.WrapperArrayHandling;
 import org.hibernate.type.spi.TypeConfiguration;
+import org.hibernate.usertype.CompositeUserType;
 
 import jakarta.persistence.SharedCacheMode;
 
@@ -54,11 +53,6 @@ public abstract class AbstractDelegatingMetadataBuildingOptions implements Metad
 	}
 
 	@Override
-	public IdentifierGeneratorFactory getIdentifierGeneratorFactory() {
-		return delegate.getIdentifierGeneratorFactory();
-	}
-
-	@Override
 	public TimeZoneStorageStrategy getDefaultTimeZoneStorage() {
 		return delegate.getDefaultTimeZoneStorage();
 	}
@@ -76,6 +70,11 @@ public abstract class AbstractDelegatingMetadataBuildingOptions implements Metad
 	@Override
 	public List<BasicTypeRegistration> getBasicTypeRegistrations() {
 		return delegate.getBasicTypeRegistrations();
+	}
+
+	@Override
+	public List<CompositeUserType<?>> getCompositeUserTypes() {
+		return delegate.getCompositeUserTypes();
 	}
 
 	@Override
@@ -114,11 +113,6 @@ public abstract class AbstractDelegatingMetadataBuildingOptions implements Metad
 	}
 
 	@Override
-	public IdGeneratorStrategyInterpreter getIdGenerationTypeInterpreter() {
-		return delegate.getIdGenerationTypeInterpreter();
-	}
-
-	@Override
 	public boolean ignoreExplicitDiscriminatorsForJoinedInheritance() {
 		return delegate.ignoreExplicitDiscriminatorsForJoinedInheritance();
 	}
@@ -149,14 +143,23 @@ public abstract class AbstractDelegatingMetadataBuildingOptions implements Metad
 	}
 
 	@Override
-	public List<MetadataSourceType> getSourceProcessOrdering() {
-		return delegate.getSourceProcessOrdering();
-	}
-
-	@Override
 	public void apply(JpaOrmXmlPersistenceUnitDefaults jpaOrmXmlPersistenceUnitDefaults) {
 		if ( delegate instanceof JpaOrmXmlPersistenceUnitDefaultAware ) {
 			( (JpaOrmXmlPersistenceUnitDefaultAware) delegate ).apply( jpaOrmXmlPersistenceUnitDefaults );
+		}
+		else {
+			throw new HibernateException(
+					"AbstractDelegatingMetadataBuildingOptions delegate did not " +
+							"implement JpaOrmXmlPersistenceUnitDefaultAware; " +
+							"cannot delegate JpaOrmXmlPersistenceUnitDefaultAware#apply"
+			);
+		}
+	}
+
+	@Override
+	public void apply(PersistenceUnitMetadata persistenceUnitMetadata) {
+		if ( delegate instanceof JpaOrmXmlPersistenceUnitDefaultAware ) {
+			( (JpaOrmXmlPersistenceUnitDefaultAware) delegate ).apply( persistenceUnitMetadata );
 		}
 		else {
 			throw new HibernateException(
@@ -178,7 +181,7 @@ public abstract class AbstractDelegatingMetadataBuildingOptions implements Metad
 	}
 
 	@Override
-	public boolean disallowExtensionsInCdi() {
-		return delegate.disallowExtensionsInCdi();
+	public boolean isAllowExtensionsInCdi() {
+		return delegate.isAllowExtensionsInCdi();
 	}
 }

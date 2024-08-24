@@ -33,7 +33,7 @@ public class CacheAnnotationTests extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration configuration) {
 		super.configure( configuration );
-		configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, "true" );
+		configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, true );
 	}
 
 	@Override
@@ -46,7 +46,7 @@ public class CacheAnnotationTests extends BaseCoreFunctionalTestCase {
 	public void testCacheWriteConcurrencyStrategyNone() {
 		doInHibernate( this::sessionFactory, session -> {
 			NoCacheConcurrencyStrategyEntity entity = new NoCacheConcurrencyStrategyEntity();
-			session.save( entity );
+			session.persist( entity );
 			session.flush();
 			session.clear();
 		} );
@@ -58,7 +58,7 @@ public class CacheAnnotationTests extends BaseCoreFunctionalTestCase {
 		doInHibernate( this::sessionFactory, session -> {
 			NoCacheConcurrencyStrategyEntity entity = new NoCacheConcurrencyStrategyEntity();
 			entity.setName( "name" );
-			session.save( entity );
+			session.persist( entity );
 			session.flush();
 
 			this.entityId = entity.getId();

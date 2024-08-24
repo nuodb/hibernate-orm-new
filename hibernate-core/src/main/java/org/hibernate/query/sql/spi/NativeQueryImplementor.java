@@ -61,7 +61,7 @@ public interface NativeQueryImplementor<R> extends QueryImplementor<R>, NativeQu
 	}
 
 	@Override
-	NamedNativeQueryMemento toMemento(String name);
+	NamedNativeQueryMemento<?> toMemento(String name);
 
 	@Override
 	NativeQueryImplementor<R> addScalar(String columnAlias);
@@ -111,6 +111,8 @@ public interface NativeQueryImplementor<R> extends QueryImplementor<R>, NativeQu
 
 	@Override
 	NativeQueryImplementor<R> addEntity(@SuppressWarnings("rawtypes") Class entityType);
+
+	NativeQueryImplementor<R> addEntity(Class<R> entityType, LockMode lockMode);
 
 	@Override
 	NativeQueryImplementor<R> addEntity(String tableAlias, @SuppressWarnings("rawtypes") Class entityType);

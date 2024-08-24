@@ -6,18 +6,19 @@
  */
 package org.hibernate.orm.test.bytecode.enhancement.lazy;
 
-import org.hibernate.annotations.LazyToOne;
-import org.hibernate.annotations.LazyToOneOption;
-import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.metamodel.CollectionClassification;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.hibernate.testing.bytecode.enhancement.BytecodeEnhancerRunner;
-import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.hibernate.cfg.AvailableSettings;
+
+import org.hibernate.testing.bytecode.enhancement.extension.BytecodeEnhanced;
+import org.hibernate.testing.orm.junit.DomainModel;
+import org.hibernate.testing.orm.junit.ServiceRegistry;
+import org.hibernate.testing.orm.junit.SessionFactory;
+import org.hibernate.testing.orm.junit.SessionFactoryScope;
+import org.hibernate.testing.orm.junit.Setting;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
@@ -28,37 +29,35 @@ import jakarta.persistence.Id;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.hibernate.cfg.AvailableSettings.DEFAULT_LIST_SEMANTICS;
 import static org.hibernate.testing.bytecode.enhancement.EnhancerTestUtils.checkDirtyTracking;
-import static org.hibernate.testing.transaction.TransactionUtil.doInHibernate;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * @author Luis Barreiro
  */
-@RunWith( BytecodeEnhancerRunner.class )
-public class LazyLoadingIntegrationTest extends BaseCoreFunctionalTestCase {
+@DomainModel(
+        annotatedClasses = {
+                LazyLoadingIntegrationTest.Parent.class, LazyLoadingIntegrationTest.Child.class
+        }
+)
+@ServiceRegistry(
+        settings = {
+                @Setting( name = AvailableSettings.USE_SECOND_LEVEL_CACHE, value = "false" ),
+                @Setting( name = AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, value = "true" ),
+                @Setting( name = AvailableSettings.DEFAULT_LIST_SEMANTICS, value = "BAG" ),
+        }
+)
+@SessionFactory
+@BytecodeEnhanced
+public class LazyLoadingIntegrationTest {
 
     private static final int CHILDREN_SIZE = 10;
     private Long lastChildID;
 
-    @Override
-    public Class<?>[] getAnnotatedClasses() {
-        return new Class<?>[]{Parent.class, Child.class};
-    }
-
-    @Override
-    protected void configure(Configuration configuration) {
-        configuration.setProperty( AvailableSettings.USE_SECOND_LEVEL_CACHE, "false" );
-        configuration.setProperty( AvailableSettings.ENABLE_LAZY_LOAD_NO_TRANS, "true" );
-        configuration.setProperty( DEFAULT_LIST_SEMANTICS, CollectionClassification.BAG.name() );
-    }
-
-    @Before
-    public void prepare() {
-        doInHibernate( this::sessionFactory, s -> {
+    @BeforeEach
+    public void prepare(SessionFactoryScope scope) {
+        scope.inTransaction( s -> {
             Parent parent = new Parent();
             for ( int i = 0; i < CHILDREN_SIZE; i++ ) {
                 Child child = new Child();
@@ -72,8 +71,8 @@ public class LazyLoadingIntegrationTest extends BaseCoreFunctionalTestCase {
     }
 
     @Test
-    public void test() {
-        doInHibernate( this::sessionFactory, s -> {
+    public void test(SessionFactoryScope scope) {
+        scope.inTransaction( s -> {
             Child loadedChild = s.load( Child.class, lastChildID );
             checkDirtyTracking( loadedChild );
 
@@ -89,7 +88,7 @@ public class LazyLoadingIntegrationTest extends BaseCoreFunctionalTestCase {
             loadedChildren.remove( loadedChild );
             loadedParent.setChildren( loadedChildren );
 
-            Assert.assertNull( loadedChild.parent );
+            assertNull( loadedChild.parent );
         } );
     }
 
@@ -97,7 +96,7 @@ public class LazyLoadingIntegrationTest extends BaseCoreFunctionalTestCase {
 
     @Entity
     @Table( name = "PARENT" )
-    private static class Parent {
+    static class Parent {
 
         @Id
         @GeneratedValue( strategy = GenerationType.AUTO )
@@ -113,14 +112,13 @@ public class LazyLoadingIntegrationTest extends BaseCoreFunctionalTestCase {
 
     @Entity
     @Table( name = "CHILD" )
-    private static class Child {
+    static class Child {
 
         @Id
         @GeneratedValue( strategy = GenerationType.AUTO )
         Long id;
 
         @ManyToOne( cascade = CascadeType.ALL, fetch = FetchType.LAZY )
-        @LazyToOne( LazyToOneOption.NO_PROXY )
         Parent parent;
 
         String name;

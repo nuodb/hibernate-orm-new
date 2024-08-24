@@ -6,10 +6,14 @@
  */
 package org.hibernate.dialect;
 
+import java.util.List;
+
 import org.hibernate.MappingException;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.query.sqm.BinaryArithmeticOperator;
+import org.hibernate.internal.util.collections.Stack;
+import org.hibernate.query.IllegalQueryOperationException;
 import org.hibernate.query.sqm.ComparisonOperator;
+import org.hibernate.sql.ast.Clause;
 import org.hibernate.sql.ast.SqlAstNodeRenderingMode;
 import org.hibernate.sql.ast.spi.AbstractSqlAstTranslator;
 import org.hibernate.sql.ast.tree.Statement;
@@ -19,10 +23,16 @@ import org.hibernate.sql.ast.tree.expression.Expression;
 import org.hibernate.sql.ast.tree.expression.Literal;
 import org.hibernate.sql.ast.tree.expression.Summarization;
 import org.hibernate.sql.ast.tree.from.FunctionTableReference;
+import org.hibernate.sql.ast.tree.from.NamedTableReference;
 import org.hibernate.sql.ast.tree.from.QueryPartTableReference;
+import org.hibernate.sql.ast.tree.from.ValuesTableReference;
+import org.hibernate.sql.ast.tree.insert.ConflictClause;
+import org.hibernate.sql.ast.tree.insert.InsertSelectStatement;
+import org.hibernate.sql.ast.tree.insert.Values;
 import org.hibernate.sql.ast.tree.select.QueryGroup;
 import org.hibernate.sql.ast.tree.select.QueryPart;
 import org.hibernate.sql.ast.tree.select.QuerySpec;
+import org.hibernate.sql.ast.tree.update.UpdateStatement;
 import org.hibernate.sql.exec.spi.JdbcOperation;
 import org.hibernate.sql.model.internal.TableInsertStandard;
 
@@ -37,6 +47,101 @@ public class HANASqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 
 	public HANASqlAstTranslator(SessionFactoryImplementor sessionFactory, Statement statement) {
 		super( sessionFactory, statement );
+	}
+
+	@Override
+	public void visitBinaryArithmeticExpression(BinaryArithmeticExpression arithmeticExpression) {
+		if ( isIntegerDivisionEmulationRequired( arithmeticExpression ) ) {
+			appendSql( "cast(" );
+			visitArithmeticOperand( arithmeticExpression.getLeftHandOperand() );
+			appendSql( arithmeticExpression.getOperator().getOperatorSqlTextString() );
+			visitArithmeticOperand( arithmeticExpression.getRightHandOperand() );
+			appendSql( " as int)" );
+		}
+		else {
+			super.visitBinaryArithmeticExpression( arithmeticExpression );
+		}
+	}
+
+	@Override
+	protected void visitArithmeticOperand(Expression expression) {
+		render( expression, SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER );
+	}
+
+	private boolean isHanaCloud() {
+		return ( (HANADialect) getDialect() ).isCloud();
+	}
+
+	@Override
+	protected void visitInsertStatementOnly(InsertSelectStatement statement) {
+		if ( statement.getConflictClause() == null || statement.getConflictClause().isDoNothing() ) {
+			// Render plain insert statement and possibly run into unique constraint violation
+			super.visitInsertStatementOnly( statement );
+		}
+		else {
+			visitInsertStatementEmulateMerge( statement );
+		}
+	}
+
+	@Override
+	protected void visitUpdateStatementOnly(UpdateStatement statement) {
+		// HANA Cloud does not support the FROM clause in UPDATE statements
+		if ( isHanaCloud() && hasNonTrivialFromClause( statement.getFromClause() ) ) {
+			visitUpdateStatementEmulateMerge( statement );
+		}
+		else {
+			super.visitUpdateStatementOnly( statement );
+		}
+	}
+
+	@Override
+	protected void renderUpdateClause(UpdateStatement updateStatement) {
+		// HANA Cloud does not support the FROM clause in UPDATE statements
+		if ( isHanaCloud() ) {
+			super.renderUpdateClause( updateStatement );
+		}
+		else {
+			appendSql( "update" );
+			final Stack<Clause> clauseStack = getClauseStack();
+			try {
+				clauseStack.push( Clause.UPDATE );
+				renderTableReferenceIdentificationVariable( updateStatement.getTargetTable() );
+			}
+			finally {
+				clauseStack.pop();
+			}
+		}
+	}
+
+	@Override
+	protected void renderFromClauseAfterUpdateSet(UpdateStatement statement) {
+		// HANA Cloud does not support the FROM clause in UPDATE statements
+		if ( !isHanaCloud() ) {
+			if ( statement.getFromClause().getRoots().isEmpty() ) {
+				appendSql( " from " );
+				renderDmlTargetTableExpression( statement.getTargetTable() );
+			}
+			else {
+				visitFromClause( statement.getFromClause() );
+			}
+		}
+	}
+
+	@Override
+	protected void renderDmlTargetTableExpression(NamedTableReference tableReference) {
+		super.renderDmlTargetTableExpression( tableReference );
+		if ( getClauseStack().getCurrent() != Clause.INSERT ) {
+			renderTableReferenceIdentificationVariable( tableReference );
+		}
+	}
+
+	@Override
+	protected void visitConflictClause(ConflictClause conflictClause) {
+		if ( conflictClause != null ) {
+			if ( conflictClause.isDoUpdate() && conflictClause.getConstraintName() != null ) {
+				throw new IllegalQueryOperationException( "Insert conflict 'do update' clause with constraint name is not supported" );
+			}
+		}
 	}
 
 	protected boolean shouldEmulateFetchClause(QueryPart queryPart) {
@@ -111,7 +216,16 @@ public class HANASqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 
 	@Override
 	protected void renderComparison(Expression lhs, ComparisonOperator operator, Expression rhs) {
-		renderComparisonEmulateIntersect( lhs, operator, rhs );
+		if ( operator == ComparisonOperator.DISTINCT_FROM || operator == ComparisonOperator.NOT_DISTINCT_FROM ) {
+			// HANA does not support plain parameters in the select clause of the intersect emulation
+			withParameterRenderingMode(
+					SqlAstNodeRenderingMode.NO_PLAIN_PARAMETER,
+					() -> renderComparisonEmulateIntersect( lhs, operator, rhs )
+			);
+		}
+		else {
+			renderComparisonEmulateIntersect( lhs, operator, rhs );
+		}
 	}
 
 	@Override
@@ -138,13 +252,13 @@ public class HANASqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 	}
 
 	@Override
-	protected String getFromDual() {
-		return " from sys.dummy";
+	protected String getDual() {
+		return "sys.dummy";
 	}
 
 	@Override
 	protected String getFromDualForSelectOnly() {
-		return getFromDual();
+		return " from " + getDual();
 	}
 
 	@Override
@@ -156,5 +270,20 @@ public class HANASqlAstTranslator<T extends JdbcOperation> extends AbstractSqlAs
 						getDialect()
 				)
 		);
+	}
+
+	@Override
+	protected void visitValuesList(List<Values> valuesList) {
+		visitValuesListEmulateSelectUnion( valuesList );
+	}
+
+	@Override
+	public void visitValuesTableReference(ValuesTableReference tableReference) {
+		emulateValuesTableReferenceColumnAliasing( tableReference );
+	}
+
+	@Override
+	protected String getSkipLocked() {
+		return " ignore locked";
 	}
 }

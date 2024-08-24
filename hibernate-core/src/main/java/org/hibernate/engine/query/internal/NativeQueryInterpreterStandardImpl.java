@@ -7,11 +7,7 @@
 package org.hibernate.engine.query.internal;
 
 import org.hibernate.engine.query.spi.NativeQueryInterpreter;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
-import org.hibernate.query.sql.internal.NativeSelectQueryPlanImpl;
 import org.hibernate.query.sql.internal.ParameterParser;
-import org.hibernate.query.sql.spi.NativeSelectQueryDefinition;
-import org.hibernate.query.sql.spi.NativeSelectQueryPlan;
 import org.hibernate.query.sql.spi.ParameterRecognizer;
 
 /**
@@ -21,23 +17,16 @@ public class NativeQueryInterpreterStandardImpl implements NativeQueryInterprete
 	/**
 	 * Singleton access
 	 */
-	public static final NativeQueryInterpreterStandardImpl NATIVE_QUERY_INTERPRETER = new NativeQueryInterpreterStandardImpl();
+	public static final NativeQueryInterpreterStandardImpl NATIVE_QUERY_INTERPRETER = new NativeQueryInterpreterStandardImpl( false );
 
-	@Override
-	public void recognizeParameters(String nativeQuery, ParameterRecognizer recognizer) {
-		ParameterParser.parse( nativeQuery, recognizer );
+	private final boolean nativeJdbcParametersIgnored;
+
+	public NativeQueryInterpreterStandardImpl(boolean nativeJdbcParametersIgnored) {
+		this.nativeJdbcParametersIgnored = nativeJdbcParametersIgnored;
 	}
 
 	@Override
-	public <R> NativeSelectQueryPlan<R> createQueryPlan(
-			NativeSelectQueryDefinition<R> queryDefinition,
-			SessionFactoryImplementor sessionFactory) {
-		return new NativeSelectQueryPlanImpl<>(
-				queryDefinition.getSqlString(),
-				queryDefinition.getAffectedTableNames(),
-				queryDefinition.getQueryParameterOccurrences(),
-				queryDefinition.getResultSetMapping(),
-				sessionFactory
-		);
+	public void recognizeParameters(String nativeQuery, ParameterRecognizer recognizer) {
+		ParameterParser.parse( nativeQuery, recognizer, nativeJdbcParametersIgnored );
 	}
 }

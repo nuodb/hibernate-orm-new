@@ -6,6 +6,7 @@
  */
 package org.hibernate.query.sqm.function;
 
+import org.hibernate.query.ReturnableType;
 import org.hibernate.sql.ast.SqlAstTranslator;
 import org.hibernate.sql.ast.spi.SqlAppender;
 import org.hibernate.sql.ast.tree.SqlAstNode;
@@ -23,7 +24,9 @@ import java.util.List;
  * to finally render SQL.
  *
  * @author Steve Ebersole
+ * @deprecated Use {@link FunctionRenderer} instead
  */
+@Deprecated(forRemoval = true)
 @FunctionalInterface
 public interface FunctionRenderingSupport {
 	void render(
@@ -31,33 +34,57 @@ public interface FunctionRenderingSupport {
 			List<? extends SqlAstNode> sqlAstArguments,
 			SqlAstTranslator<?> walker);
 
+	/**
+	 * @since 6.4
+	 */
+	default void render(
+			SqlAppender sqlAppender,
+			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
+			SqlAstTranslator<?> walker) {
+		// Ignore the return type by default. Subclasses will override this
+		render( sqlAppender, sqlAstArguments, walker );
+	}
+
+	/**
+	 * @since 6.4
+	 */
 	default void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		// Ignore the filter by default. Subclasses will override this
-		render( sqlAppender, sqlAstArguments, walker );
+		render( sqlAppender, sqlAstArguments, returnType, walker );
 	}
 
+	/**
+	 * @since 6.4
+	 */
 	default void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			List<SortSpecification> withinGroup,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		// Ignore the filter by default. Subclasses will override this
-		render( sqlAppender, sqlAstArguments, walker );
+		render( sqlAppender, sqlAstArguments, returnType, walker );
 	}
 
+	/**
+	 * @since 6.4
+	 */
 	default void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
 			Predicate filter,
 			Boolean respectNulls,
 			Boolean fromFirst,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		// Ignore the filter by default. Subclasses will override this
-		render( sqlAppender, sqlAstArguments, walker );
+		render( sqlAppender, sqlAstArguments, returnType, walker );
 	}
 }

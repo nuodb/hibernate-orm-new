@@ -60,7 +60,7 @@ public class CompleteResultBuilderEntityJpa implements CompleteResultBuilderEnti
 		}
 		else {
 			// discriminated
-			assert discriminatorFetchBuilder != null;
+			assert !entityDescriptor.hasSubclasses() || discriminatorFetchBuilder != null;
 		}
 	}
 
@@ -122,7 +122,7 @@ public class CompleteResultBuilderEntityJpa implements CompleteResultBuilderEnti
 
 						return discriminatorFetchBuilder.buildFetch(
 								entityResult,
-								navigablePath.append( EntityDiscriminatorMapping.ROLE_NAME ),
+								navigablePath.append( EntityDiscriminatorMapping.DISCRIMINATOR_ROLE_NAME ),
 								jdbcResultsMetadata,
 								legacyFetchResolver,
 								domainResultCreationState

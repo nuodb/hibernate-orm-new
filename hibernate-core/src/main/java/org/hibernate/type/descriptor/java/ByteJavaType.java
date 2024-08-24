@@ -32,9 +32,15 @@ public class ByteJavaType extends AbstractClassJavaType<Byte>
 	}
 
 	@Override
+	public boolean useObjectEqualsHashCode() {
+		return true;
+	}
+
+	@Override
 	public String toString(Byte value) {
 		return value == null ? null : value.toString();
 	}
+
 	@Override
 	public Byte fromString(CharSequence string) {
 		return Byte.valueOf( string.toString() );
@@ -46,7 +52,7 @@ public class ByteJavaType extends AbstractClassJavaType<Byte>
 		if ( value == null ) {
 			return null;
 		}
-		if ( Byte.class.isAssignableFrom( type ) ) {
+		if ( Byte.class.isAssignableFrom( type ) || type == Object.class ) {
 			return (X) value;
 		}
 		if ( Short.class.isAssignableFrom( type ) ) {
@@ -175,6 +181,7 @@ public class ByteJavaType extends AbstractClassJavaType<Byte>
 				)
 		);
 	}
+
 	@Override
 	public Byte next(
 			Byte current,
@@ -188,7 +195,9 @@ public class ByteJavaType extends AbstractClassJavaType<Byte>
 	@Override
 	public Byte seed(
 			Long length,
-			Integer precision, Integer scale, SharedSessionContractImplementor session) {
+			Integer precision,
+			Integer scale,
+			SharedSessionContractImplementor session) {
 		return ZERO;
 	}
 

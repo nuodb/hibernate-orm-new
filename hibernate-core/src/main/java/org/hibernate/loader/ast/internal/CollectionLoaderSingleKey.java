@@ -8,10 +8,9 @@ package org.hibernate.loader.ast.internal;
 
 import org.hibernate.LockOptions;
 import org.hibernate.collection.spi.PersistentCollection;
-import org.hibernate.engine.jdbc.env.spi.JdbcEnvironment;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
 import org.hibernate.engine.spi.CollectionKey;
-import org.hibernate.engine.spi.EntityKey;
+import org.hibernate.engine.spi.EntityHolder;
 import org.hibernate.engine.spi.LoadQueryInfluencers;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
@@ -19,14 +18,15 @@ import org.hibernate.engine.spi.SubselectFetch;
 import org.hibernate.loader.ast.spi.CollectionLoader;
 import org.hibernate.metamodel.mapping.PluralAttributeMapping;
 import org.hibernate.query.spi.QueryOptions;
-import org.hibernate.sql.ast.SqlAstTranslatorFactory;
+import org.hibernate.sql.ast.tree.from.FromClause;
+import org.hibernate.sql.ast.tree.from.TableGroup;
+import org.hibernate.sql.ast.tree.select.QuerySpec;
 import org.hibernate.sql.ast.tree.select.SelectStatement;
 import org.hibernate.sql.exec.internal.BaseExecutionContext;
 import org.hibernate.sql.exec.internal.JdbcParameterBindingsImpl;
 import org.hibernate.sql.exec.spi.JdbcOperationQuerySelect;
 import org.hibernate.sql.exec.spi.JdbcParameterBindings;
 import org.hibernate.sql.exec.spi.JdbcParametersList;
-import org.hibernate.sql.results.graph.entity.LoadingEntityEntry;
 import org.hibernate.sql.results.internal.RowTransformerStandardImpl;
 import org.hibernate.sql.results.spi.ListResultsConsumer;
 
@@ -41,6 +41,7 @@ public class CollectionLoaderSingleKey implements CollectionLoader {
 	private final int keyJdbcCount;
 
 	private final SelectStatement sqlAst;
+	private final JdbcOperationQuerySelect jdbcSelect;
 	private final JdbcParametersList jdbcParameters;
 
 	public CollectionLoaderSingleKey(
@@ -63,7 +64,18 @@ public class CollectionLoaderSingleKey implements CollectionLoader {
 				jdbcParametersBuilder::add,
 				sessionFactory
 		);
+
+		final QuerySpec querySpec = sqlAst.getQueryPart().getFirstQuerySpec();
+		final FromClause fromClause = querySpec.getFromClause();
+		final TableGroup tableGroup = fromClause.getRoots().get( 0 );
+		attributeMapping.applySoftDeleteRestrictions( tableGroup, querySpec::applyPredicate );
+
 		this.jdbcParameters = jdbcParametersBuilder.build();
+		this.jdbcSelect = sessionFactory.getJdbcServices()
+				.getJdbcEnvironment()
+				.getSqlAstTranslatorFactory()
+				.buildSelectTranslator( sessionFactory, sqlAst )
+				.translate( JdbcParameterBindings.NO_BINDINGS, QueryOptions.NONE );
 	}
 
 	@Override
@@ -87,10 +99,7 @@ public class CollectionLoaderSingleKey implements CollectionLoader {
 	public PersistentCollection<?> load(Object key, SharedSessionContractImplementor session) {
 		final CollectionKey collectionKey = new CollectionKey( attributeMapping.getCollectionDescriptor(), key );
 
-		final SessionFactoryImplementor sessionFactory = session.getFactory();
-		final JdbcServices jdbcServices = sessionFactory.getJdbcServices();
-		final JdbcEnvironment jdbcEnvironment = jdbcServices.getJdbcEnvironment();
-		final SqlAstTranslatorFactory sqlAstTranslatorFactory = jdbcEnvironment.getSqlAstTranslatorFactory();
+		final JdbcServices jdbcServices = session.getFactory().getJdbcServices();
 
 		final JdbcParameterBindings jdbcParameterBindings = new JdbcParameterBindingsImpl( keyJdbcCount );
 		int offset = jdbcParameterBindings.registerParametersForEachJdbcValue(
@@ -100,10 +109,6 @@ public class CollectionLoaderSingleKey implements CollectionLoader {
 				session
 		);
 		assert offset == jdbcParameters.size();
-
-		final JdbcOperationQuerySelect jdbcSelect = sqlAstTranslatorFactory
-				.buildSelectTranslator( sessionFactory, sqlAst )
-				.translate( jdbcParameterBindings, QueryOptions.NONE );
 
 		final SubselectFetch.RegistrationHandler subSelectFetchableKeysHandler = SubselectFetch.createRegistrationHandler(
 				session.getPersistenceContext().getBatchFetchQueue(),
@@ -142,8 +147,8 @@ public class CollectionLoaderSingleKey implements CollectionLoader {
 		}
 
 		@Override
-		public void registerLoadingEntityEntry(EntityKey entityKey, LoadingEntityEntry entry) {
-			subSelectFetchableKeysHandler.addKey( entityKey, entry );
+		public void registerLoadingEntityHolder(EntityHolder holder) {
+			subSelectFetchableKeysHandler.addKey( holder );
 		}
 
 	}

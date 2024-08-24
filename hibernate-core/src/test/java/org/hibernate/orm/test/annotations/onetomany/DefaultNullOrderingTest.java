@@ -14,6 +14,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
 
+import org.hibernate.query.NullPrecedence;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -34,7 +35,7 @@ import org.hibernate.testing.junit4.BaseCoreFunctionalTestCase;
 public class DefaultNullOrderingTest extends BaseCoreFunctionalTestCase {
 	@Override
 	protected void configure(Configuration configuration) {
-		configuration.setProperty( AvailableSettings.DEFAULT_NULL_ORDERING, "last" );
+		configuration.setProperty( AvailableSettings.DEFAULT_NULL_ORDERING, NullPrecedence.LAST );
 	}
 
 	@Override
@@ -66,8 +67,8 @@ public class DefaultNullOrderingTest extends BaseCoreFunctionalTestCase {
 
 				// Cleanup data.
 				session.getTransaction().begin();
-				session.delete( monkey1 );
-				session.delete( monkey2 );
+				session.remove( monkey1 );
+				session.remove( monkey2 );
 				session.getTransaction().commit();
 			}
 			catch (Exception e) {
@@ -110,7 +111,7 @@ public class DefaultNullOrderingTest extends BaseCoreFunctionalTestCase {
 
 						// Cleanup data.
 						session.getTransaction().begin();
-						session.delete( troop );
+						session.remove( troop );
 						session.getTransaction().commit();
 					}
 					catch (Exception e) {
@@ -155,8 +156,8 @@ public class DefaultNullOrderingTest extends BaseCoreFunctionalTestCase {
 
 						// Cleanup data.
 						session.getTransaction().begin();
-						session.delete( monkey1 );
-						session.delete( monkey2 );
+						session.remove( monkey1 );
+						session.remove( monkey2 );
 						session.getTransaction().commit();
 					}
 					catch (Exception e) {

@@ -24,7 +24,6 @@ import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.type.descriptor.WrapperOptions;
 import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.descriptor.jdbc.JdbcTypeIndicators;
-import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
 
 /**
  * Descriptor for {@link Clob} handling.
@@ -33,6 +32,7 @@ import org.hibernate.type.descriptor.jdbc.spi.JdbcTypeRegistry;
  * But we treat them as immutable because we simply have no way to dirty check nor deep copy them.
  *
  * @author Steve Ebersole
+ * @author Loïc Lefèvre
  */
 public class ClobJavaType extends AbstractClassJavaType<Clob> {
 	public static final ClobJavaType INSTANCE = new ClobJavaType();
@@ -107,7 +107,7 @@ public class ClobJavaType extends AbstractClassJavaType<Clob> {
 			else if (Clob.class.isAssignableFrom( type )) {
 				final Clob clob =  value instanceof WrappedClob
 						? ( (WrappedClob) value ).getWrappedClob()
-						: value;
+						: getOrCreateClob(value, options);
 				return (X) clob;
 			}
 			else if ( String.class.isAssignableFrom( type ) ) {
@@ -128,6 +128,21 @@ public class ClobJavaType extends AbstractClassJavaType<Clob> {
 		throw unknownUnwrap( type );
 	}
 
+	private Clob getOrCreateClob(Clob value, WrapperOptions options) throws SQLException {
+		if(options.getDialect().useConnectionToCreateLob()) {
+			if(value.length() == 0) {
+				// empty Clob
+				return options.getLobCreator().createClob("");
+			}
+			else {
+				return options.getLobCreator().createClob(value.getSubString(1, (int) value.length()));
+			}
+		}
+		else {
+			return value;
+		}
+	}
+
 	public <X> Clob wrap(X value, WrapperOptions options) {
 		if ( value == null ) {
 			return null;
@@ -144,9 +159,6 @@ public class ClobJavaType extends AbstractClassJavaType<Clob> {
 		else if ( Reader.class.isAssignableFrom( value.getClass() ) ) {
 			Reader reader = (Reader) value;
 			return options.getLobCreator().createClob( DataHelper.extractString( reader ) );
-		}
-		else if ( String.class.isAssignableFrom( value.getClass() ) ) {
-			return options.getLobCreator().createClob( (String) value );
 		}
 
 		throw unknownWrap( value.getClass() );

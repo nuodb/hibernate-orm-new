@@ -12,7 +12,6 @@ import org.hibernate.query.sqm.produce.function.ArgumentsValidator;
 import org.hibernate.query.sqm.tree.SqmTypedNode;
 import org.hibernate.query.sqm.tree.predicate.SqmPredicate;
 import org.hibernate.query.sqm.tree.select.SqmOrderByClause;
-import org.hibernate.type.spi.TypeConfiguration;
 
 import java.util.List;
 
@@ -37,6 +36,51 @@ import static java.util.Collections.singletonList;
  * returns {@link SelfRenderingSqmFunction}, which is an object
  * that is permitted to take over the logic of producing the
  * SQL AST subtree, so de-sugaring may also be performed there.
+ * <p>
+ * User-written function descriptors may be contributed via a
+ * {@link org.hibernate.boot.model.FunctionContributor} or by
+ * calling {@link org.hibernate.cfg.Configuration#addSqlFunction}.
+ * The {@link SqmFunctionRegistry} exposes methods which simplify
+ * the definition of a function, including
+ * {@link SqmFunctionRegistry#namedDescriptorBuilder(String)} and
+ * {@link SqmFunctionRegistry#patternAggregateDescriptorBuilder(String, String)}.
+ * <p>
+ * For example, this code registers a function named {@code prefixes()}:
+ * <pre>
+ * Configuration config = ... ;
+ * config.addSqlFunction("prefixes",
+ *         new SqmFunctionDescriptor() {
+ *             &#064;Override
+ *             public &lt;T&gt; SelfRenderingSqmFunction&lt;T&gt; generateSqmExpression(
+ *                     List&lt;? extends SqmTypedNode&lt;?&gt;&gt; arguments,
+ *                     ReturnableType&lt;T&gt; impliedResultType,
+ *                     QueryEngine queryEngine) {
+ *                 final SqmFunctionRegistry registry = queryEngine.getSqmFunctionRegistry();
+ *                 final TypeConfiguration types = queryEngine.getTypeConfiguration();
+ *                 return registry.patternDescriptorBuilder("prefix", "(left(?1, character_length(?2)) = ?2)" )
+ *                         .setExactArgumentCount(2)
+ *                         .setParameterTypes(FunctionParameterType.STRING, FunctionParameterType.STRING)
+ *                         .setInvariantType(types.standardBasicTypeForJavaType(Boolean.class))
+ *                         .descriptor()
+ *                         .generateSqmExpression(arguments, impliedResultType, queryEngine);
+ *             }
+ *
+ *             &#064;Override
+ *             public ArgumentsValidator getArgumentsValidator() {
+ *                 return new ArgumentTypesValidator(
+ *                         StandardArgumentsValidators.exactly(2),
+ *                         FunctionParameterType.STRING, FunctionParameterType.STRING
+ *                 );
+ *             }
+ *         }
+ * );
+ * </pre>
+ * The function may be called like this: {@code prefixes('Hibernate',book.title)}.
+ *
+ * @see org.hibernate.query.sqm.function.SqmFunctionRegistry
+ * @see org.hibernate.cfg.Configuration#addSqlFunction
+ * @see org.hibernate.boot.MetadataBuilder#applySqlFunction
+ * @see org.hibernate.boot.model.FunctionContributor
  *
  * @author David Channon
  * @author Steve Ebersole
@@ -55,11 +99,10 @@ public interface SqmFunctionDescriptor {
 	<T> SelfRenderingSqmFunction<T> generateSqmExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration);
+			QueryEngine queryEngine);
 
 	/**
-	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine, TypeConfiguration)},
+	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine)},
 	 * but also accepts a {@code filter} predicate.
 	 * <p>
 	 * This method is intended for aggregate functions.
@@ -68,13 +111,12 @@ public interface SqmFunctionDescriptor {
 			List<? extends SqmTypedNode<?>> arguments,
 			SqmPredicate filter,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		throw new UnsupportedOperationException( "Not an aggregate function" );
 	}
 
 	/**
-	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine, TypeConfiguration)},
+	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine)},
 	 * but also accepts a {@code filter} predicate and an {@code order by} clause.
 	 * <p>
 	 * This method is intended for ordered set aggregate functions.
@@ -84,13 +126,12 @@ public interface SqmFunctionDescriptor {
 			SqmPredicate filter,
 			SqmOrderByClause withinGroupClause,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		throw new UnsupportedOperationException( "Not an ordered set aggregate function" );
 	}
 
 	/**
-	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine, TypeConfiguration)}
+	 * Like {@link #generateSqmExpression(List, ReturnableType, QueryEngine)}
 	 * but also accepts a {@code filter} predicate.
 	 * <p>
 	 * This method is intended for window functions.
@@ -101,8 +142,7 @@ public interface SqmFunctionDescriptor {
 			Boolean respectNulls,
 			Boolean fromFirst,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		throw new UnsupportedOperationException( "Not a window function" );
 	}
 
@@ -112,13 +152,11 @@ public interface SqmFunctionDescriptor {
 	default <T> SelfRenderingSqmFunction<T> generateSqmExpression(
 			SqmTypedNode<?> argument,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return generateSqmExpression(
 				singletonList(argument),
 				impliedResultType,
-				queryEngine,
-				typeConfiguration
+				queryEngine
 		);
 	}
 
@@ -127,13 +165,11 @@ public interface SqmFunctionDescriptor {
 	 */
 	default <T> SelfRenderingSqmFunction<T> generateSqmExpression(
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		return generateSqmExpression(
 				emptyList(),
 				impliedResultType,
-				queryEngine,
-				typeConfiguration
+				queryEngine
 		);
 	}
 

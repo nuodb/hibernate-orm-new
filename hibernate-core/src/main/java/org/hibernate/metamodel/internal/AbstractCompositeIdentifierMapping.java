@@ -47,7 +47,8 @@ import org.hibernate.sql.results.graph.FetchParent;
 import org.hibernate.sql.results.graph.embeddable.EmbeddableValuedFetchable;
 import org.hibernate.sql.results.graph.embeddable.internal.EmbeddableFetchImpl;
 import org.hibernate.sql.results.graph.embeddable.internal.EmbeddableResultImpl;
-import org.hibernate.type.descriptor.java.JavaType;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Base implementation for composite identifier mappings
@@ -67,10 +68,20 @@ public abstract class AbstractCompositeIdentifierMapping
 			EntityMappingType entityMapping,
 			String tableExpression,
 			MappingModelCreationProcess creationProcess) {
-		this.navigableRole = entityMapping.getNavigableRole().appendContainer( EntityIdentifierMapping.ROLE_LOCAL_NAME );
+		this.navigableRole = entityMapping.getNavigableRole().appendContainer( EntityIdentifierMapping.ID_ROLE_NAME );
 		this.entityMapping = entityMapping;
 		this.tableExpression = tableExpression;
 		this.sessionFactory = creationProcess.getCreationContext().getSessionFactory();
+	}
+
+	/*
+	 * Used by Hibernate Reactive
+	 */
+	protected AbstractCompositeIdentifierMapping(AbstractCompositeIdentifierMapping original) {
+		this.navigableRole = original.navigableRole;
+		this.entityMapping = original.entityMapping;
+		this.tableExpression = original.tableExpression;
+		this.sessionFactory = original.sessionFactory;
 	}
 
 	@Override
@@ -120,19 +131,13 @@ public abstract class AbstractCompositeIdentifierMapping
 	public TableGroupJoin createTableGroupJoin(
 			NavigablePath navigablePath,
 			TableGroup lhs,
-			String explicitSourceAlias,
-			SqlAliasBase explicitSqlAliasBase,
-			SqlAstJoinType requestedJoinType,
+			@Nullable String explicitSourceAlias,
+			@Nullable SqlAliasBase explicitSqlAliasBase,
+			@Nullable SqlAstJoinType requestedJoinType,
 			boolean fetched,
 			boolean addsPredicate,
 			SqlAstCreationState creationState) {
-		final SqlAstJoinType joinType;
-		if ( requestedJoinType == null ) {
-			joinType = SqlAstJoinType.INNER;
-		}
-		else {
-			joinType = requestedJoinType;
-		}
+		final SqlAstJoinType joinType = determineSqlJoinType( lhs, requestedJoinType, fetched );
 		final TableGroup tableGroup = createRootTableGroupJoin(
 				navigablePath,
 				lhs,
@@ -151,11 +156,11 @@ public abstract class AbstractCompositeIdentifierMapping
 	public TableGroup createRootTableGroupJoin(
 			NavigablePath navigablePath,
 			TableGroup lhs,
-			String explicitSourceAlias,
-			SqlAliasBase explicitSqlAliasBase,
-			SqlAstJoinType sqlAstJoinType,
+			@Nullable String explicitSourceAlias,
+			@Nullable SqlAliasBase explicitSqlAliasBase,
+			@Nullable SqlAstJoinType sqlAstJoinType,
 			boolean fetched,
-			Consumer<Predicate> predicateConsumer,
+			@Nullable Consumer<Predicate> predicateConsumer,
 			SqlAstCreationState creationState) {
 		return new StandardVirtualTableGroup( navigablePath, this, lhs, fetched );
 	}
@@ -192,7 +197,7 @@ public abstract class AbstractCompositeIdentifierMapping
 		else {
 			for ( int i = 0; i < size; i++ ) {
 				final AttributeMapping attributeMapping = embeddableTypeDescriptor.getAttributeMapping( i );
-				final Object o = attributeMapping.getPropertyAccess().getGetter().get( value );
+				final Object o = embeddableTypeDescriptor.getValue( value, i );
 				if ( attributeMapping instanceof ToOneAttributeMapping ) {
 					final ToOneAttributeMapping toOneAttributeMapping = (ToOneAttributeMapping) attributeMapping;
 					final ForeignKeyDescriptor fkDescriptor = toOneAttributeMapping.getForeignKeyDescriptor();
@@ -295,4 +300,5 @@ public abstract class AbstractCompositeIdentifierMapping
 	public boolean containsTableReference(String tableExpression) {
 		return entityMapping.containsTableReference( tableExpression );
 	}
+
 }

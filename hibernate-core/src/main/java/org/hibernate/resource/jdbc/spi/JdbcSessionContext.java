@@ -8,9 +8,8 @@ package org.hibernate.resource.jdbc.spi;
 
 import org.hibernate.engine.jdbc.batch.spi.BatchBuilder;
 import org.hibernate.engine.jdbc.spi.JdbcServices;
-import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.jpa.spi.JpaCompliance;
-import org.hibernate.service.ServiceRegistry;
+import org.hibernate.stat.spi.StatisticsImplementor;
 
 /**
  * Provides the "JDBC session" with contextual information it needs during its lifecycle.
@@ -34,12 +33,6 @@ public interface JdbcSessionContext {
 	Integer getFetchSizeOrNull();
 
 	/**
-	 * @deprecated this is never called, and luckily so, because it's not null-safe
-	 */
-	@Deprecated(since = "6.2", forRemoval = true)
-	int getFetchSize();
-
-	/**
 	 * @see org.hibernate.cfg.AvailableSettings#CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT
 	 */
 	boolean doesConnectionProviderDisableAutoCommit();
@@ -60,28 +53,9 @@ public interface JdbcSessionContext {
 
 	JpaCompliance getJpaCompliance();
 
-	/**
-	 * @deprecated since {@link JdbcObserver} is deprecated
-	 */
-	@Deprecated(forRemoval = true)
-	JdbcObserver getObserver();
+	StatisticsImplementor getStatistics();
 
-	/**
-	* Retrieve the session factory for this environment.
-	 *
-	 * @deprecated exposing this here seems to kinda defeat the purpose of this SPI
-	*/
-	@Deprecated(since = "6.2")
-	SessionFactoryImplementor getSessionFactory();
-
-	/**
-	 * Retrieve the service registry.
-	 *
-	 * @deprecated this is no longer called, and unnecessary, since the needed
-	 *             services are now available via {@link #getJdbcServices()}
-	 */
-	@Deprecated(since = "6.2")
-	ServiceRegistry getServiceRegistry();
+	JdbcEventHandler getEventHandler();
 
 	JdbcServices getJdbcServices();
 

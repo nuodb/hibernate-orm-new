@@ -13,7 +13,7 @@ import org.hibernate.query.spi.QueryEngine;
 import org.hibernate.query.sqm.NodeBuilder;
 import org.hibernate.query.sqm.TemporalUnit;
 import org.hibernate.query.sqm.function.AbstractSqmFunctionDescriptor;
-import org.hibernate.query.sqm.function.FunctionRenderingSupport;
+import org.hibernate.query.sqm.function.FunctionRenderer;
 import org.hibernate.query.sqm.function.SelfRenderingSqmFunction;
 import org.hibernate.query.sqm.produce.function.ArgumentTypesValidator;
 import org.hibernate.query.sqm.produce.function.StandardArgumentsValidators;
@@ -39,7 +39,7 @@ import static org.hibernate.query.sqm.produce.function.FunctionParameterType.TEM
  *
  * @author Marco Belladelli
  */
-public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements FunctionRenderingSupport {
+public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements FunctionRenderer {
 	protected final String toDateFunction;
 	private final SqmFormat sqmFormat;
 
@@ -58,6 +58,7 @@ public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements
 	public void render(
 			SqlAppender sqlAppender,
 			List<? extends SqlAstNode> sqlAstArguments,
+			ReturnableType<?> returnType,
 			SqlAstTranslator<?> walker) {
 		sqlAppender.appendSql( toDateFunction );
 		sqlAppender.append( '(' );
@@ -71,8 +72,7 @@ public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements
 	protected <T> SelfRenderingSqmFunction<T> generateSqmFunctionExpression(
 			List<? extends SqmTypedNode<?>> arguments,
 			ReturnableType<T> impliedResultType,
-			QueryEngine queryEngine,
-			TypeConfiguration typeConfiguration) {
+			QueryEngine queryEngine) {
 		final NodeBuilder nodeBuilder = queryEngine.getCriteriaBuilder();
 		final TemporalUnit temporalUnit = ( (SqmExtractUnit<?>) arguments.get( 1 ) ).getUnit();
 		final String pattern;
@@ -113,13 +113,12 @@ public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements
 								datetime,
 								new SqmFormat(
 										pattern,
-										typeConfiguration.getBasicTypeForJavaType( String.class ),
+										nodeBuilder.getTypeConfiguration().getBasicTypeForJavaType( String.class ),
 										nodeBuilder
 								)
 						),
 						null,
-						queryEngine,
-						typeConfiguration
+						queryEngine
 				);
 		final SqmExpression<?> formattedDatetime;
 		if ( literal != null ) {
@@ -130,13 +129,12 @@ public class DateTruncEmulation extends AbstractSqmFunctionDescriptor implements
 									formatExpression,
 									new SqmLiteral<>(
 											literal,
-											typeConfiguration.getBasicTypeForJavaType( String.class ),
+											nodeBuilder.getTypeConfiguration().getBasicTypeForJavaType( String.class ),
 											nodeBuilder
 									)
 							),
 							null,
-							queryEngine,
-							typeConfiguration
+							queryEngine
 					);
 		}
 		else {

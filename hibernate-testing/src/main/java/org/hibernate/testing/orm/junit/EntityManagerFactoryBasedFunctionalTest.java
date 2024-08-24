@@ -17,6 +17,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.hibernate.bytecode.enhance.spi.EnhancementContext;
+import org.hibernate.bytecode.spi.ClassTransformer;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.cfg.Environment;
 import org.hibernate.jpa.HibernatePersistenceProvider;
@@ -26,10 +27,8 @@ import org.hibernate.query.sqm.mutation.internal.temptable.GlobalTemporaryTableM
 import org.hibernate.query.sqm.mutation.internal.temptable.LocalTemporaryTableMutationStrategy;
 import org.hibernate.query.sqm.mutation.internal.temptable.PersistentTableStrategy;
 
-import org.hibernate.testing.jdbc.SharedDriverManagerConnectionProviderImpl;
+import org.hibernate.testing.util.ServiceRegistryUtil;
 import org.junit.jupiter.api.AfterEach;
-
-import org.jboss.logging.Logger;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -45,7 +44,6 @@ import static org.hibernate.testing.transaction.TransactionUtil.doInJPA;
 @FunctionalEntityManagerFactoryTesting
 public class EntityManagerFactoryBasedFunctionalTest
 		implements EntityManagerFactoryProducer, EntityManagerFactoryScopeContainer {
-	private static final Logger log = Logger.getLogger( EntityManagerFactoryBasedFunctionalTest.class );
 
 	private EntityManagerFactoryScope entityManagerFactoryScope;
 
@@ -143,12 +141,7 @@ public class EntityManagerFactoryBasedFunctionalTest
 		config.put( PersistentTableStrategy.DROP_ID_TABLES, "true" );
 		config.put( GlobalTemporaryTableMutationStrategy.DROP_ID_TABLES, "true" );
 		config.put( LocalTemporaryTableMutationStrategy.DROP_ID_TABLES, "true" );
-		if ( !config.containsKey( Environment.CONNECTION_PROVIDER ) ) {
-			config.put(
-					AvailableSettings.CONNECTION_PROVIDER,
-					SharedDriverManagerConnectionProviderImpl.getInstance()
-			);
-		}
+		ServiceRegistryUtil.applySettings( config );
 		addConfigOptions( config );
 		return config;
 	}
@@ -265,6 +258,11 @@ public class EntityManagerFactoryBasedFunctionalTest
 
 		@Override
 		public void pushClassTransformer(EnhancementContext enhancementContext) {
+		}
+
+		@Override
+		public ClassTransformer getClassTransformer() {
+			return null;
 		}
 	}
 

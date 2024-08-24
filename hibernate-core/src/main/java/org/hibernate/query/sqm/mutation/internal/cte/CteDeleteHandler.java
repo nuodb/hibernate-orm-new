@@ -11,10 +11,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.hibernate.boot.model.naming.Identifier;
+import org.hibernate.boot.model.relational.QualifiedNameParser;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.metamodel.mapping.EntityMappingType;
 import org.hibernate.metamodel.mapping.PluralAttributeMapping;
+import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.query.sqm.internal.DomainParameterXref;
 import org.hibernate.query.sqm.mutation.internal.DeleteHandler;
 import org.hibernate.query.sqm.mutation.internal.MultiTableSqmMutationConverter;
@@ -41,7 +43,6 @@ import org.hibernate.sql.results.graph.basic.BasicResult;
  * @author Christian Beikov
  */
 public class CteDeleteHandler extends AbstractCteMutationHandler implements DeleteHandler {
-
 	private static final String DELETE_RESULT_TABLE_NAME_PREFIX = "delete_cte_";
 
 	protected CteDeleteHandler(
@@ -60,7 +61,7 @@ public class CteDeleteHandler extends AbstractCteMutationHandler implements Dele
 			MultiTableSqmMutationConverter sqmConverter,
 			Map<SqmParameter<?>, List<JdbcParameter>> parameterResolutions,
 			SessionFactoryImplementor factory) {
-		final TableGroup updatingTableGroup = sqmConverter.getMutatingTableGroup();
+		final TableGroup mutatingTableGroup = sqmConverter.getMutatingTableGroup();
 		final SelectStatement idSelectStatement = (SelectStatement) idSelectCte.getCteDefinition();
 		sqmConverter.getProcessingStateStack().push(
 				new SqlAstQueryPartProcessingStateImpl(
@@ -72,14 +73,13 @@ public class CteDeleteHandler extends AbstractCteMutationHandler implements Dele
 				)
 		);
 		SqmMutationStrategyHelper.visitCollectionTables(
-				(EntityMappingType) updatingTableGroup.getModelPart(),
+				(EntityMappingType) mutatingTableGroup.getModelPart(),
 				pluralAttribute -> {
 					if ( pluralAttribute.getSeparateCollectionTable() != null ) {
 						// Ensure that the FK target columns are available
 						final boolean useFkTarget = !pluralAttribute.getKeyDescriptor()
 								.getTargetPart().isEntityIdentifierMapping();
 						if ( useFkTarget ) {
-							final TableGroup mutatingTableGroup = sqmConverter.getMutatingTableGroup();
 							pluralAttribute.getKeyDescriptor().getTargetPart().applySqlSelections(
 									mutatingTableGroup.getNavigablePath(),
 									mutatingTableGroup,
@@ -140,6 +140,14 @@ public class CteDeleteHandler extends AbstractCteMutationHandler implements Dele
 
 		sqmConverter.getProcessingStateStack().pop();
 
+		applyDmlOperations( statement, idSelectCte, factory, mutatingTableGroup );
+	}
+
+	protected void applyDmlOperations(
+			CteContainer statement,
+			CteStatement idSelectCte,
+			SessionFactoryImplementor factory,
+			TableGroup updatingTableGroup) {
 		getEntityDescriptor().visitConstraintOrderedTables(
 				(tableExpression, tableColumnsVisitationSupplier) -> {
 					final String cteTableName = getCteTableName( tableExpression );
@@ -183,7 +191,7 @@ public class CteDeleteHandler extends AbstractCteMutationHandler implements Dele
 	protected String getCteTableName(String tableExpression) {
 		final Dialect dialect = getSessionFactory().getJdbcServices().getDialect();
 		if ( Identifier.isQuoted( tableExpression ) ) {
-			tableExpression = tableExpression.substring( 1, tableExpression.length() - 1 );
+			tableExpression = QualifiedNameParser.INSTANCE.parse( tableExpression ).getObjectName().getText();
 		}
 		return Identifier.toIdentifier( DELETE_RESULT_TABLE_NAME_PREFIX + tableExpression ).render( dialect );
 	}

@@ -9,7 +9,6 @@ package org.hibernate.query.criteria;
 import java.util.Map;
 
 import org.hibernate.metamodel.model.domain.EntityDomainType;
-import org.hibernate.query.PathException;
 
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.MapJoin;
@@ -33,8 +32,9 @@ public interface JpaMapJoin<O,K,V> extends JpaPluralJoin<O, Map<K, V>, V>, MapJo
 	@Override
 	JpaMapJoin<O, K, V> on(Predicate... restrictions);
 
-	<S extends V> JpaMapJoin<O, K, S> treatAs(Class<S> treatAsType);
+	@Override
+	<S extends V> JpaTreatedJoin<O, V, S> treatAs(Class<S> treatAsType);
 
 	@Override
-	<S extends V> JpaMapJoin<O, K, S> treatAs(EntityDomainType<S> treatJavaType);
+	<S extends V> JpaTreatedJoin<O, V, S> treatAs(EntityDomainType<S> treatJavaType);
 }

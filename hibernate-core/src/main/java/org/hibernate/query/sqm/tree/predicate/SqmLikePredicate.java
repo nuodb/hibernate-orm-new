@@ -13,6 +13,8 @@ import org.hibernate.query.sqm.SqmExpressible;
 import org.hibernate.query.sqm.tree.SqmCopyContext;
 import org.hibernate.query.sqm.tree.expression.SqmExpression;
 
+import static org.hibernate.query.sqm.internal.TypecheckUtil.assertString;
+
 /**
  * @author Steve Ebersole
  */
@@ -52,11 +54,16 @@ public class SqmLikePredicate extends AbstractNegatableSqmPredicate {
 		this.escapeCharacter = escapeCharacter;
 		this.isCaseSensitive = isCaseSensitive;
 		final SqmExpressible<?> expressibleType = QueryHelper.highestPrecedenceType(
-				matchExpression.getNodeType(),
-				pattern.getNodeType()
+				matchExpression.getExpressible(),
+				pattern.getExpressible()
 		);
+
+		assertString( matchExpression );
+		assertString( pattern );
+
 		matchExpression.applyInferableType( expressibleType );
 		pattern.applyInferableType( expressibleType );
+
 		if ( escapeCharacter != null ) {
 			escapeCharacter.applyInferableType( nodeBuilder.getCharacterType() );
 		}
@@ -136,6 +143,13 @@ public class SqmLikePredicate extends AbstractNegatableSqmPredicate {
 
 	@Override
 	protected SqmNegatablePredicate createNegatedNode() {
-		return new SqmLikePredicate( matchExpression, pattern, escapeCharacter, !isNegated(), nodeBuilder() );
+		return new SqmLikePredicate(
+				matchExpression,
+				pattern,
+				escapeCharacter,
+				!isNegated(),
+				isCaseSensitive,
+				nodeBuilder()
+		);
 	}
 }

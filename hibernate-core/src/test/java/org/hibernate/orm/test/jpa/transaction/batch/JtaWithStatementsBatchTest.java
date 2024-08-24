@@ -7,7 +7,7 @@
 package org.hibernate.orm.test.jpa.transaction.batch;
 
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.engine.jdbc.batch.internal.BatchBuilderInitiator;
+import org.hibernate.cfg.BatchSettings;
 import org.hibernate.orm.test.jpa.transaction.JtaPlatformSettingProvider;
 
 import org.hibernate.testing.TestForIssue;
@@ -42,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 		integrationSettings = {
 				@Setting(name = AvailableSettings.JPA_TRANSACTION_TYPE, value = "JTA"),
 				@Setting(name = AvailableSettings.JPA_TRANSACTION_COMPLIANCE, value = "true"),
+				@Setting(name = AvailableSettings.CONNECTION_PROVIDER_DISABLES_AUTOCOMMIT, value = "true"),
 				@Setting(name = AvailableSettings.STATEMENT_BATCH_SIZE, value = "50")
 		},
 		settingProviders = {
@@ -54,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 						provider = JtaPlatformSettingProvider.class
 				),
 				@SettingProvider(
-						settingName = BatchBuilderInitiator.BUILDER,
+						settingName = BatchSettings.BUILDER,
 						provider = AbstractBatchingTest.Batch2BuilderSettingProvider.class
 				)
 		}

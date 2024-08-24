@@ -18,12 +18,15 @@ import org.hibernate.testing.orm.junit.SessionFactoryProducer;
 import org.hibernate.testing.orm.junit.SessionFactoryScope;
 import org.hibernate.testing.orm.junit.Setting;
 import org.hibernate.binder.internal.TenantIdBinder;
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
 import static org.hibernate.cfg.AvailableSettings.JAKARTA_HBM2DDL_DATABASE_ACTION;
+import static org.junit.Assert.assertNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -38,8 +41,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 )
 public class TenantUuidTest implements SessionFactoryProducer {
 
-    private static final UUID mine = UUID.randomUUID();
-    private static final UUID yours = UUID.randomUUID();
+    private static final UUID mine = SafeRandomUUIDGenerator.safeRandomUUID();
+    private static final UUID yours = SafeRandomUUIDGenerator.safeRandomUUID();
 
     UUID currentTenant;
 
@@ -54,10 +57,10 @@ public class TenantUuidTest implements SessionFactoryProducer {
     @Override
     public SessionFactoryImplementor produceSessionFactory(MetadataImplementor model) {
         final SessionFactoryBuilder sessionFactoryBuilder = model.getSessionFactoryBuilder();
-        sessionFactoryBuilder.applyCurrentTenantIdentifierResolver( new CurrentTenantIdentifierResolver() {
+        sessionFactoryBuilder.applyCurrentTenantIdentifierResolver( new CurrentTenantIdentifierResolver<UUID>() {
             @Override
-            public String resolveCurrentTenantIdentifier() {
-                return currentTenant.toString();
+            public UUID resolveCurrentTenantIdentifier() {
+                return currentTenant;
             }
             @Override
             public boolean validateExistingCurrentSessions() {
@@ -84,7 +87,8 @@ public class TenantUuidTest implements SessionFactoryProducer {
 
         currentTenant = yours;
         scope.inTransaction( session -> {
-            assertNotNull( session.find(Account.class, acc.id) );
+            //HHH-16830 Sessions applies tenantId filter on find()
+            assertNull( session.find(Account.class, acc.id) );
             assertEquals( 0, session.createQuery("from Account").getResultList().size() );
             session.disableFilter(TenantIdBinder.FILTER_NAME);
             assertNotNull( session.find(Account.class, acc.id) );

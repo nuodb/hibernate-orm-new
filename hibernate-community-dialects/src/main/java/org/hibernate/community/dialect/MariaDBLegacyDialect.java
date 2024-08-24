@@ -11,13 +11,7 @@ import java.sql.SQLException;
 
 import org.hibernate.boot.model.FunctionContributions;
 import org.hibernate.boot.model.TypeContributions;
-import org.hibernate.dialect.DatabaseVersion;
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.InnoDBStorageEngine;
-import org.hibernate.dialect.MySQLServerConfiguration;
-import org.hibernate.dialect.MySQLStorageEngine;
-import org.hibernate.dialect.NationalizationSupport;
-import org.hibernate.dialect.VarcharUUIDJdbcType;
+import org.hibernate.dialect.*;
 import org.hibernate.dialect.function.CommonFunctionFactory;
 import org.hibernate.dialect.sequence.MariaDBSequenceSupport;
 import org.hibernate.dialect.sequence.SequenceSupport;
@@ -67,7 +61,7 @@ public class MariaDBLegacyDialect extends MySQLLegacyDialect {
 	}
 
 	public MariaDBLegacyDialect(DialectResolutionInfo info) {
-		super( createVersion( info ), MySQLServerConfiguration.fromDatabaseMetadata( info.getDatabaseMetadata() ) );
+		super( createVersion( info ), MySQLServerConfiguration.fromDialectResolutionInfo( info ) );
 		registerKeywords( info );
 	}
 
@@ -186,6 +180,12 @@ public class MariaDBLegacyDialect extends MySQLLegacyDialect {
 	}
 
 	@Override
+	public boolean doesRoundTemporalOnOverflow() {
+		// See https://jira.mariadb.org/browse/MDEV-16991
+		return false;
+	}
+
+	@Override
 	protected MySQLStorageEngine getDefaultMySQLStorageEngine() {
 		return InnoDBStorageEngine.INSTANCE;
 	}
@@ -247,6 +247,11 @@ public class MariaDBLegacyDialect extends MySQLLegacyDialect {
 	boolean supportsAliasLocks() {
 		//only supported on MySQL
 		return false;
+	}
+
+	@Override
+	public FunctionalDependencyAnalysisSupport getFunctionalDependencyAnalysisSupport() {
+		return FunctionalDependencyAnalysisSupportImpl.TABLE_GROUP_AND_CONSTANTS;
 	}
 
 	@Override

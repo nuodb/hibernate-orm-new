@@ -19,6 +19,8 @@ import java.util.function.BiFunction;
 import org.hibernate.AssertionFailure;
 import org.hibernate.Internal;
 import org.hibernate.MappingException;
+import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
+import org.hibernate.boot.registry.classloading.spi.ClassLoadingException;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.internal.EntityManagerMessageLogger;
 import org.hibernate.internal.HEMLogging;
@@ -28,7 +30,6 @@ import org.hibernate.mapping.Component;
 import org.hibernate.mapping.MappedSuperclass;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.Property;
-import org.hibernate.mapping.Value;
 import org.hibernate.metamodel.MappingMetamodel;
 import org.hibernate.metamodel.model.domain.AbstractIdentifiableType;
 import org.hibernate.metamodel.model.domain.BasicDomainType;
@@ -51,6 +52,7 @@ import org.hibernate.metamodel.spi.RuntimeModelCreationContext;
 import org.hibernate.type.descriptor.java.JavaType;
 import org.hibernate.type.descriptor.java.spi.EntityJavaType;
 import org.hibernate.type.descriptor.java.spi.JavaTypeRegistry;
+import org.hibernate.type.descriptor.jdbc.JdbcType;
 import org.hibernate.type.spi.TypeConfiguration;
 
 import jakarta.persistence.metamodel.Attribute;
@@ -103,6 +105,7 @@ public class MetadataContext {
 	 */
 	private final List<PersistentClass> stackOfPersistentClassesBeingProcessed = new ArrayList<>();
 	private final MappingMetamodel metamodel;
+	private final ClassLoaderService classLoaderService;
 
 	public MetadataContext(
 			JpaMetamodelImplementor jpaMetamodel,
@@ -112,6 +115,7 @@ public class MetadataContext {
 			JpaMetaModelPopulationSetting jpaMetaModelPopulationSetting,
 			RuntimeModelCreationContext runtimeModelCreationContext) {
 		this.jpaMetamodel = jpaMetamodel;
+		this.classLoaderService = jpaMetamodel.getServiceRegistry().getService( ClassLoaderService.class );
 		this.metamodel = mappingMetamodel;
 		this.knownMappedSuperclasses = bootMetamodel.getMappedSuperclassMappingsCopy();
 		this.typeConfiguration = runtimeModelCreationContext.getTypeConfiguration();
@@ -207,7 +211,9 @@ public class MetadataContext {
 		identifiableTypesByName.put( mappedSuperclassType.getTypeName(), mappedSuperclassType );
 		mappedSuperclassByMappedSuperclassMapping.put( mappedSuperclass, mappedSuperclassType );
 		orderedMappings.add( mappedSuperclass );
-		mappedSuperClassTypeToPersistentClass.put( mappedSuperclassType, getEntityWorkedOn() );
+		if ( !stackOfPersistentClassesBeingProcessed.isEmpty() ) {
+			mappedSuperClassTypeToPersistentClass.put( mappedSuperclassType, getEntityWorkedOn() );
+		}
 
 		knownMappedSuperclasses.remove( mappedSuperclass );
 	}
@@ -286,8 +292,9 @@ public class MetadataContext {
 			LOG.trace( "Wrapping up metadata context..." );
 		}
 
-		boolean staticMetamodelScanEnabled =
+		final boolean staticMetamodelScanEnabled =
 				this.jpaStaticMetaModelPopulationSetting != JpaStaticMetaModelPopulationSetting.DISABLED;
+		final Set<String> processedMetamodelClasses = new HashSet<>();
 
 		//we need to process types from superclasses to subclasses
 		for ( Object mapping : orderedMappings ) {
@@ -332,7 +339,7 @@ public class MetadataContext {
 					( (AttributeContainer<?>) jpaMapping ).getInFlightAccess().finishUp();
 
 					if ( staticMetamodelScanEnabled ) {
-						populateStaticMetamodel( jpaMapping );
+						populateStaticMetamodel( jpaMapping, processedMetamodelClasses );
 					}
 				}
 				finally {
@@ -376,7 +383,7 @@ public class MetadataContext {
 					( (AttributeContainer<?>) jpaType ).getInFlightAccess().finishUp();
 
 					if ( staticMetamodelScanEnabled ) {
-						populateStaticMetamodel( jpaType );
+						populateStaticMetamodel( jpaType, processedMetamodelClasses );
 					}
 				}
 				finally {
@@ -402,6 +409,9 @@ public class MetadataContext {
 			for ( EmbeddableDomainType<?> embeddable : processingEmbeddables ) {
 				final Component component = componentByEmbeddable.get( embeddable );
 				for ( Property property : component.getProperties() ) {
+					if ( component.isPolymorphic() && !embeddable.getTypeName().equals( component.getPropertyDeclaringClass( property ) ) ) {
+						continue;
+					}
 					final PersistentAttribute<Object, ?> attribute =
 							attributeFactory.buildAttribute( (ManagedDomainType<Object>) embeddable, property );
 					if ( attribute != null ) {
@@ -416,7 +426,7 @@ public class MetadataContext {
 					embeddables.put( embeddable.getJavaType(), embeddable );
 
 					if ( staticMetamodelScanEnabled ) {
-						populateStaticMetamodel( embeddable );
+						populateStaticMetamodel( embeddable, processedMetamodelClasses );
 					}
 				}
 			}
@@ -547,6 +557,8 @@ public class MetadataContext {
 
 		final EmbeddableTypeImpl<?> embeddableType = new EmbeddableTypeImpl<>(
 				javaType,
+				null,
+				null,
 				false,
 				getJpaMetamodel()
 		);
@@ -644,37 +656,39 @@ public class MetadataContext {
 		return attributes;
 	}
 
-	private <X> void populateStaticMetamodel(ManagedDomainType<X> managedType) {
+	private <X> void populateStaticMetamodel(ManagedDomainType<X> managedType, Set<String> processedMetamodelClassName) {
 		final Class<X> managedTypeClass = managedType.getJavaType();
 		if ( managedTypeClass == null ) {
 			// should indicate MAP entity mode, skip...
 			return;
 		}
 		final String metamodelClassName = managedTypeClass.getName() + '_';
-		try {
-			final Class<?> metamodelClass = Class.forName( metamodelClassName, true, managedTypeClass.getClassLoader() );
-			// we found the class; so populate it...
-			registerAttributes( metamodelClass, managedType );
-		}
-		catch (ClassNotFoundException ignore) {
-			// nothing to do...
-		}
+		if ( processedMetamodelClassName.add( metamodelClassName ) ) {
+			try {
+				final Class<?> metamodelClass = classLoaderService.classForName( metamodelClassName );
+				// we found the class; so populate it...
+				registerAttributes( metamodelClass, managedType );
+				try {
+					injectField( metamodelClass, "class_", managedType, false );
+				}
+				catch ( NoSuchFieldException e ) {
+					// ignore
+				}
+			}
+			catch ( ClassLoadingException ignore ) {
+				// nothing to do...
+			}
 
-		// todo : this does not account for @MappedSuperclass, mainly because this is not being tracked in our
-		// internal metamodel as populated from the annotations properly
-		ManagedDomainType<? super X> superType = managedType.getSuperType();
-		if ( superType != null ) {
-			populateStaticMetamodel( superType );
+			// todo : this does not account for @MappedSuperclass, mainly because this is not being tracked in our
+			// internal metamodel as populated from the annotations properly
+			ManagedDomainType<? super X> superType = managedType.getSuperType();
+			if ( superType != null ) {
+				populateStaticMetamodel( superType, processedMetamodelClassName );
+			}
 		}
 	}
 
-	private final Set<Class<?>> processedMetamodelClasses = new HashSet<>();
-
 	private <X> void registerAttributes(Class<?> metamodelClass, ManagedDomainType<X> managedType) {
-		if ( !processedMetamodelClasses.add( metamodelClass ) ) {
-			return;
-		}
-
 		// push the attributes on to the metamodel class...
 		for ( Attribute<X, ?> attribute : managedType.getDeclaredAttributes() ) {
 			registerAttribute( metamodelClass, attribute );
@@ -715,25 +729,39 @@ public class MetadataContext {
 					attribute.getPersistentAttributeType() == Attribute.PersistentAttributeType.EMBEDDED
 							|| attribute.getDeclaringType().getPersistenceType() == Type.PersistenceType.EMBEDDABLE;
 
-			final Field field = allowNonDeclaredFieldReference
-					? metamodelClass.getField( name )
-					: metamodelClass.getDeclaredField( name );
-			try {
-				// should be public anyway, but to be sure...
-				ReflectHelper.ensureAccessibility( field );
-				field.set( null, attribute );
-			}
-			catch (IllegalAccessException e) {
-				// todo : exception type?
-				throw new AssertionFailure(
-						"Unable to inject static metamodel attribute : " + metamodelClass.getName() + '#' + name,
-						e
-				);
-			}
-			catch (IllegalArgumentException e) {
-				// most likely a mismatch in the type we are injecting and the defined field; this represents a
-				// mismatch in how the annotation processor interpreted the attribute and how our metamodel
-				// and/or annotation binder did.
+			injectField( metamodelClass, name, attribute, allowNonDeclaredFieldReference );
+		}
+		catch (NoSuchFieldException e) {
+			LOG.unableToLocateStaticMetamodelField( metamodelClass.getName(), name );
+//			throw new AssertionFailure(
+//					"Unable to locate static metamodel field : " + metamodelClass.getName() + '#' + name
+//			);
+		}
+	}
+
+	private static <X> void injectField(
+			Class<?> metamodelClass, String name, Object model,
+			boolean allowNonDeclaredFieldReference)
+				throws NoSuchFieldException {
+		final Field field = allowNonDeclaredFieldReference
+				? metamodelClass.getField(name)
+				: metamodelClass.getDeclaredField(name);
+		try {
+			// should be public anyway, but to be sure...
+			ReflectHelper.ensureAccessibility( field );
+			field.set( null, model);
+		}
+		catch (IllegalAccessException e) {
+			// todo : exception type?
+			throw new AssertionFailure(
+					"Unable to inject static metamodel attribute : " + metamodelClass.getName() + '#' + name,
+					e
+			);
+		}
+		catch (IllegalArgumentException e) {
+			// most likely a mismatch in the type we are injecting and the defined field; this represents a
+			// mismatch in how the annotation processor interpreted the attribute and how our metamodel
+			// and/or annotation binder did.
 
 //              This is particularly the case as arrays are not handled properly by the StaticMetamodel generator
 
@@ -742,19 +770,12 @@ public class MetadataContext {
 //								+ "; expected type :  " + attribute.getClass().getName()
 //								+ "; encountered type : " + field.getType().getName()
 //				);
-				LOG.illegalArgumentOnStaticMetamodelFieldInjection(
-						metamodelClass.getName(),
-						name,
-						attribute.getClass().getName(),
-						field.getType().getName()
-				);
-			}
-		}
-		catch (NoSuchFieldException e) {
-			LOG.unableToLocateStaticMetamodelField( metamodelClass.getName(), name );
-//			throw new AssertionFailure(
-//					"Unable to locate static metamodel field : " + metamodelClass.getName() + '#' + name
-//			);
+			LOG.illegalArgumentOnStaticMetamodelFieldInjection(
+					metamodelClass.getName(),
+					name,
+					model.getClass().getName(),
+					field.getType().getName()
+			);
 		}
 	}
 
@@ -785,14 +806,7 @@ public class MetadataContext {
 	}
 
 	public PersistentClass getPersistentClassHostingProperties(MappedSuperclassTypeImpl<?> mappedSuperclassType) {
-		final PersistentClass persistentClass = mappedSuperClassTypeToPersistentClass.get( mappedSuperclassType );
-		if ( persistentClass == null ) {
-			throw new AssertionFailure(
-					"Could not find PersistentClass for MappedSuperclassType: "
-							+ mappedSuperclassType.getJavaType()
-			);
-		}
-		return persistentClass;
+		return mappedSuperClassTypeToPersistentClass.get( mappedSuperclassType );
 	}
 
 	public Set<MappedSuperclass> getUnusedMappedSuperclasses() {
@@ -806,12 +820,14 @@ public class MetadataContext {
 		return (BasicDomainType<J>) basicDomainTypeMap.computeIfAbsent(
 				javaType,
 				jt -> {
+					// we cannot use getTypeConfiguration().standardBasicTypeForJavaType(javaType)
+					// because that doesn't return the right thing for primitive types
 					final JavaTypeRegistry registry = getTypeConfiguration().getJavaTypeRegistry();
-
-					if ( javaType.isPrimitive() ) {
-						return new PrimitiveBasicTypeImpl<>( registry.resolveDescriptor( javaType ), javaType );
-					}
-					return new BasicTypeImpl<>( registry.resolveDescriptor( javaType ) );
+					JavaType<J> javaTypeDescriptor = registry.resolveDescriptor( javaType );
+					JdbcType jdbcType = javaTypeDescriptor.getRecommendedJdbcType( typeConfiguration.getCurrentBaseSqlTypeIndicators() );
+					return javaType.isPrimitive()
+							? new PrimitiveBasicTypeImpl<>( javaTypeDescriptor, jdbcType , javaType )
+							: new BasicTypeImpl<>( javaTypeDescriptor, jdbcType );
 				}
 		);
 	}

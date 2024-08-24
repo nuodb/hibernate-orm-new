@@ -49,11 +49,13 @@ public abstract class DelegatingTableGroup implements TableGroup {
 			int jdbcPosition,
 			int valuesArrayPosition,
 			JavaType javaType,
+			boolean virtual,
 			TypeConfiguration typeConfiguration) {
 		return getTableGroup().createSqlSelection(
 				jdbcPosition,
 				valuesArrayPosition,
 				javaType,
+				virtual,
 				typeConfiguration
 		);
 	}

@@ -109,6 +109,10 @@ public class Any extends SimpleValue {
 		return discriminatorDescriptor;
 	}
 
+	public BasicValue getKeyDescriptor() {
+		return keyDescriptor;
+	}
+
 	public MetaValue getMetaMapping() {
 		return metaMapping;
 	}
@@ -236,10 +240,14 @@ public class Any extends SimpleValue {
 
 	public boolean isSame(Any other) {
 		return super.isSame( other )
-				&& Objects.equals( keyMapping.getTypeName(), other.keyMapping.getTypeName() )
-				&& Objects.equals( metaMapping.getTypeName(), other.keyMapping.getTypeName() )
+				&& Objects.equals( getTypeNameOrNull( keyMapping ), getTypeNameOrNull( other.keyMapping ) )
+				&& Objects.equals( getTypeNameOrNull( metaMapping ), getTypeNameOrNull( other.metaMapping ) )
 				&& Objects.equals( metaValueToEntityNameMap, other.metaValueToEntityNameMap )
 				&& lazy == other.lazy;
+	}
+
+	private String getTypeNameOrNull(SimpleValue simpleValue) {
+		return simpleValue != null ? simpleValue.getTypeName() : null;
 	}
 
 	public boolean isValid(Mapping mapping) throws MappingException {
@@ -253,15 +261,18 @@ public class Any extends SimpleValue {
 		final JdbcServices jdbcServices = buildingContext
 				.getBootstrapContext()
 				.getServiceRegistry()
-				.getService( JdbcServices.class );
-
-		return column.getQuotedName( jdbcServices .getDialect() );
+				.requireService( JdbcServices.class );
+		return column.getQuotedName( jdbcServices.getDialect() );
 	}
 
 	public void setDiscriminator(BasicValue discriminatorDescriptor) {
 		this.discriminatorDescriptor = discriminatorDescriptor;
 		if ( discriminatorDescriptor.getColumn() instanceof Column ) {
-			justAddColumn( (Column) discriminatorDescriptor.getColumn() );
+			justAddColumn(
+					(Column) discriminatorDescriptor.getColumn(),
+					discriminatorDescriptor.isColumnInsertable( 0 ),
+					discriminatorDescriptor.isColumnUpdateable( 0 )
+			);
 		}
 		else {
 			justAddFormula( (Formula) discriminatorDescriptor.getColumn() );
@@ -278,7 +289,11 @@ public class Any extends SimpleValue {
 	public void setKey(BasicValue keyDescriptor) {
 		this.keyDescriptor = keyDescriptor;
 		if ( keyDescriptor.getColumn() instanceof Column ) {
-			justAddColumn( (Column) keyDescriptor.getColumn() );
+			justAddColumn(
+					(Column) keyDescriptor.getColumn(),
+					keyDescriptor.isColumnInsertable( 0 ),
+					keyDescriptor.isColumnUpdateable( 0 )
+			);
 		}
 		else {
 			justAddFormula( (Formula) keyDescriptor.getColumn() );

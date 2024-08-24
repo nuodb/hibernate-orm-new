@@ -82,13 +82,13 @@ public class ManagedTypeRepresentationResolverStandard implements ManagedTypeRep
 			final Class<CompositeUserType<?>> userTypeClass = creationContext.getBootstrapContext()
 					.getClassLoaderAccess()
 					.classForName( bootDescriptor.getTypeName() );
-			if ( creationContext.getBootModel().getMetadataBuildingOptions().disallowExtensionsInCdi() ) {
+			if ( !creationContext.getBootModel().getMetadataBuildingOptions().isAllowExtensionsInCdi() ) {
 				compositeUserType = FallbackBeanInstanceProducer.INSTANCE.produceBeanInstance( userTypeClass );
 			}
 			else {
 				compositeUserType = creationContext.getBootstrapContext()
 						.getServiceRegistry()
-						.getService( ManagedBeanRegistry.class )
+						.requireService( ManagedBeanRegistry.class )
 						.getBean( userTypeClass )
 						.getBeanInstance();
 			}
@@ -99,13 +99,13 @@ public class ManagedTypeRepresentationResolverStandard implements ManagedTypeRep
 		final EmbeddableInstantiator customInstantiator;
 		if ( bootDescriptor.getCustomInstantiator() != null ) {
 			final Class<? extends EmbeddableInstantiator> instantiatorClass = bootDescriptor.getCustomInstantiator();
-			if ( creationContext.getBootModel().getMetadataBuildingOptions().disallowExtensionsInCdi() ) {
+			if ( !creationContext.getBootModel().getMetadataBuildingOptions().isAllowExtensionsInCdi() ) {
 				customInstantiator = FallbackBeanInstanceProducer.INSTANCE.produceBeanInstance( instantiatorClass );
 			}
 			else {
 				customInstantiator = creationContext.getBootstrapContext()
 						.getServiceRegistry()
-						.getService( ManagedBeanRegistry.class )
+						.requireService( ManagedBeanRegistry.class )
 						.getBean( instantiatorClass )
 						.getBeanInstance();
 			}

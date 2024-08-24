@@ -9,6 +9,8 @@ package org.hibernate.orm.test.query.hql;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
+
 import org.hibernate.testing.jdbc.SQLStatementInspector;
 import org.hibernate.testing.orm.junit.DomainModel;
 import org.hibernate.testing.orm.junit.SessionFactory;
@@ -29,7 +31,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.TypedQuery;
 
 import static java.util.Objects.requireNonNull;
-import static java.util.UUID.randomUUID;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
@@ -99,8 +100,8 @@ public class SameTableAliasInSubqueryWithEmbeddedTest {
 			query.setParameter( "countryCode", "DE" );
 			query.setParameter( "nested", "NESTED_2" );
 			assertNotNull( query.getSingleResult() );
-			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "m1_0", 6 );
-			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "m2_0", 5 );
+			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "mdfe1_0", 6 );
+			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "mdfe2_0", 5 );
 		} );
 	}
 
@@ -118,8 +119,8 @@ public class SameTableAliasInSubqueryWithEmbeddedTest {
 			TypedQuery<PrimaryKey> query = session.createQuery( jpql, PrimaryKey.class );
 			query.setParameter( "nested", "NESTED_2" );
 			assertNotNull( query.getSingleResult() );
-			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "m1_0", 4 );
-			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "m2_0", 3 );
+			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "mdfe1_0", 4 );
+			statementInspector.assertNumberOfOccurrenceInQueryNoSpace( 0, "mdfe2_0", 3 );
 		} );
 	}
 
@@ -128,7 +129,7 @@ public class SameTableAliasInSubqueryWithEmbeddedTest {
 		private String value;
 
 		public PrimaryKey() {
-			value = randomUUID().toString();
+			value = SafeRandomUUIDGenerator.safeRandomUUIDAsString();
 		}
 
 		public String getValue() {

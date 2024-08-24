@@ -19,6 +19,7 @@ import org.hibernate.engine.internal.CacheHelper;
 import org.hibernate.engine.internal.StatefulPersistenceContext;
 import org.hibernate.engine.internal.TwoPhaseLoad;
 import org.hibernate.engine.spi.EntityEntry;
+import org.hibernate.engine.spi.EntityHolder;
 import org.hibernate.engine.spi.EntityKey;
 import org.hibernate.engine.spi.PersistenceContext;
 import org.hibernate.engine.spi.PersistentAttributeInterceptor;
@@ -168,8 +169,7 @@ public class CacheEntityLoaderHelper {
 				}
 			}
 			if ( options.isAllowNulls() ) {
-				final EntityPersister persister = event.getSession()
-						.getFactory()
+				final EntityPersister persister = event.getFactory()
 						.getRuntimeMetamodels()
 						.getMappingMetamodel()
 						.getEntityDescriptor( keyToLoad.getEntityName() );
@@ -214,7 +214,7 @@ public class CacheEntityLoaderHelper {
 					.setId( event.getEntityId() )
 					.setPersister( persister );
 
-			event.getSession().getSessionFactory()
+			event.getFactory()
 					.getFastSessionServices()
 					.firePostLoadEvent( postLoadEvent );
 		}
@@ -272,18 +272,18 @@ public class CacheEntityLoaderHelper {
 				source.getTenantIdentifier()
 		);
 
-		final Object ce = CacheHelper.fromSharedCache( source, ck, persister.getCacheAccessStrategy() );
+		final Object ce = CacheHelper.fromSharedCache( source, ck, persister, persister.getCacheAccessStrategy() );
 		final StatisticsImplementor statistics = factory.getStatistics();
 		if ( statistics.isStatisticsEnabled() ) {
 			if ( ce == null ) {
 				statistics.entityCacheMiss(
-						StatsHelper.INSTANCE.getRootEntityRole( persister ),
+						StatsHelper.getRootEntityRole( persister ),
 						cache.getRegion().getName()
 				);
 			}
 			else {
 				statistics.entityCacheHit(
-						StatsHelper.INSTANCE.getRootEntityRole( persister ),
+						StatsHelper.getRootEntityRole( persister ),
 						cache.getRegion().getName()
 				);
 			}
@@ -356,10 +356,15 @@ public class CacheEntityLoaderHelper {
 		final StatefulPersistenceContext statefulPersistenceContext = (StatefulPersistenceContext) session.getPersistenceContext();
 
 		if ( ( isManagedEntity( entity ) ) ) {
-			statefulPersistenceContext.addReferenceEntry(
+			final EntityHolder entityHolder = statefulPersistenceContext.addEntityHolder(
+					entityKey,
+					entity
+			);
+			final EntityEntry entityEntry = statefulPersistenceContext.addReferenceEntry(
 					entity,
 					Status.READ_ONLY
 			);
+			entityHolder.setEntityEntry( entityEntry );
 		}
 		else {
 			TwoPhaseLoad.addUninitializedCachedEntity(
@@ -398,9 +403,19 @@ public class CacheEntityLoaderHelper {
 		subclassPersister = factory.getRuntimeMetamodels()
 				.getMappingMetamodel()
 				.getEntityDescriptor( entry.getSubclass() );
-		entity = instanceToLoad == null
-				? source.instantiate( subclassPersister, entityId )
-				: instanceToLoad;
+		if ( instanceToLoad != null ) {
+			entity = instanceToLoad;
+		}
+		else {
+			final EntityHolder holder = source.getPersistenceContextInternal().getEntityHolder( entityKey );
+			if ( holder != null && holder.getEntity() != null ) {
+				// Use the entity which might already be
+				entity = holder.getEntity();
+			}
+			else {
+				entity = source.instantiate( subclassPersister, entityId );
+			}
+		}
 
 		if ( isPersistentAttributeInterceptable( entity ) ) {
 			PersistentAttributeInterceptor persistentAttributeInterceptor = asPersistentAttributeInterceptable( entity ).$$_hibernate_getInterceptor();
@@ -460,7 +475,7 @@ public class CacheEntityLoaderHelper {
 			isReadOnly = source.isDefaultReadOnly();
 		}
 
-		persistenceContext.addEntry(
+		EntityEntry entityEntry = persistenceContext.addEntry(
 				entity,
 				( isReadOnly ? Status.READ_ONLY : Status.MANAGED ),
 				values,
@@ -472,6 +487,7 @@ public class CacheEntityLoaderHelper {
 				subclassPersister,
 				false
 		);
+		persistenceContext.getEntityHolder( entityKey ).setEntityEntry( entityEntry );
 		subclassPersister.afterInitialize( entity, source );
 		persistenceContext.initializeNonLazyCollections();
 

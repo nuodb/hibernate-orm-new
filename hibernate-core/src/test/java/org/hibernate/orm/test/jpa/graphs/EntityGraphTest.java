@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -37,9 +36,11 @@ import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Root;
 
 import org.hibernate.Hibernate;
+import org.hibernate.testing.util.uuid.SafeRandomUUIDGenerator;
 import org.hibernate.orm.test.jpa.BaseEntityManagerFunctionalTestCase;
 
 import org.hibernate.testing.TestForIssue;
+import org.hibernate.testing.orm.junit.JiraKey;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -55,8 +56,8 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class[] {
-				Foo.class, Bar.class, Baz.class, Author.class, Book.class, Prize.class,
-				Company.class, Employee.class, Manager.class, Location.class, Animal.class, Dog.class, Cat.class
+				Foo.class, Bar.class, Baz.class, Author.class, Book.class, Prize.class, Company.class,
+				Employee.class, Manager.class, Location.class, AnimalOwner.class, Animal.class, Dog.class, Cat.class
 		};
 	}
 
@@ -166,10 +167,10 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 
    		assertTrue( Hibernate.isInitialized( result ) );
    		assertTrue( Hibernate.isInitialized( result.bar ) );
-        assertTrue( Hibernate.isInitialized( result.bar.foos) );
+        assertTrue( Hibernate.isInitialized( result.bar.getFoos()) );
    		assertTrue( Hibernate.isInitialized( result.baz ) );
    		// sanity check -- ensure the only bi-directional fetch was the one identified by the graph
-        assertFalse( Hibernate.isInitialized( result.baz.foos) );
+        assertFalse( Hibernate.isInitialized( result.baz.getFoos()) );
 
    		em.getTransaction().commit();
    		em.close();
@@ -321,6 +322,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		Book book = new Book();
 		author.books.put(1, book);
 		em.persist(author);
+		em.persist(book);
 
 		em.getTransaction().commit();
 		em.clear();
@@ -345,7 +347,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
 
-		String authorName = UUID.randomUUID().toString();
+		String authorName = SafeRandomUUIDGenerator.safeRandomUUIDAsString();
 		Set<Integer> authorIds = IntStream.range(0, 3)
 				.mapToObj(v -> {
 					Author author = new Author(authorName);
@@ -391,7 +393,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		EntityManager em = getOrCreateEntityManager();
 		em.getTransaction().begin();
 
-		String authorName = UUID.randomUUID().toString();
+		String authorName = SafeRandomUUIDGenerator.safeRandomUUIDAsString();
 		Set<Integer> authorIds = IntStream.range(0, 3)
 				.mapToObj(v -> {
 					Author author = new Author(authorName);
@@ -454,7 +456,37 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		em.close();
 	}
 
-    @Entity
+	@Test
+	@JiraKey("HHH-17192")
+	public void joinedInheritanceWithSubEntityAttributeFiltering() {
+		EntityManager em = getOrCreateEntityManager();
+		em.getTransaction().begin();
+		Dog dog = new Dog();
+		em.persist( dog );
+		AnimalOwner animalOwner = new AnimalOwner();
+		animalOwner.animal = dog;
+		em.persist( animalOwner );
+		em.flush();
+		em.clear();
+
+		EntityGraph<AnimalOwner> entityGraph = em.createEntityGraph( AnimalOwner.class );
+		entityGraph.addAttributeNodes( "animal" );
+		CriteriaBuilder cb = em.getCriteriaBuilder();
+		CriteriaQuery<AnimalOwner> query = cb.createQuery( AnimalOwner.class );
+		Root<AnimalOwner> root = query.from( AnimalOwner.class );
+		query.where( cb.equal( root.get( "animal" ).get( "id" ), dog.id ) );
+		AnimalOwner owner = em.createQuery( query )
+				.setHint( "jakarta.persistence.loadgraph", entityGraph )
+				.getResultList()
+				.get( 0 );
+		assertTrue( Hibernate.isInitialized( owner.animal ) );
+		assertTrue( owner.animal instanceof Dog );
+
+		em.getTransaction().commit();
+		em.close();
+	}
+
+    @Entity(name = "Foo")
 	@Table(name = "foo")
     public static class Foo {
 
@@ -469,7 +501,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		public Baz baz;
 	}
 
-	@Entity
+	@Entity(name = "Bar")
 	@Table(name = "bar")
 	public static class Bar {
 
@@ -479,9 +511,13 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 
         @OneToMany(mappedBy = "bar")
         public Set<Foo> foos = new HashSet<Foo>();
+
+		public Set<Foo> getFoos() {
+			return foos;
+		}
 	}
 
-	@Entity
+	@Entity(name = "Baz")
 	@Table(name = "baz")
     public static class Baz {
 
@@ -492,9 +528,12 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
         @OneToMany(mappedBy = "baz")
         public Set<Foo> foos = new HashSet<Foo>();
 
+		public Set<Foo> getFoos() {
+			return foos;
+		}
 	}
 
-	@Entity
+	@Entity(name = "Book")
 	@Table(name = "book")
 	public static class Book {
 		@Id
@@ -513,7 +552,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		}
 	}
 
-	@Entity
+	@Entity(name = "Prize")
 	public static class Prize {
 		@Id
 		@GeneratedValue
@@ -532,7 +571,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 
 	}
 
-	@Entity
+	@Entity(name = "Author")
 	@Table(name = "author")
 	public static class Author {
 		@Id
@@ -557,7 +596,17 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		}
 	}
 
-	@Entity
+	@Entity(name = "AnimalOwner")
+	public static class AnimalOwner {
+		@Id
+		@GeneratedValue
+		public Integer id;
+
+		@ManyToOne(fetch = FetchType.LAZY)
+		public Animal animal;
+	}
+
+	@Entity(name = "Animal")
 	@Inheritance(strategy = InheritanceType.JOINED)
 	public static abstract class Animal {
 		@Id
@@ -567,7 +616,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		public String name;
 	}
 
-	@Entity
+	@Entity(name = "Dog")
 	@DiscriminatorValue("DOG")
 	public static class Dog extends Animal {
 
@@ -578,7 +627,7 @@ public class EntityGraphTest extends BaseEntityManagerFunctionalTestCase {
 		}
 	}
 
-	@Entity
+	@Entity(name = "Cat")
 	@DiscriminatorValue("CAT")
 	public static class Cat extends Animal {
 

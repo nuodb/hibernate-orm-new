@@ -6,6 +6,7 @@
  */
 package org.hibernate.query.internal;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -14,7 +15,7 @@ import org.hibernate.query.named.ResultMemento;
 import org.hibernate.query.results.ResultSetMapping;
 
 /**
- * Standard `NamedResultSetMappingMemento` implementation
+ * Standard {@link NamedResultSetMappingMemento} implementation
  *
  * @author Steve Ebersole
  */
@@ -32,6 +33,10 @@ public class NamedResultSetMappingMementoImpl implements NamedResultSetMappingMe
 	@Override
 	public String getName() {
 		return name;
+	}
+
+	public List<ResultMemento> getResultMementos() {
+		return Collections.unmodifiableList( resultMementos );
 	}
 
 	@Override

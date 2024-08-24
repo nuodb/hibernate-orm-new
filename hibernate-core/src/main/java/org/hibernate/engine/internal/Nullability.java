@@ -11,13 +11,16 @@ import java.util.Iterator;
 import org.hibernate.HibernateException;
 import org.hibernate.PropertyValueException;
 import org.hibernate.bytecode.enhance.spi.LazyPropertyInitializer;
-import org.hibernate.engine.spi.CascadingActions;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.persister.entity.EntityPersister;
 import org.hibernate.generator.Generator;
+import org.hibernate.type.AnyType;
 import org.hibernate.type.CollectionType;
+import org.hibernate.type.ComponentType;
 import org.hibernate.type.CompositeType;
 import org.hibernate.type.Type;
+
+import static org.hibernate.engine.spi.CascadingActions.getLoadedElementsIterator;
 
 /**
  * Implements the algorithm for validating property values for illegal null values
@@ -143,19 +146,22 @@ public final class Nullability {
 	 * @throws HibernateException error while getting subcomponent values
 	 */
 	private String checkSubElementsNullability(Type propertyType, Object value) throws HibernateException {
-		if ( propertyType.isComponentType() ) {
-			return checkComponentNullability( value, (CompositeType) propertyType );
+		if ( propertyType instanceof AnyType ) {
+			return checkComponentNullability( value, (AnyType) propertyType );
+		}
+		if ( propertyType instanceof ComponentType ) {
+			return checkComponentNullability( value, (ComponentType) propertyType );
 		}
 
-		if ( propertyType.isCollectionType() ) {
+		if ( propertyType instanceof CollectionType ) {
 			// persistent collections may have components
 			final CollectionType collectionType = (CollectionType) propertyType;
 			final Type collectionElementType = collectionType.getElementType( session.getFactory() );
 
-			if ( collectionElementType.isComponentType() ) {
+			if ( collectionElementType instanceof ComponentType || collectionElementType instanceof AnyType ) {
 				// check for all components values in the collection
 				final CompositeType componentType = (CompositeType) collectionElementType;
-				final Iterator<?> itr = CascadingActions.getLoadedElementsIterator( session, collectionType, value );
+				final Iterator<?> itr = getLoadedElementsIterator( session, collectionType, value );
 				while ( itr.hasNext() ) {
 					final Object compositeElement = itr.next();
 					if ( compositeElement != null ) {
@@ -188,7 +194,7 @@ public final class Nullability {
 		//
 		// The more correct fix would be to cascade saves of the many-to-any elements before the Nullability checking
 
-		if ( compositeType.isAnyType() ) {
+		if ( compositeType instanceof AnyType ) {
 			return null;
 		}
 

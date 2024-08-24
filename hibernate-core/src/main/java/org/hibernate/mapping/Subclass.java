@@ -8,15 +8,12 @@ package org.hibernate.mapping;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 
 import org.hibernate.boot.spi.MetadataBuildingContext;
 import org.hibernate.engine.OptimisticLockStyle;
 import org.hibernate.internal.FilterConfiguration;
-import org.hibernate.internal.util.collections.JoinedIterator;
 import org.hibernate.internal.util.collections.JoinedList;
-import org.hibernate.internal.util.collections.SingletonIterator;
 import org.hibernate.persister.entity.EntityPersister;
 
 /**
@@ -130,36 +127,12 @@ public class Subclass extends PersistentClass {
 		return new JoinedList<>( getSuperclass().getPropertyClosure(), getProperties() );
 	}
 
-	@Deprecated @Override
-	public Iterator<Property> getPropertyClosureIterator() {
-		return new JoinedIterator<>(
-				getSuperclass().getPropertyClosureIterator(),
-				getPropertyIterator()
-			);
-	}
-
-	@Deprecated @Override
-	public Iterator<Table> getTableClosureIterator() {
-		return new JoinedIterator<>(
-				getSuperclass().getTableClosureIterator(),
-				new SingletonIterator<>( getTable() )
-			);
-	}
-
 	@Override
 	public List<Table> getTableClosure() {
 		return new JoinedList<>(
 				getSuperclass().getTableClosure(),
 				List.of( getTable() )
 		);
-	}
-
-	@Override @Deprecated
-	public Iterator<KeyValue> getKeyClosureIterator() {
-		return new JoinedIterator<>(
-				getSuperclass().getKeyClosureIterator(),
-				new SingletonIterator<>( getKey() )
-			);
 	}
 
 	@Override
@@ -209,13 +182,6 @@ public class Subclass extends PersistentClass {
 	}
 
 	@Override
-	public Class<? extends EntityPersister> getEntityPersisterClass() {
-		return classPersisterClass == null
-				? getSuperclass().getEntityPersisterClass()
-				: classPersisterClass;
-	}
-
-	@Override
 	public Table getRootTable() {
 		return getSuperclass().getRootTable();
 	}
@@ -226,8 +192,8 @@ public class Subclass extends PersistentClass {
 	}
 
 	@Override
-	public boolean isExplicitPolymorphism() {
-		return getSuperclass().isExplicitPolymorphism();
+	public boolean isConcreteProxy() {
+		return getRootClass().isConcreteProxy();
 	}
 
 	public void setSuperclass(PersistentClass superclass) {
@@ -250,11 +216,6 @@ public class Subclass extends PersistentClass {
 		}
 	}
 
-	@Override
-	public void setEntityPersisterClass(Class<? extends EntityPersister> classPersisterClass) {
-		this.classPersisterClass = classPersisterClass;
-	}
-
 
 	@Override
 	public int getJoinClosureSpan() {
@@ -270,15 +231,6 @@ public class Subclass extends PersistentClass {
 	public List<Join> getJoinClosure() {
 		return new JoinedList<>( getSuperclass().getJoinClosure(), super.getJoinClosure() );
 	}
-
-	@Deprecated(since = "6.0") @SuppressWarnings("deprecation")
-	public Iterator<Join> getJoinClosureIterator() {
-		return new JoinedIterator<>(
-			getSuperclass().getJoinClosureIterator(),
-			super.getJoinClosureIterator()
-		);
-	}
-
 
 	@Override
 	public boolean isClassOrSuperclassJoin(Join join) {

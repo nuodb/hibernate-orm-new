@@ -30,7 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * @author Steve Ebersole
  */
 @Inherited
-@Target( ElementType.TYPE )
+@Target( {ElementType.TYPE, ElementType.METHOD} )
 @Retention( RetentionPolicy.RUNTIME )
 
 @TestInstance( TestInstance.Lifecycle.PER_CLASS )
@@ -84,12 +84,6 @@ public @interface Jpa {
 	boolean closedComplianceEnabled() default false;
 
 	/**
-	 * @see JpaCompliance#isJpaListComplianceEnabled()
-	 * @see org.hibernate.cfg.AvailableSettings#DEFAULT_LIST_SEMANTICS
-	 */
-	boolean listMappingComplianceEnabled() default false;
-
-	/**
 	 * @see JpaCompliance#isJpaOrderByMappingComplianceEnabled()
 	 */
 	boolean orderByMappingComplianceEnabled() default false;
@@ -124,7 +118,7 @@ public @interface Jpa {
 	String[] xmlMappings() default {};
 
 	/**
-	 * Shorthand for adding {@code @Setting( name = AvailableSettings.STATEMENT_INSPECTOR, value = "org.hibernate.testing.jdbc.SQLStatementInspector"}
+	 * Shortcut for adding {@code @Setting( name = AvailableSettings.STATEMENT_INSPECTOR, value = "org.hibernate.testing.jdbc.SQLStatementInspector"}
 	 * to the integration settings.
 	 * Note: if the statement inspector is also explicitly specified as a setting, it will be overridden by the shortcut
 	 * @see SQLStatementInspector
